@@ -29,7 +29,7 @@ function register(bot) {
     const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
     ctx.editMessageText(
       'Выберите конкретную работу:', 
-      createInlineKeyboard(buttons, 'catalog:courses') // Можно сделать возврат к предметам, но для простоты к курсам
+      createInlineKeyboard(buttons, `catalog:subject:${works[0]?.courseId || 'course1'}`) 
     );
   });
 
@@ -38,12 +38,15 @@ function register(bot) {
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
 
+    // 🌟 Умная кнопка "Назад": возвращает к списку работ этого же предмета
+    const buttons = [
+      [{ text: '✅ Оформить этот заказ', callback: `order:start:${workId}` }],
+      [{ text: '⬅️ Назад к работам предмета', callback: `catalog:work:${work.subjectId}` }]
+    ];
+
     ctx.editMessageText(
       `📝 *${work.title}*\n\n${work.description}\n\n💰 Стоимость: ${work.price} ₽`,
-      Markup.inlineKeyboard([
-        [Markup.button.callback('✅ Оформить этот заказ', `order:start:${workId}`)],
-        [Markup.button.callback('⬅️ Назад к работам', 'catalog:courses')]
-      ])
+      createInlineKeyboard(buttons)
     );
   });
 }
