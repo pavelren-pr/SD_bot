@@ -1,4 +1,4 @@
-﻿const catalog = require('../data/catalog');
+const catalog = require('../data/catalog');
 const loyalty = require('../data/loyalty');
 const { createInlineKeyboard } = require('../utils/keyboard');
 
