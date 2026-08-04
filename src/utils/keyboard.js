@@ -6,10 +6,10 @@ function createInlineKeyboard(buttons, backCallback = null) {
   );
 
   if (backCallback) {
-    keyboard.push([Markup.button.callback('️ Назад', backCallback)]);
+    keyboard.push([Markup.button.callback('⬅️ Назад', backCallback)]);
   }
 
-  // Возвращаем ПОЛНЫЙ готовый объект reply_markup
+  // Возвращаем объект, который можно безопасно распаковать в опции сообщения
   return Markup.inlineKeyboard(keyboard);
 }
 
