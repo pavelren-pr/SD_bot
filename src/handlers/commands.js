@@ -1,29 +1,24 @@
-const { createInlineKeyboard } = require('../utils/keyboard');
+const { getMainMenuKeyboard } = require('./menu');
 
 function register(bot) {
-  bot.start((ctx) => {
-    // 🛡️ Гарантируем наличие объекта сессии перед её использованием
+  // 🌟 ЕДИНСТВЕННАЯ точка входа для /start теперь здесь
+  bot.command('start', async (ctx) => {
     ctx.session = ctx.session || {};
-    ctx.session.order = null; // Сброс сессии при старте
+    const userLink = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
     
-    const keyboard = createInlineKeyboard([
-      [{ text: '📚 Открыть каталог работ', callback: 'catalog:courses' }]
-    ]);
-    
-    ctx.reply('Привет! Я умный помощник Smart Deals. Чем могу помочь?', keyboard);
+    await ctx.reply(
+      `👋 *Добро пожаловать, ${userLink}!*\n\n` +
+      `Я — бот для заказа учебных работ.\n` +
+      `Выберите раздел в меню ниже:`,
+      { 
+        parse_mode: 'Markdown',
+        reply_markup: getMainMenuKeyboard() // 🌟 Постоянная клавиатура
+      }
+    );
   });
 
-  bot.command('cancel', (ctx) => {
-    // 🛡️ Гарантируем наличие объекта сессии
-    ctx.session = ctx.session || {};
-    ctx.session.order = null;
-    
-    const keyboard = createInlineKeyboard([
-      [{ text: '📚 Открыть каталог', callback: 'catalog:courses' }]
-    ]);
-    
-    ctx.reply('❌ Заказ отменён. Возвращаемся в главное меню:', keyboard);
-  });
+  // Если у тебя были другие команды (например, /help), оставь их ниже:
+  // bot.command('help', async (ctx) => { ... });
 }
 
 module.exports = { register };
