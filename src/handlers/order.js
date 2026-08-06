@@ -33,25 +33,32 @@ function register(bot) {
   bot.on(['text', 'photo', 'document'], async (ctx) => {
     ctx.session = ctx.session || {};
     
-    // 🌟 0. ПРОВЕРКА РЕЖИМА ОТВЕТА (ДО фильтра приватности!)
+    // 🌟 0. ПРОВЕРКА: Если пользователь в админ-панели — не обрабатываем здесь
+    // Админ-панель сама разберётся с этим сообщением
+    if (ctx.session.adminState) {
+      console.log('⚙️ Сообщение перехвачено админ-панелью, order.js игнорирует');
+      return;
+    }
+    
+    // 🌟 0.1 ПРОВЕРКА: Менеджер пишет ответ пользователю из поддержки
     if (ctx.session.replyToUserId) {
       console.log('✅ Режим ответа активен! Отправляем пользователю:', ctx.session.replyToUserId);
       const targetUserId = ctx.session.replyToUserId;
+      const targetUsername = ctx.session.replyToUsername || 'неизвестно';
       const messageText = ctx.message.text || '[Фото/Файл]';
 
       await ctx.telegram.sendMessage(targetUserId, `💬 *Сообщение от менеджера:*\n\n${messageText}`, { parse_mode: 'Markdown' });
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
 
-      const targetUsername = ctx.session.replyToUsername || 'неизвестно';
       await ctx.reply(`✅ Ответ успешно отправлен пользователю @${targetUsername} (ID: ${targetUserId})`);
-      
       ctx.session.replyToUserId = null;
       ctx.session.replyToUsername = null;
       console.log('✅ Ответ отправлен, режим ответа деактивирован');
       return;
     }
 
+    // Теперь проверяем приватность чата
     if (ctx.chat?.type !== 'private' || ctx.from?.is_bot) return;
     
     const order = ctx.session.order;

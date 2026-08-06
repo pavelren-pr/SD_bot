@@ -31,25 +31,41 @@ function getLoyaltyInfo(userId) {
   const user = data[userId];
   
   if (!user) {
-    return { rank: RANKS[0], discountPercent: 0, isLoyal: false, totalSpent: 0, hasExecutorAccess: false, hasFullAccess: false };
+    return { rank: RANKS[0], discountPercent: 0, isLoyal: false, totalSpent: 0, hasExecutorAccess: false, hasFullAccess: false, progressToNext: null };
   }
   
+  // 🌟 Если у пользователя явно указан ранг — используем его
   let currentRank = RANKS[0];
-  for (const rank of RANKS) {
-    if (user.totalSpent >= rank.minSpent) {
-      currentRank = rank;
+  if (user.rank) {
+    const foundRank = RANKS.find(r => r.name === user.rank);
+    if (foundRank) {
+      currentRank = foundRank;
+    }
+  } else {
+    // Иначе определяем ранг по сумме заказов
+    for (const rank of RANKS) {
+      if (user.totalSpent >= rank.minSpent) {
+        currentRank = rank;
+      }
     }
   }
   
-  // Расчет прогресса до следующего ранга
   let progressToNext = null;
-  const currentIndex = RANKS.findIndex(r => r.name === currentRank.name);
-  if (currentIndex < RANKS.length - 1 && !currentRank.secret) {
-    const nextRank = RANKS[currentIndex + 1];
-    progressToNext = {
-      nextName: nextRank.name,
-      need: nextRank.minSpent - (user.totalSpent || 0)
-    };
+  if (!currentRank.secret) {
+    let nextPublicRank = null;
+    const currentIndex = RANKS.findIndex(r => r.name === currentRank.name);
+    for (let i = currentIndex + 1; i < RANKS.length; i++) {
+      if (!RANKS[i].secret) {
+        nextPublicRank = RANKS[i];
+        break;
+      }
+    }
+    if (nextPublicRank) {
+      progressToNext = {
+        nextName: nextPublicRank.name,
+        need: nextPublicRank.minSpent - (user.totalSpent || 0)
+      };
+    }
   }
 
   return { 

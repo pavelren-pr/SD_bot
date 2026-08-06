@@ -10,6 +10,7 @@ const Drive4yearLink = 'https://drive.google.com/drive/folders/1ImX8bRsg1OFrsIY0
 const DrivePractice = 'https://drive.google.com/drive/folders/1lNX7F6AUTA7SSIhwhLlQebDFvGnAJT-E?usp=sharing';
 
 function register(bot) {
+  // Главное меню сокровищницы
   bot.action('treasure:main', async (ctx) => {
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback('1 курс ⭐️', 'treasure:1')],
@@ -23,48 +24,52 @@ function register(bot) {
     const text = `💰 <b>Морская Сокровищница</b> 💰\n\nВыберите раздел, чтобы получить доступ к материалам:`;
     
     if (ctx.callbackQuery) {
-      await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
       await ctx.answerCbQuery();
     } else {
-      await ctx.reply(text, { parse_mode: 'HTML', reply_markup: keyboard });
+      await ctx.reply(text, { parse_mode: 'HTML', ...keyboard });
     }
   });
 
-  const createTreasureMessage = (title, link) => ({
-    text: `💰 <b>Морская Сокровищница</b> 💰\n${title}\n\nВсе материалы расположены на Google Drive, для доступа необходимо перейти по ссылке 🔗`,
-    keyboard: Markup.inlineKeyboard([
-      [Markup.button.url('Ссылка на Google Drive 📁', link)],
-      [Markup.button.callback('Назад 🔙', 'treasure:main')]
-    ])
-  });
+  //  Вспомогательная функция для создания сообщения с кнопками
+  function createTreasureMessage(title, link) {
+    return {
+      text: `💰 <b>Морская Сокровищница</b> 💰\n${title}\n\nВсе материалы расположены на Google Drive, для доступа необходимо перейти по ссылке 🔗`,
+      keyboard: Markup.inlineKeyboard([
+        [Markup.button.url('Ссылка на Google Drive 📁', link)],
+        [Markup.button.callback('Назад 🔙', 'treasure:main')]
+      ])
+    };
+  }
 
+  // 🌟 Обработчики подразделов с ИСПРАВЛЕННОЙ передачей клавиатуры
   bot.action('treasure:1', async (ctx) => {
     const data = createTreasureMessage('1 курс ⭐️', Drive1yearLink);
-    await ctx.editMessageText(data.text, { parse_mode: 'HTML', reply_markup: data.keyboard });
+    await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:2', async (ctx) => {
     const data = createTreasureMessage('2 курс ⭐️⭐️', Drive2yearLink);
-    await ctx.editMessageText(data.text, { parse_mode: 'HTML', reply_markup: data.keyboard });
+    await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:3', async (ctx) => {
-    const data = createTreasureMessage('3 курс ⭐️⭐️⭐️', Drive3yearLink);
-    await ctx.editMessageText(data.text, { parse_mode: 'HTML', reply_markup: data.keyboard });
+    const data = createTreasureMessage('3 курс ️⭐️⭐️', Drive3yearLink);
+    await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); //  Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:4', async (ctx) => {
     const data = createTreasureMessage('4 курс ⭐️⭐️⭐️⭐️', Drive4yearLink);
-    await ctx.editMessageText(data.text, { parse_mode: 'HTML', reply_markup: data.keyboard });
+    await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:prac', async (ctx) => {
     const data = createTreasureMessage('Практика 🚢', DrivePractice);
-    await ctx.editMessageText(data.text, { parse_mode: 'HTML', reply_markup: data.keyboard });
+    await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 
@@ -78,7 +83,7 @@ function register(bot) {
       [Markup.button.callback('Назад 🔙', 'treasure:main')]
     ]);
 
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: keyboard, disable_web_page_preview: true });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard, disable_web_page_preview: true }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 }
