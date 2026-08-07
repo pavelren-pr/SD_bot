@@ -34,6 +34,75 @@ function register(bot) {
   bot.on(['text', 'photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
     
+    // 🌟 0.1 АДМИН ПИШЕТ ЗАКАЗЧИКУ (через меню "Все заказы")
+    if (ctx.session.adminReplyToCustomerId) {
+      const targetUserId = ctx.session.adminReplyToCustomerId;
+      const orderTitle = ctx.session.adminReplyOrderTitle;
+      const orderDate = ctx.session.adminReplyOrderDate;
+      const messageText = ctx.message.text || '[Фото/Файл]';
+      
+      await ctx.telegram.sendMessage(
+        targetUserId,
+        `💬 *Вам сообщение от исполнителя*\n\n` +
+        `📚 *Заказ:* ${orderTitle}\n` +
+        `📅 *Дата заказа:* ${orderDate}\n\n` +
+        `${messageText}`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      if (ctx.message.photo) {
+        await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
+      } else if (ctx.message.document) {
+        await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
+      }
+      
+      await ctx.reply(`✅ Сообщение отправлено заказчику (ID: ${targetUserId})`);
+      
+      ctx.session.adminReplyToCustomerId = null;
+      ctx.session.adminReplyOrderId = null;
+      ctx.session.adminReplyOrderTitle = null;
+      ctx.session.adminReplyOrderDate = null;
+      return;
+    }
+    
+    // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ (через карточку заказа)
+    if (ctx.session.customerReplyToExecutorId) {
+      const targetUserId = ctx.session.customerReplyToExecutorId;
+      const orderTitle = ctx.session.customerReplyOrderTitle;
+      const orderDate = ctx.session.customerReplyOrderDate;
+      const messageText = ctx.message.text || '[Фото/Файл]';
+      
+      await ctx.telegram.sendMessage(
+        targetUserId,
+        `💬 *Вам сообщение от заказчика*\n\n` +
+        `📚 *Заказ:* ${orderTitle}\n` +
+        `📅 *Дата заказа:* ${orderDate}\n\n` +
+        `${messageText}`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      if (ctx.message.photo) {
+        await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
+      } else if (ctx.message.document) {
+        await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
+      }
+      
+      await ctx.reply(`✅ Сообщение отправлено исполнителю (ID: ${targetUserId})`);
+      
+      ctx.session.customerReplyToExecutorId = null;
+      ctx.session.customerReplyOrderId = null;
+      ctx.session.customerReplyOrderTitle = null;
+      ctx.session.customerReplyOrderDate = null;
+      return;
+    }
+    
+    // 🌟 0.3 ПРОВЕРКА: Если пользователь в админ-панели — передаём управление admin.js
+    if (ctx.session.adminState) {
+      console.log('⚙️ Сообщение перехвачено админ-панелью, передаём управление admin.js');
+      await next();
+      return;
+    }
+
     // 🌟 0. ПРОВЕРКА: Если пользователь в админ-панели — передаём управление admin.js
     if (ctx.session.adminState) {
       console.log('⚙️ Сообщение перехвачено админ-панелью, передаём управление admin.js');
@@ -447,7 +516,7 @@ function register(bot) {
     await ctx.answerCbQuery('Чат завершён');
   });
 
-  function findExecutorChat(userId) {
+    function findExecutorChat(userId) {
     for (const chatData of activeChats.values()) {
       if (chatData.executorUserId === userId && (chatData.status === 'waiting_executor_message' || chatData.status === 'waiting_executor_file')) return chatData;
     }
@@ -460,14 +529,14 @@ function register(bot) {
     }
     return null;
   }
+}
 
-  // 🌟 Найти активный чат по ID заказа
-  function findChatByOrderId(orderId) {
+function findChatByOrderId(orderId) {
     for (const [chatId, chatData] of activeChats) {
       if (chatData.orderId === orderId) return { chatId, chatData };
     }
     return null;
-  }
 }
 
-mmodule.exports = { register, findChatByOrderId };
+// 🌟 Экспортируем и register, и findChatByOrderId
+module.exports = { register, findChatByOrderId };
