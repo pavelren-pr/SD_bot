@@ -234,7 +234,7 @@ function register(bot) {
         const waitingKeyboard = Markup.inlineKeyboard([[Markup.button.url('👨‍💼 Связаться с менеджером', managerUrl)]]);
         
         await ctx.reply(
-          `✅ *Заказ оформлен и ожидает назначения исполнителя.*\n\n📚 *Работа:* ${work.title}\n💰 *Сумма:* ${order.finalPrice} ₽\n\nМы уже ищем для вас лучшего специалиста. Если у вас есть срочные вопросы, нажмите кнопку ниже:`,
+          `✅ *Заказ оформлен и ожидает назначения исполнителя.*\n\n🆔 *Номер заказа:* №${newOrder.orderNumber}\n\n📚 *Работа:* ${work.title}\n💰 *Сумма:* ${order.finalPrice} ₽\n\nМы уже ищем для вас лучшего специалиста. Если у вас есть срочные вопросы, нажмите кнопку ниже:`,
           { parse_mode: 'Markdown', reply_markup: waitingKeyboard.reply_markup }
         );
       } catch (error) {
@@ -396,7 +396,7 @@ function register(bot) {
       { parse_mode: 'Markdown' }
     );
     
-    activeChats.set(chatId, { chatId, customerUserId, executorUserId, workId, workTitle: work.title, status: 'waiting_executor_message', createdAt: Date.now() });
+    activeChats.set(chatId, { chatId, customerUserId, executorUserId, workId, workTitle: work.title, orderId: activeOrder ? activeOrder.id : null, orderNumber: orderNumber, status: 'waiting_executor_message', createdAt: Date.now() });
 
     // 🌟 Используем УЖЕ ОБЪЯВЛЕННУЮ выше переменную activeOrder (без const!)
     if (activeOrder) {
@@ -419,8 +419,8 @@ function register(bot) {
 
     await ctx.telegram.sendMessage(
       executorUserId, 
-      `✅ *Вы приняли заказ!*\n\n📚 *Работа:* ${work.title}\n👤 *Заказчик ID:* ${customerUserId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`, 
-      { parse_mode: 'Markdown', reply_markup: executorFullKeyboard }
+      `✅ *Вы приняли заказ!*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Работа:* ${work.title}\n👤 *Заказчик ID:* ${customerUserId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`, 
+      { parse_mode: 'Markdown', reply_markup: executorFullKeyboard.reply_markup }
     );
 
     await ctx.telegram.sendMessage(
@@ -445,7 +445,7 @@ function register(bot) {
       });
     }
 
-    await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'Markdown' });
+    await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Заказ выполнен!*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
   });
@@ -453,7 +453,7 @@ function register(bot) {
   async function handleExecutorMessage(ctx, chatData) {
     const { customerUserId, workTitle, chatId, executorUserId } = chatData;
     const messageText = ctx.message.text || '[Фото/Файл]';
-    await ctx.telegram.sendMessage(customerUserId, `💬 *Вам сообщение от исполнителя*\n\n📚 *Заказ:* ${workTitle}\n\n${messageText}`, { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) });
+    await ctx.telegram.sendMessage(customerUserId, `💬 *Вам сообщение от исполнителя*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`, { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) });
     if (ctx.message.photo) await ctx.telegram.sendPhoto(customerUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
     else if (ctx.message.document) await ctx.telegram.sendDocument(customerUserId, ctx.message.document.file_id);
     chatData.status = 'waiting_customer_action';
@@ -463,7 +463,7 @@ function register(bot) {
   async function handleCustomerMessage(ctx, chatData) {
     const { executorUserId, workTitle, chatId, customerUserId } = chatData;
     const messageText = ctx.message.text || '[Фото/Файл]';
-    await ctx.telegram.sendMessage(executorUserId, `💬 *Вам сообщение от заказчика*\n\n📚 *Заказ:* ${workTitle}\n\n${messageText}`, { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, false) });
+    await ctx.telegram.sendMessage(executorUserId, `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`, { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, false) });
     if (ctx.message.photo) await ctx.telegram.sendPhoto(executorUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
     else if (ctx.message.document) await ctx.telegram.sendDocument(executorUserId, ctx.message.document.file_id);
     chatData.status = 'waiting_executor_message';
@@ -490,7 +490,7 @@ function register(bot) {
     const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
     if (!chatData || chatData.customerUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'closed';
-    await ctx.telegram.sendMessage(chatData.executorUserId, `❌ *Заказчик завершил чат*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.telegram.sendMessage(chatData.executorUserId, `❌ *Заказчик завершил чат*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery('Чат завершён');
   });
@@ -515,7 +515,7 @@ function register(bot) {
     const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
     if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'closed';
-    await ctx.telegram.sendMessage(chatData.customerUserId, `❌ *Исполнитель завершил чат по этому заказу.*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.telegram.sendMessage(chatData.customerUserId, `❌ *Исполнитель завершил чат по этому заказу.*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery('Чат завершён');
   });
