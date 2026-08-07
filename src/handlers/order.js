@@ -30,13 +30,13 @@ function register(bot) {
     await ctx.editMessageText(`📎 Отлично!\n\n${work.prompt}`);
   });
 
-  bot.on(['text', 'photo', 'document'], async (ctx) => {
+  bot.on(['text', 'photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    // 🌟 0. ПРОВЕРКА: Если пользователь в админ-панели — не обрабатываем здесь
-    // Админ-панель сама разберётся с этим сообщением
+    // 🌟 0. ПРОВЕРКА: Если пользователь в админ-панели — передаём управление admin.js
     if (ctx.session.adminState) {
-      console.log('⚙️ Сообщение перехвачено админ-панелью, order.js игнорирует');
+      console.log('⚙️ Сообщение перехвачено админ-панелью, передаём управление admin.js');
+      await next(); //  ВАЖНО: передаём управление следующему middleware
       return;
     }
     
