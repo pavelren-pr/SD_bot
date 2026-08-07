@@ -21,32 +21,61 @@ function register(bot) {
     );
   });
 
-  // 3. Показ работ выбранного предмета
+  // 3. Показ работ выбранного предмета с информацией о курсе и предмете в заголовке
   bot.action(/^catalog:work:(.+)$/, (ctx) => {
     const subjectId = ctx.match[1];
+    const subject = catalog.getSubject(subjectId);
+    const course = catalog.getCourse(subject.courseId);
     const works = catalog.getWorksBySubject(subjectId);
 
+    // 🌟 Заголовок с информацией о курсе и предмете
+    let header = `🎯 *Выбран: ${course.name}*\n`;
+    header += `📖 *Предмет:* ${subject.name}\n\n`;
+    header += `📝 *Выберите работу:*`;
+
     const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
+    
     ctx.editMessageText(
-      'Выберите конкретную работу:', 
-      createInlineKeyboard(buttons, `catalog:subject:${works[0]?.courseId || 'course1'}`) 
+      header, 
+      {
+        parse_mode: 'Markdown',
+        ...createInlineKeyboard(buttons, `catalog:subject:${subject.courseId}`)
+      }
     );
   });
 
-  // 4. Детали работы и кнопка заказа
+    // 4. Детали работы и кнопка заказа
   bot.action(/^catalog:details:(.+)$/, (ctx) => {
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
+    const subject = catalog.getSubject(work.subjectId);
+    const course = catalog.getCourse(subject.courseId);
 
-    // 🌟 Умная кнопка "Назад": возвращает к списку работ этого же предмета
+    // 🌟 Формируем текст карточки
+    let text = ` *${work.title}*\n\n`;
+    
+    // Показываем описание, если оно есть
+    if (work.description && work.description.trim() !== '') {
+      text += `${work.description}\n\n`;
+    }
+    
+    text += `💰 *Стоимость:* ${work.price} ₽\n`;
+    text += ` *Ваша скидка:* ${pricing.discountPercent}%\n`;
+    text += `✅ *Итого:* ${pricing.finalPrice} ₽\n\n`;
+    text += ` *Что нужно для заказа:*\n${work.prompt}`;
+
+    // 🌟 Умная кнопка "Назад"
     const buttons = [
       [{ text: '✅ Оформить этот заказ', callback: `order:start:${workId}` }],
       [{ text: '⬅️ Назад к работам предмета', callback: `catalog:work:${work.subjectId}` }]
     ];
 
     ctx.editMessageText(
-      `📝 *${work.title}*\n\n${work.description}\n\n💰 Стоимость: ${work.price} ₽`,
-      createInlineKeyboard(buttons)
+      text,
+      {
+        parse_mode: 'Markdown',
+        ...createInlineKeyboard(buttons)
+      }
     );
   });
 }
