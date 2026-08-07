@@ -1,0 +1,19 @@
+[
+  {
+    "id": "order_1786095969026_miqdp",
+    "workId": "nil_1tide",
+    "workTitle": "Приливы 1 задача 🏄",
+    "subjectName": "НиЛ 🧭",
+    "courseName": "4 курс ⭐⭐⭐⭐",
+    "customerId": 1012758149,
+    "customerUsername": "pavelren",
+    "executorId": 7195122925,
+    "executorUsername": "SmartDealsManager",
+    "price": 1192,
+    "commission": 20,
+    "status": "active",
+    "createdAt": "07.08.2026, 12:46:08",
+    "acceptedAt": "07.08.2026, 12:47:24",
+    "completedAt": null
+  }
+]

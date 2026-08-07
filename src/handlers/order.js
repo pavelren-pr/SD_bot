@@ -1,5 +1,6 @@
 const catalog = require('../data/catalog');
 const loyalty = require('../data/loyalty');
+const orders = require('../data/orders');
 const { createInlineKeyboard } = require('../utils/keyboard');
 const { Markup } = require('telegraf');
 
@@ -147,6 +148,25 @@ function register(bot) {
         order.status = 'paid'; order.paidAt = paidTime; order.step = 'completed';
         loyalty.addToTotal(ctx.from.id, ctx.from.username, order.finalPrice);
         
+        // 🌟 СОЗДАЁМ ЗАПИСЬ В БАЗЕ ЗАКАЗОВ
+        const subject = catalog.getSubject(work.subjectId);
+        const course = catalog.getCourse(subject.courseId);
+        
+        const newOrder = orders.createOrder({
+          workId: work.id,
+          workTitle: work.title,
+          subjectName: subject.name,
+          courseName: course.name,
+          customerId: ctx.from.id,
+          customerUsername: ctx.from.username || null,
+          price: order.finalPrice,
+          commission: work.commission,
+          createdAt: paidTime
+        });
+        
+        // Сохраняем ID заказа в сессии, чтобы потом обновлять его
+        ctx.session.currentOrderId = newOrder.id;
+
         const managerUrl = 'https://t.me/SmartDealsManager';
         const waitingKeyboard = Markup.inlineKeyboard([[Markup.button.url('👨‍💼 Связаться с менеджером', managerUrl)]]);
         
@@ -299,7 +319,21 @@ function register(bot) {
     
     activeChats.set(chatId, { chatId, customerUserId, executorUserId, workId, workTitle: work.title, status: 'waiting_executor_message', createdAt: Date.now() });
 
-    // 🌟 ЯВНОЕ СОЗДАНИЕ КЛАВИАТУРЫ (без сложных объединений, 100% работает)
+    // 🌟 ОБНОВЛЯЕМ ЗАКАЗ: назначаем исполнителя
+    const activeOrder = orders.findActiveOrder(customerUserId, workId);
+    if (activeOrder) {
+      const executorUser = await ctx.telegram.getChat(executorUserId);
+      orders.updateOrder(activeOrder.id, {
+        executorId: executorUserId,
+        executorUsername: executorUser.username || null,
+        status: 'active',
+        acceptedAt: new Date().toLocaleString('ru-RU')
+      });
+      // Сохраняем ID заказа в активных чатах для дальнейшего использования
+      activeChats.get(chatId).orderId = activeOrder.id;
+    }
+
+    // 🌟 ЯВНО СОЗДАЁМ КЛАВИАТУРУ (без проблемных объединений)
     const executorFullKeyboard = Markup.inlineKeyboard([
       [Markup.button.callback('✏️ Ответить заказчику', `executor_reply:${chatId}`)],
       [Markup.button.callback('📎 Отправить файл/фото', `executor_send_file:${chatId}`)],
@@ -329,6 +363,15 @@ function register(bot) {
     if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     
     chatData.status = 'completed';
+
+    // 🌟 ОБНОВЛЯЕМ ЗАКАЗ: отмечаем как выполненный
+    if (chatData.orderId) {
+      orders.updateOrder(chatData.orderId, {
+        status: 'completed',
+        completedAt: new Date().toLocaleString('ru-RU')
+      });
+    }
+
     await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Заказ выполнен!*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
@@ -417,6 +460,14 @@ function register(bot) {
     }
     return null;
   }
+
+  // 🌟 Найти активный чат по ID заказа
+  function findChatByOrderId(orderId) {
+    for (const [chatId, chatData] of activeChats) {
+      if (chatData.orderId === orderId) return { chatId, chatData };
+    }
+    return null;
+  }
 }
 
-module.exports = { register };
+mmodule.exports = { register, findChatByOrderId };

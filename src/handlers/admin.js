@@ -19,6 +19,7 @@ function isAdmin(userId) {
 function getAdminMainMenu() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('🗂 Управление каталогом', 'admin:catalog')],
+    [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
     [Markup.button.callback('🏅 Изменить ранг пользователя', 'admin:set_user_rank')],
     [Markup.button.callback('❌ Закрыть панель', 'admin:close')]
   ]);
@@ -396,6 +397,35 @@ function register(bot) {
       return;
     }
 
+    // === РЕДАКТИРОВАНИЕ ЗАКАЗА (ввод значения) ===
+    if (state.startsWith('edit_order_input:')) {
+      const parts = state.split(':');
+      const orderId = parts[1];
+      const field = parts[2];
+      
+      let value = text;
+      if ((field === 'price' || field === 'commission') && isNaN(text)) {
+        return ctx.reply('❌ Значение должно быть числом. Попробуйте еще раз:');
+      }
+      if (field === 'price' || field === 'commission') value = parseInt(text);
+      
+      require('../data/orders').updateOrder(orderId, { [field]: value });
+      
+      const order = require('../data/orders').getOrder(orderId);
+      await ctx.reply(
+        `✅ Поле "${field}" обновлено!\n\n` +
+        `Новое значение: \`${value}\``,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
+          ])
+        }
+      );
+      ctx.session.adminState = null;
+      return;
+    }
+
     // === ИЗМЕНЕНИЕ РАНГА ===
     if (state === 'awaiting_user_id_for_rank') {
       if (isNaN(text)) return ctx.reply('❌ ID пользователя должен быть числом. Попробуйте еще раз:');
@@ -750,6 +780,344 @@ function register(bot) {
         {
           parse_mode: 'Markdown',
           ...backToWorkKeyboard
+        }
+      );
+    }
+
+        // === УПРАВЛЕНИЕ ЗАКАЗАМИ ===
+    else if (action === 'orders') {
+      ctx.session.adminState = null;
+      const allOrders = require('../data/orders').getAllOrders();
+      
+      const pending = allOrders.filter(o => o.status === 'pending').length;
+      const active = allOrders.filter(o => o.status === 'active').length;
+      const completed = allOrders.filter(o => o.status === 'completed').length;
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`⏳ Ожидают (${pending})`, 'admin:orders_list:pending')],
+        [Markup.button.callback(`🔨 В работе (${active})`, 'admin:orders_list:active')],
+        [Markup.button.callback(`✅ Выполнены (${completed})`, 'admin:orders_list:completed')],
+        [Markup.button.callback('📦 Все заказы', 'admin:orders_list:all')],
+        [Markup.button.callback('⬅️ Назад', 'admin:main')]
+      ]);
+      
+      await ctx.editMessageText(
+        `📦 *Управление заказами*\n\n` +
+        `Всего заказов: *${allOrders.length}*\n` +
+        `⏳ Ожидают: *${pending}*\n` +
+        `🔨 В работе: *${active}*\n` +
+        `✅ Выполнены: *${completed}*`,
+        {
+          parse_mode: 'Markdown',
+          ...keyboard
+        }
+      );
+    }
+        // === УПРАВЛЕНИЕ ЗАКАЗАМИ (с пагинацией) ===
+    else if (action === 'orders') {
+      ctx.session.adminState = null;
+      const allOrders = require('../data/orders').getAllOrders();
+      
+      const pending = allOrders.filter(o => o.status === 'pending').length;
+      const active = allOrders.filter(o => o.status === 'active').length;
+      const completed = allOrders.filter(o => o.status === 'completed').length;
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`⏳ Ожидают (${pending})`, 'admin:orders_list:pending:0')],
+        [Markup.button.callback(`🔨 В работе (${active})`, 'admin:orders_list:active:0')],
+        [Markup.button.callback(`✅ Выполнены (${completed})`, 'admin:orders_list:completed:0')],
+        [Markup.button.callback('📦 Все заказы', 'admin:orders_list:all:0')],
+        [Markup.button.callback('⬅️ Назад', 'admin:main')]
+      ]);
+      
+      await ctx.editMessageText(
+        `📦 *Управление заказами*\n\n` +
+        `Всего заказов: *${allOrders.length}*\n` +
+        `⏳ Ожидают: *${pending}*\n` +
+        `🔨 В работе: *${active}*\n` +
+        `✅ Выполнены: *${completed}*`,
+        {
+          parse_mode: 'Markdown',
+          ...keyboard
+        }
+      );
+    }
+    else if (action.startsWith('orders_list:')) {
+      const parts = action.split(':');
+      const filter = parts[1];
+      const page = parseInt(parts[2]) || 0;
+      
+      const allOrders = require('../data/orders').getAllOrders();
+      const ORDERS_PER_PAGE = 5;
+      
+      let filtered = allOrders;
+      let title = '📦 Все заказы';
+      
+      if (filter === 'pending') {
+        filtered = allOrders.filter(o => o.status === 'pending');
+        title = '⏳ Ожидают принятия';
+      } else if (filter === 'active') {
+        filtered = allOrders.filter(o => o.status === 'active');
+        title = '🔨 В работе';
+      } else if (filter === 'completed') {
+        filtered = allOrders.filter(o => o.status === 'completed');
+        title = '✅ Выполнены';
+      }
+      
+      const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
+      const currentPage = Math.min(page, totalPages - 1);
+      
+      const startIdx = currentPage * ORDERS_PER_PAGE;
+      const displayOrders = filtered.slice(startIdx, startIdx + ORDERS_PER_PAGE).reverse();
+      
+      let text = `${title}\n\n`;
+      text += `Страница ${currentPage + 1} из ${totalPages}\n`;
+      text += `Всего: ${filtered.length}`;
+      
+      const buttons = displayOrders.map(o => {
+        const customer = o.customerUsername ? `@${o.customerUsername}` : `ID:${o.customerId}`;
+        const date = o.createdAt.split(' ')[0];
+        const label = `📝 ${o.workTitle.substring(0, 20)} | ${date}`;
+        return [Markup.button.callback(label, `admin:order_view:${o.id}`)];
+      });
+      
+      if (displayOrders.length === 0) {
+        buttons.push([Markup.button.callback('— пусто —', 'noop')]);
+      }
+      
+      // Навигация
+      const navRow = [];
+      if (currentPage > 0) {
+        navRow.push(Markup.button.callback('◀️', `admin:orders_list:${filter}:${currentPage - 1}`));
+      }
+      navRow.push(Markup.button.callback(`${currentPage + 1}/${totalPages}`, 'noop'));
+      if (currentPage < totalPages - 1) {
+        navRow.push(Markup.button.callback('▶️', `admin:orders_list:${filter}:${currentPage + 1}`));
+      }
+      buttons.push(navRow);
+      
+      buttons.push([Markup.button.callback('⬅️ Назад', 'admin:orders')]);
+      
+      const keyboard = Markup.inlineKeyboard(buttons);
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...keyboard
+      });
+    }
+    else if (action.startsWith('order_view:')) {
+      const orderId = action.split(':')[1];
+      const order = require('../data/orders').getOrder(orderId);
+      
+      if (!order) {
+        await ctx.answerCbQuery('❌ Заказ не найден');
+        return;
+      }
+      
+      // Используем общую функцию форматирования
+      const { formatOrderCard } = require('./menu');
+      const text = formatOrderCard(order, 'admin');
+      
+      const buttons = [];
+      
+      // Кнопка изменения информации
+      buttons.push([Markup.button.callback('✏️ Изменить информацию', `admin:order_edit:${orderId}`)]);
+      
+      // Кнопка связи с заказчиком
+      if (order.customerUsername) {
+        buttons.push([Markup.button.url('💬 Связаться с заказчиком', `https://t.me/${order.customerUsername}`)]);
+      }
+      
+      // Кнопки смены статуса
+      if (order.status === 'pending') {
+        buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
+        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+      } else if (order.status === 'active') {
+        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+      } else if (order.status === 'completed') {
+        buttons.push([Markup.button.callback('🔨 Вернуть в работу', `admin:order_status:${orderId}:active`)]);
+        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+      }
+      
+      buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
+      buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
+      
+      const keyboard = Markup.inlineKeyboard(buttons);
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...keyboard
+      });
+    }
+    
+    // === РЕДАКТИРОВАНИЕ ЗАКАЗА ===
+    else if (action.startsWith('order_edit:')) {
+      const orderId = action.split(':')[1];
+      const order = require('../data/orders').getOrder(orderId);
+      
+      if (!order) {
+        await ctx.answerCbQuery('❌ Заказ не найден');
+        return;
+      }
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📝 Название работы', `admin:order_field:${orderId}:workTitle`)],
+        [Markup.button.callback('📖 Предмет', `admin:order_field:${orderId}:subjectName`)],
+        [Markup.button.callback('🎓 Курс', `admin:order_field:${orderId}:courseName`)],
+        [Markup.button.callback('💰 Цена', `admin:order_field:${orderId}:price`)],
+        [Markup.button.callback('📊 Комиссия', `admin:order_field:${orderId}:commission`)],
+        [Markup.button.callback('👤 Username заказчика', `admin:order_field:${orderId}:customerUsername`)],
+        [Markup.button.callback('👷 Username исполнителя', `admin:order_field:${orderId}:executorUsername`)],
+        [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
+      ]);
+      
+      await ctx.editMessageText(
+        `✏️ *Редактирование заказа*\n\n` +
+        `Заказ: *${order.workTitle.substring(0, 30)}*\n\n` +
+        `Выберите поле для изменения:`,
+        {
+          parse_mode: 'Markdown',
+          ...keyboard
+        }
+      );
+    }
+    else if (action.startsWith('order_field:')) {
+      const parts = action.split(':');
+      const orderId = parts[1];
+      const field = parts[2];
+      
+      const order = require('../data/orders').getOrder(orderId);
+      if (!order) {
+        await ctx.answerCbQuery('❌ Заказ не найден');
+        return;
+      }
+      
+      let oldValue = order[field];
+      if (oldValue === undefined || oldValue === null || oldValue === '') {
+        oldValue = 'не указано';
+      } else if (field === 'price') {
+        oldValue = `${oldValue} ₽`;
+      } else if (field === 'commission') {
+        oldValue = `${oldValue}%`;
+      }
+      
+      ctx.session.adminState = `edit_order_input:${orderId}:${field}`;
+      
+      const backKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ]);
+      
+      await ctx.editMessageText(
+        `✏️ *Введите новое значение для поля "${field}":*\n\n` +
+        `📌 *Текущее значение:* \`${oldValue}\`\n\n` +
+        `_(Для отмены нажмите "Назад")_`,
+        {
+          parse_mode: 'Markdown',
+          ...backKeyboard
+        }
+      );
+    }
+    
+    // === СТАТУС ЗАКАЗА ===
+    else if (action.startsWith('order_status:')) {
+      const parts = action.split(':');
+      const orderId = parts[1];
+      const newStatus = parts[2];
+      
+      const updates = { status: newStatus };
+      const order = require('../data/orders').getOrder(orderId);
+      
+      if (newStatus === 'active' && !order.acceptedAt) {
+        updates.acceptedAt = new Date().toLocaleString('ru-RU');
+      }
+      if (newStatus === 'completed' && !order.completedAt) {
+        updates.completedAt = new Date().toLocaleString('ru-RU');
+      }
+      
+      require('../data/orders').updateOrder(orderId, updates);
+      
+      await ctx.answerCbQuery(`✅ Статус изменён`);
+      
+      // Возвращаемся к просмотру заказа
+      const updatedOrder = require('../data/orders').getOrder(orderId);
+      const { formatOrderCard } = require('./menu');
+      const text = formatOrderCard(updatedOrder, 'admin');
+      
+      const buttons = [];
+      buttons.push([Markup.button.callback('✏️ Изменить информацию', `admin:order_edit:${orderId}`)]);
+      
+      if (updatedOrder.customerUsername) {
+        buttons.push([Markup.button.url('💬 Связаться с заказчиком', `https://t.me/${updatedOrder.customerUsername}`)]);
+      }
+      
+      if (updatedOrder.status === 'pending') {
+        buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
+        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+      } else if (updatedOrder.status === 'active') {
+        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+      } else if (updatedOrder.status === 'completed') {
+        buttons.push([Markup.button.callback('🔨 Вернуть в работу', `admin:order_status:${orderId}:active`)]);
+        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+      }
+      
+      buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
+      buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
+      
+      const keyboard = Markup.inlineKeyboard(buttons);
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...keyboard
+      });
+    }
+    
+    // === УДАЛЕНИЕ ЗАКАЗА ===
+    else if (action.startsWith('order_delete:')) {
+      const orderId = action.split(':')[1];
+      const order = require('../data/orders').getOrder(orderId);
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Да, удалить', `admin:order_delete_confirm:${orderId}`)],
+        [Markup.button.callback('❌ Отмена', `admin:order_view:${orderId}`)]
+      ]);
+      
+      await ctx.editMessageText(
+        `⚠️ *Подтверждение удаления*\n\n` +
+        `Заказ: *${order.workTitle}*\n` +
+        `Заказчик: ${order.customerUsername ? `@${order.customerUsername}` : order.customerId}\n\n` +
+        `Заказ будет удалён безвозвратно!`,
+        {
+          parse_mode: 'Markdown',
+          ...keyboard
+        }
+      );
+    }
+    else if (action.startsWith('order_delete_confirm:')) {
+      const orderId = action.split(':')[1];
+      require('../data/orders').deleteOrder(orderId);
+      
+      const allOrders = require('../data/orders').getAllOrders();
+      const pending = allOrders.filter(o => o.status === 'pending').length;
+      const active = allOrders.filter(o => o.status === 'active').length;
+      const completed = allOrders.filter(o => o.status === 'completed').length;
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`⏳ Ожидают (${pending})`, 'admin:orders_list:pending:0')],
+        [Markup.button.callback(`🔨 В работе (${active})`, 'admin:orders_list:active:0')],
+        [Markup.button.callback(`✅ Выполнены (${completed})`, 'admin:orders_list:completed:0')],
+        [Markup.button.callback('📦 Все заказы', 'admin:orders_list:all:0')],
+        [Markup.button.callback('⬅️ Назад', 'admin:main')]
+      ]);
+      
+      await ctx.editMessageText(
+        `✅ *Заказ удалён!*\n\n` +
+        `📦 *Управление заказами*\n\n` +
+        `Всего заказов: *${allOrders.length}*`,
+        {
+          parse_mode: 'Markdown',
+          ...keyboard
         }
       );
     }
