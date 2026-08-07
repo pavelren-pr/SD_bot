@@ -47,37 +47,84 @@ function getOrder(orderId) {
   return loadData().find(o => o.id === orderId);
 }
 
-// 🌟 Функция получения следующего номера заказа
+// 🌟 Получить следующий номер заказа
 function getNextOrderNumber() {
   const data = loadData();
   
-  // Если счётчика ещё нет — инициализируем с 10000
-  if (!data._meta || !data._meta.nextOrderNumber) {
-    data._meta = { nextOrderNumber: 10000 };
-    saveData(data);
+  // Ищем _meta либо как свойство массива, либо в первом элементе
+  let meta = data._meta;
+  if (!meta && data.length > 0 && data[0]._meta) {
+    meta = data[0]._meta;
   }
   
-  return data._meta.nextOrderNumber;
+  // Если счётчика ещё нет — инициализируем с 10000
+  if (!meta || !meta.nextOrderNumber) {
+    const newMeta = { nextOrderNumber: 10000 };
+    if (data.length === 0) {
+      data._meta = newMeta;
+    } else {
+      data[0]._meta = newMeta;
+    }
+    saveData(data);
+    return 10000;
+  }
+  
+  return meta.nextOrderNumber;
 }
 
 // 🌟 Функция увеличения счётчика после создания заказа
 function incrementOrderNumber() {
   const data = loadData();
-  if (!data._meta) data._meta = { nextOrderNumber: 10000 };
-  data._meta.nextOrderNumber += 1;
+  
+  // Ищем _meta либо как свойство массива, либо в первом элементе
+  let meta = data._meta;
+  if (!meta && data.length > 0 && data[0]._meta) {
+    meta = data[0]._meta;
+  }
+  
+  if (!meta) {
+    meta = { nextOrderNumber: 10000 };
+    if (data.length === 0) {
+      data._meta = meta;
+    } else {
+      data[0]._meta = meta;
+    }
+  }
+  
+  meta.nextOrderNumber += 1;
   saveData(data);
 }
 
 // 🌟 Миграция: присваиваем номера старым заказам, у которых их нет
 function migrateOrders() {
   const data = loadData();
-  if (!data._meta) data._meta = { nextOrderNumber: 10000 };
+  
+  // Ищем _meta либо как свойство массива, либо в первом элементе
+  let meta = data._meta;
+  if (!meta && data.length > 0 && data[0]._meta) {
+    meta = data[0]._meta;
+  }
+  
+  if (!meta) {
+    meta = { nextOrderNumber: 10000 };
+    if (data.length === 0) {
+      data._meta = meta;
+    } else {
+      data[0]._meta = meta;
+    }
+  }
   
   let migrated = false;
-  let nextNum = data._meta.nextOrderNumber;
+  let nextNum = meta.nextOrderNumber;
   
-  // Находим все заказы без номера
-  const ordersWithoutNumber = data.filter(o => !o.orderNumber);
+  // Находим все заказы без номера (пропуская _meta если он в первом элементе)
+  const ordersWithoutNumber = data.filter((o, index) => {
+    // Пропускаем первый элемент, если он содержит только _meta или является метаданными
+    if (index === 0 && o._meta && Object.keys(o).length === 1) {
+      return false;
+    }
+    return !o.orderNumber;
+  });
   
   if (ordersWithoutNumber.length > 0) {
     // Присваиваем номера начиная с текущего счётчика
@@ -87,7 +134,7 @@ function migrateOrders() {
       migrated = true;
     });
     
-    data._meta.nextOrderNumber = nextNum;
+    meta.nextOrderNumber = nextNum;
     saveData(data);
     console.log(`✅ Мигрировано заказов: ${ordersWithoutNumber.length}. Следующий номер: ${nextNum}`);
   }
