@@ -47,10 +47,62 @@ function getOrder(orderId) {
   return loadData().find(o => o.id === orderId);
 }
 
+// 🌟 Функция получения следующего номера заказа
+function getNextOrderNumber() {
+  const data = loadData();
+  
+  // Если счётчика ещё нет — инициализируем с 10000
+  if (!data._meta || !data._meta.nextOrderNumber) {
+    data._meta = { nextOrderNumber: 10000 };
+    saveData(data);
+  }
+  
+  return data._meta.nextOrderNumber;
+}
+
+// 🌟 Функция увеличения счётчика после создания заказа
+function incrementOrderNumber() {
+  const data = loadData();
+  if (!data._meta) data._meta = { nextOrderNumber: 10000 };
+  data._meta.nextOrderNumber += 1;
+  saveData(data);
+}
+
+// 🌟 Миграция: присваиваем номера старым заказам, у которых их нет
+function migrateOrders() {
+  const data = loadData();
+  if (!data._meta) data._meta = { nextOrderNumber: 10000 };
+  
+  let migrated = false;
+  let nextNum = data._meta.nextOrderNumber;
+  
+  // Находим все заказы без номера
+  const ordersWithoutNumber = data.filter(o => !o.orderNumber);
+  
+  if (ordersWithoutNumber.length > 0) {
+    // Присваиваем номера начиная с текущего счётчика
+    ordersWithoutNumber.forEach(order => {
+      order.orderNumber = nextNum;
+      nextNum++;
+      migrated = true;
+    });
+    
+    data._meta.nextOrderNumber = nextNum;
+    saveData(data);
+    console.log(`✅ Мигрировано заказов: ${ordersWithoutNumber.length}. Следующий номер: ${nextNum}`);
+  }
+}
+
+// Запускаем миграцию при загрузке модуля
+migrateOrders();
+
 // 🌟 Создать новый заказ
 function createOrder(orderData) {
   const orders = loadData();
+  const orderNumber = getNextOrderNumber();
+  
   const newOrder = {
+    orderNumber: orderNumber, // 🌟 НОВЫЙ ПОЛЕ: читаемый номер заказа
     id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     workId: orderData.workId || null,
     workTitle: orderData.workTitle || 'Не указано',
@@ -62,14 +114,21 @@ function createOrder(orderData) {
     executorUsername: null,
     price: orderData.price,
     commission: orderData.commission || 0,
-    status: 'pending', // pending | active | completed
+    status: 'pending',
     createdAt: orderData.createdAt || new Date().toLocaleString('ru-RU'),
     acceptedAt: null,
     completedAt: null
   };
+  
   orders.push(newOrder);
+  incrementOrderNumber(); // 🌟 Увеличиваем счётчик
   saveData(orders);
   return newOrder;
+}
+
+// 🌟 Получить заказ по номеру (удобно для поиска)
+function getOrderByNumber(orderNumber) {
+  return loadData().find(o => o.orderNumber === orderNumber || String(o.orderNumber) === String(orderNumber));
 }
 
 // 🌟 Обновить заказ
@@ -105,6 +164,7 @@ module.exports = {
   getUserOrders,
   getExecutorOrders,
   getOrder,
+  getOrderByNumber,
   createOrder,
   updateOrder,
   deleteOrder,

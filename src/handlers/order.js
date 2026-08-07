@@ -7,6 +7,12 @@ const { Markup } = require('telegraf');
 const mediaBuffer = {};
 const activeChats = new Map();
 
+// 🌟 Функция экранирования специальных символов Markdown
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+}
+
 function getChatKeyboard(chatId, isCustomer) {
   const replyText = isCustomer ? '✏️ Написать исполнителю' : '✏️ Ответить заказчику';
   const replyCallback = isCustomer ? `customer_reply:${chatId}` : `executor_reply:${chatId}`;
@@ -34,7 +40,7 @@ function register(bot) {
   bot.on(['text', 'photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    // 🌟 0.1 АДМИН ПИШЕТ ЗАКАЗЧИКУ (через меню "Все заказы")
+    // 🌟 0.1 АДМИН ПИШЕТ ЗАКАЗЧИКУ
     if (ctx.session.adminReplyToCustomerId) {
       const targetUserId = ctx.session.adminReplyToCustomerId;
       const orderTitle = ctx.session.adminReplyOrderTitle;
@@ -43,21 +49,13 @@ function register(bot) {
       
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 *Вам сообщение от исполнителя*\n\n` +
-        `📚 *Заказ:* ${orderTitle}\n` +
-        `📅 *Дата заказа:* ${orderDate}\n\n` +
-        `${messageText}`,
+        `💬 *Вам сообщение от исполнителя*\n\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
         { parse_mode: 'Markdown' }
       );
-      
-      if (ctx.message.photo) {
-        await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
-      } else if (ctx.message.document) {
-        await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
-      }
+      if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
+      else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
       
       await ctx.reply(`✅ Сообщение отправлено заказчику (ID: ${targetUserId})`);
-      
       ctx.session.adminReplyToCustomerId = null;
       ctx.session.adminReplyOrderId = null;
       ctx.session.adminReplyOrderTitle = null;
@@ -65,7 +63,7 @@ function register(bot) {
       return;
     }
     
-    // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ (через карточку заказа)
+    // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ
     if (ctx.session.customerReplyToExecutorId) {
       const targetUserId = ctx.session.customerReplyToExecutorId;
       const orderTitle = ctx.session.customerReplyOrderTitle;
@@ -74,21 +72,13 @@ function register(bot) {
       
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 *Вам сообщение от заказчика*\n\n` +
-        `📚 *Заказ:* ${orderTitle}\n` +
-        `📅 *Дата заказа:* ${orderDate}\n\n` +
-        `${messageText}`,
+        `💬 *Вам сообщение от заказчика*\n\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
         { parse_mode: 'Markdown' }
       );
-      
-      if (ctx.message.photo) {
-        await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
-      } else if (ctx.message.document) {
-        await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
-      }
+      if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
+      else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
       
       await ctx.reply(`✅ Сообщение отправлено исполнителю (ID: ${targetUserId})`);
-      
       ctx.session.customerReplyToExecutorId = null;
       ctx.session.customerReplyOrderId = null;
       ctx.session.customerReplyOrderTitle = null;
@@ -96,58 +86,46 @@ function register(bot) {
       return;
     }
     
-    // 🌟 0.3 ПРОВЕРКА: Если пользователь в админ-панели — передаём управление admin.js
+    // 🌟 ПРОВЕРКА: Если пользователь в админ-панели — передаём управление admin.js
     if (ctx.session.adminState) {
       console.log('⚙️ Сообщение перехвачено админ-панелью, передаём управление admin.js');
       await next();
       return;
     }
-
-    // 🌟 0. ПРОВЕРКА: Если пользователь в админ-панели — передаём управление admin.js
-    if (ctx.session.adminState) {
-      console.log('⚙️ Сообщение перехвачено админ-панелью, передаём управление admin.js');
-      await next(); //  ВАЖНО: передаём управление следующему middleware
-      return;
-    }
     
-    // 🌟 0.1 ПРОВЕРКА: Менеджер пишет ответ пользователю из поддержки
+    // 🌟 Менеджер пишет ответ пользователю из поддержки
     if (ctx.session.replyToUserId) {
       console.log('✅ Режим ответа активен! Отправляем пользователю:', ctx.session.replyToUserId);
       const targetUserId = ctx.session.replyToUserId;
       const targetUsername = ctx.session.replyToUsername || 'неизвестно';
       const messageText = ctx.message.text || '[Фото/Файл]';
-
+      
       await ctx.telegram.sendMessage(targetUserId, `💬 *Сообщение от менеджера:*\n\n${messageText}`, { parse_mode: 'Markdown' });
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
-
+      
       await ctx.reply(`✅ Ответ успешно отправлен пользователю @${targetUsername} (ID: ${targetUserId})`);
       ctx.session.replyToUserId = null;
       ctx.session.replyToUsername = null;
-      console.log('✅ Ответ отправлен, режим ответа деактивирован');
       return;
     }
 
-    // Теперь проверяем приватность чата
     if (ctx.chat?.type !== 'private' || ctx.from?.is_bot) return;
     
     const order = ctx.session.order;
 
-    // 1. Исполнитель в активном чате
     const executorChat = findExecutorChat(ctx.from.id);
     if (executorChat && (executorChat.status === 'waiting_executor_message' || executorChat.status === 'waiting_executor_file')) {
       await handleExecutorMessage(ctx, executorChat);
       return;
     }
 
-    // 2. Заказчик в активном чате
     const customerChat = findCustomerChat(ctx.from.id);
     if (customerChat && (customerChat.status === 'waiting_customer_message' || customerChat.status === 'waiting_customer_file')) {
       await handleCustomerMessage(ctx, customerChat);
       return;
     }
 
-    // 3. Детали заказа
     if (order && order.step === 'waiting_details') {
       if (ctx.message.text) {
         order.details.text = ctx.message.text;
@@ -182,7 +160,6 @@ function register(bot) {
       return;
     }
 
-    // 4. Чек об оплате
     if (order && order.step === 'awaiting_payment') {
       const work = catalog.getWork(order.workId);
       const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
@@ -197,7 +174,7 @@ function register(bot) {
         if (order.details.text) updatedText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
         if (order.details.files.length > 0) {
           updatedText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
-          order.details.files.forEach(file => { updatedText += `• ${file.fileName}\n`; });
+          order.details.files.forEach(file => { updatedText += `• ${escapeMarkdown(file.fileName)}\n`; });
         }
         updatedText += `\n⏰ *Создан:* ${order.createdAt}\n✅ *Оплачен:* ${paidTime}\n🟢 *Статус:* ОПЛАЧЕН`;
         
@@ -217,7 +194,6 @@ function register(bot) {
         order.status = 'paid'; order.paidAt = paidTime; order.step = 'completed';
         loyalty.addToTotal(ctx.from.id, ctx.from.username, order.finalPrice);
         
-        // 🌟 СОЗДАЁМ ЗАПИСЬ В БАЗЕ ЗАКАЗОВ
         const subject = catalog.getSubject(work.subjectId);
         const course = catalog.getCourse(subject.courseId);
         
@@ -233,9 +209,27 @@ function register(bot) {
           createdAt: paidTime
         });
         
-        // Сохраняем ID заказа в сессии, чтобы потом обновлять его
         ctx.session.currentOrderId = newOrder.id;
-
+        
+        let updatedOrderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
+        updatedOrderText += `🆔 *Номер заказа:* №${newOrder.orderNumber}\n`;
+        updatedOrderText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
+        updatedOrderText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
+        if (order.details.text) updatedOrderText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
+        if (order.details.files.length > 0) {
+          updatedOrderText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
+          order.details.files.forEach(file => { updatedOrderText += `• ${escapeMarkdown(file.fileName)}\n`; });
+        }
+        updatedOrderText += `\n⏰ *Создан:* ${order.createdAt}\n✅ *Оплачен:* ${paidTime}\n🟢 *Статус:* ОПЛАЧЕН`;
+        
+        try {
+          await ctx.telegram.editMessageText(targetChatId, order.managerMessageId, null, updatedOrderText, { 
+            parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
+          });
+        } catch (e) {
+          console.log('Не удалось обновить сообщение менеджера с номером:', e.message);
+        }
+        
         const managerUrl = 'https://t.me/SmartDealsManager';
         const waitingKeyboard = Markup.inlineKeyboard([[Markup.button.url('👨‍💼 Связаться с менеджером', managerUrl)]]);
         
@@ -250,7 +244,6 @@ function register(bot) {
       return;
     }
 
-    // 5. Случайное сообщение (поддержка)
     const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
     const userLink = ctx.from.username ? `@${ctx.from.username}` : `ID: ${ctx.from.id}`;
     
@@ -260,8 +253,7 @@ function register(bot) {
       ]);
 
       await ctx.telegram.sendMessage(supportChatId, `📩 *Новое сообщение от пользователя*\n👤 ${userLink}\n\nСообщение переслано ниже 👇`, { 
-        parse_mode: 'Markdown',
-        reply_markup: supportReplyKeyboard.reply_markup
+        parse_mode: 'Markdown', reply_markup: supportReplyKeyboard.reply_markup 
       });
       
       await ctx.forwardMessage(supportChatId, ctx.chat.id, ctx.message.message_id);
@@ -304,7 +296,7 @@ function register(bot) {
     if (order.details.text) summary += `📝 *Ваши данные:*\n\`${order.details.text}\`\n\n`;
     if (order.details.files.length > 0) {
       summary += `📎 *Принято файлов:* ${order.details.files.length}\n`;
-      order.details.files.forEach(file => { summary += `• ${file.fileName}\n`; });
+      order.details.files.forEach(file => { summary += `• ${escapeMarkdown(file.fileName)}\n`; });
       summary += '\n';
     }
     summary += 'Проверьте данные и нажмите кнопку ниже.';
@@ -342,19 +334,20 @@ function register(bot) {
     const createdAt = new Date().toLocaleString('ru-RU');
 
     let orderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
+    orderText += `🆔 *Номер заказа:* будет присвоен после оплаты\n`;
     orderText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
     orderText += `💰 *Сумма:* ${pricing.finalPrice} ₽ (скидка ${pricing.discountPercent}%)\n💳 *Оплата на:* \`${paymentDetails}\`\n`;
     if (order.details.text) orderText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
     if (order.details.files.length > 0) {
       orderText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
-      order.details.files.forEach(file => { orderText += `• ${file.fileName}\n`; });
+      order.details.files.forEach(file => { orderText += `• ${escapeMarkdown(file.fileName)}\n`; });
     }
     orderText += `\n⏰ *Создан:* ${createdAt}\n🟡 *Статус:* ОЖИДАЕТ ОПЛАТЫ`;
 
     const chatId = `order_${ctx.from.id}_${order.workId}`;
     try {
       const sentMsg = await ctx.telegram.sendMessage(targetChatId, orderText, { 
-        parse_mode: 'Markdown', reply_markup: createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `accept_order:${chatId}` }]]).reply_markup
+        parse_mode: 'Markdown', reply_markup: createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `accept_order:${chatId}` }]]).reply_markup 
       });
       order.managerMessageId = sentMsg.message_id;
       for (const file of order.details.files) {
@@ -370,7 +363,7 @@ function register(bot) {
     }
   });
 
-    bot.action(/^accept_order:(.+)$/, async (ctx) => {
+  bot.action(/^accept_order:(.+)$/, async (ctx) => {
     const chatId = ctx.match[1];
     const executorUserId = ctx.from.id;
     const parts = chatId.split('_');
@@ -382,14 +375,30 @@ function register(bot) {
     if (activeChats.has(chatId)) return ctx.answerCbQuery('⚠️ Этот заказ уже принят другим исполнителем');
 
     const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+    
+    let customerUsername = null;
+    try {
+      const customerUser = await ctx.telegram.getChat(customerUserId);
+      customerUsername = customerUser.username ? `@${customerUser.username}` : null;
+    } catch (e) {
+      console.log('Не удалось получить username заказчика:', e.message);
+    }
+    
     const groupChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
-
-    await ctx.telegram.sendMessage(groupChatId, `✅ *Исполнитель ${executorName} (ID: \`${executorUserId}\`) принял заказ!*\n\n📚 *Работа:* ${work.title}\n👤 *Заказчик ID:* ${customerUserId}`, { parse_mode: 'Markdown' });
+    
+    // 🌟 Получаем номер заказа (один раз!)
+    const activeOrder = orders.findActiveOrder(customerUserId, workId);
+    const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
+    
+    await ctx.telegram.sendMessage(
+      groupChatId, 
+      `✅ *Исполнитель ${executorName} принял заказ!*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Работа:* ${work.title}\n👤 *Заказчик:* ${customerUsername || `ID: ${customerUserId}`}`, 
+      { parse_mode: 'Markdown' }
+    );
     
     activeChats.set(chatId, { chatId, customerUserId, executorUserId, workId, workTitle: work.title, status: 'waiting_executor_message', createdAt: Date.now() });
 
-    // 🌟 ОБНОВЛЯЕМ ЗАКАЗ: назначаем исполнителя
-    const activeOrder = orders.findActiveOrder(customerUserId, workId);
+    // 🌟 Используем УЖЕ ОБЪЯВЛЕННУЮ выше переменную activeOrder (без const!)
     if (activeOrder) {
       const executorUser = await ctx.telegram.getChat(executorUserId);
       orders.updateOrder(activeOrder.id, {
@@ -398,11 +407,9 @@ function register(bot) {
         status: 'active',
         acceptedAt: new Date().toLocaleString('ru-RU')
       });
-      // Сохраняем ID заказа в активных чатах для дальнейшего использования
       activeChats.get(chatId).orderId = activeOrder.id;
     }
 
-    // 🌟 ЯВНО СОЗДАЁМ КЛАВИАТУРУ (без проблемных объединений)
     const executorFullKeyboard = Markup.inlineKeyboard([
       [Markup.button.callback('✏️ Ответить заказчику', `executor_reply:${chatId}`)],
       [Markup.button.callback('📎 Отправить файл/фото', `executor_send_file:${chatId}`)],
@@ -418,22 +425,19 @@ function register(bot) {
 
     await ctx.telegram.sendMessage(
       customerUserId, 
-      `✅ *Ваш заказ в работе!*\n\n📚 *Работа:* ${work.title}\n\nИсполнитель назначен. Теперь вы можете обсудить детали выполнения заказа, используя кнопки ниже:`, 
+      `✅ *Ваш заказ в работе!*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Работа:* ${work.title}\n\nИсполнитель назначен. Теперь вы можете обсудить детали выполнения заказа, используя кнопки ниже:`, 
       { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) }
     );
     
     await ctx.answerCbQuery('✅ Заказ принят');
   });
 
-  // 🌟 Обработчик кнопки "Заказ выполнен"
   bot.action(/^order_completed:(.+)$/, async (ctx) => {
     const chatId = ctx.match[1];
     const chatData = activeChats.get(chatId);
     if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     
     chatData.status = 'completed';
-
-    // 🌟 ОБНОВЛЯЕМ ЗАКАЗ: отмечаем как выполненный
     if (chatData.orderId) {
       orders.updateOrder(chatData.orderId, {
         status: 'completed',
@@ -516,7 +520,7 @@ function register(bot) {
     await ctx.answerCbQuery('Чат завершён');
   });
 
-    function findExecutorChat(userId) {
+  function findExecutorChat(userId) {
     for (const chatData of activeChats.values()) {
       if (chatData.executorUserId === userId && (chatData.status === 'waiting_executor_message' || chatData.status === 'waiting_executor_file')) return chatData;
     }
@@ -531,12 +535,11 @@ function register(bot) {
   }
 }
 
-function findChatByOrderId(orderId) {
+  function findChatByOrderId(orderId) {
     for (const [chatId, chatData] of activeChats) {
       if (chatData.orderId === orderId) return { chatId, chatData };
     }
     return null;
-}
+  }
 
-// 🌟 Экспортируем и register, и findChatByOrderId
 module.exports = { register, findChatByOrderId };

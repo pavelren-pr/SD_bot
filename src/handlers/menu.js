@@ -122,11 +122,11 @@ function register(bot) {
     const buttons = [];
     
     pageOrders.forEach(order => {
-      const title = order.workTitle.substring(0, 30);
+      const title = order.workTitle.substring(0, 25);
       const date = order.createdAt.split(' ')[0];
       buttons.push([Markup.button.callback(
-        `📝 ${title} | 📅 ${date}`,
-        `orders:admin:view:${order.id}`
+        `№${order.orderNumber} | ${title} | ${date}`,
+        `orders:customer:view:${order.id}`
       )]);
     });
     
@@ -175,11 +175,11 @@ function register(bot) {
     const buttons = [];
     
     pageOrders.forEach(order => {
-      const title = order.workTitle.substring(0, 30);
+      const title = order.workTitle.substring(0, 25);
       const date = order.createdAt.split(' ')[0];
       buttons.push([Markup.button.callback(
-        `📝 ${title} | 📅 ${date}`,
-        `orders:admin:view:${order.id}`
+        `№${order.orderNumber} | ${title} | ${date}`,
+        `orders:customer:view:${order.id}`
       )]);
     });
     
@@ -297,11 +297,11 @@ function register(bot) {
     const buttons = [];
     
     pageOrders.forEach(order => {
-      const title = order.workTitle.substring(0, 30);
+      const title = order.workTitle.substring(0, 25);
       const date = order.createdAt.split(' ')[0];
       buttons.push([Markup.button.callback(
-        `📝 ${title} | 📅 ${date}`,
-        `orders:admin:view:${order.id}`
+        `№${order.orderNumber} | ${title} | ${date}`,
+        `orders:customer:view:${order.id}`
       )]);
     });
     
@@ -439,10 +439,10 @@ function register(bot) {
     const buttons = [];
     
     pageOrders.forEach(order => {
-      const title = order.workTitle.substring(0, 30);
+      const title = order.workTitle.substring(0, 25);
       const date = order.createdAt.split(' ')[0];
       buttons.push([Markup.button.callback(
-        `📝 ${title} | 📅 ${date}`,
+        `№${order.orderNumber} | ${title} | ${date}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -516,10 +516,10 @@ function register(bot) {
     const buttons = [];
     
     pageOrders.forEach(order => {
-      const title = order.workTitle.substring(0, 30);
+      const title = order.workTitle.substring(0, 25);
       const date = order.createdAt.split(' ')[0];
       buttons.push([Markup.button.callback(
-        `📝 ${title} | 📅 ${date}`,
+        `№${order.orderNumber} | ${title} | ${date}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -626,11 +626,11 @@ function register(bot) {
     const buttons = [];
     
     pageOrders.forEach(order => {
-      const title = order.workTitle.substring(0, 30);
+      const title = order.workTitle.substring(0, 25);
       const date = order.createdAt.split(' ')[0];
       buttons.push([Markup.button.callback(
-        `📝 ${title} | 📅 ${date}`,
-        `orders:executor:view:${order.id}`
+        `№${order.orderNumber} | ${title} | ${date}`,
+        `orders:customer:view:${order.id}`
       )]);
     });
     
@@ -702,11 +702,11 @@ function register(bot) {
     const buttons = [];
     
     pageOrders.forEach(order => {
-      const title = order.workTitle.substring(0, 30);
+      const title = order.workTitle.substring(0, 25);
       const date = order.createdAt.split(' ')[0];
       buttons.push([Markup.button.callback(
-        `📝 ${title} | 📅 ${date}`,
-        `orders:executor:view:${order.id}`
+        `№${order.orderNumber} | ${title} | ${date}`,
+        `orders:customer:view:${order.id}`
       )]);
     });
     
@@ -775,7 +775,7 @@ function formatOrderCard(order, role) {
   if (order.status === 'active') { statusEmoji = '🔨'; statusText = 'В работе'; }
   if (order.status === 'completed') { statusEmoji = '✅'; statusText = 'Выполнен'; }
   
-  let text = `📦 *Заказ #${order.id.substr(-6)}*\n\n`;
+  let text = `📦 *Заказ №${order.orderNumber}*\n\n`;
   text += `${statusEmoji} *Статус:* ${statusText}\n\n`;
   text += `📚 *Работа:* ${order.workTitle}\n`;
   text += `📖 *Предмет:* ${order.subjectName}\n`;

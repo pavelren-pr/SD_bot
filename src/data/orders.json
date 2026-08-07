@@ -1,19 +1,20 @@
 [
   {
-    "id": "order_1786095969026_miqdp",
-    "workId": "nil_1tide",
-    "workTitle": "Приливы 1 задача 🏄",
+    "orderNumber": 10000,
+    "id": "order_1786128189771_og4l0",
+    "workId": "NIL_VertAngl_RGR",
+    "workTitle": "РГР «вертикальный угол» (4 задачи) 📐",
     "subjectName": "НиЛ 🧭",
-    "courseName": "4 курс ⭐⭐⭐⭐",
+    "courseName": "3 курс ⭐⭐⭐",
     "customerId": 1012758149,
     "customerUsername": "pavelren",
     "executorId": 7195122925,
     "executorUsername": "SmartDealsManager",
-    "price": 1192,
+    "price": 1032,
     "commission": 20,
     "status": "active",
-    "createdAt": "07.08.2026, 12:46:08",
-    "acceptedAt": "07.08.2026, 12:47:24",
+    "createdAt": "07.08.2026, 21:43:09",
+    "acceptedAt": "07.08.2026, 21:44:14",
     "completedAt": null
   }
 ]
