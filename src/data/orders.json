@@ -1,5 +1,8 @@
 [
   {
+    "_meta": {
+      "nextOrderNumber": 10001
+    },
     "orderNumber": 10000,
     "id": "order_1786128189771_og4l0",
     "workId": "NIL_VertAngl_RGR",
