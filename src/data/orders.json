@@ -37,5 +37,41 @@
     "createdAt": "07.08.2026, 22:25:04",
     "acceptedAt": null,
     "completedAt": null
+  },
+  {
+    "orderNumber": 10001,
+    "id": "order_1786133722269_md75r",
+    "workId": "mss_pz3",
+    "workTitle": "ПЗ №3 📒",
+    "subjectName": "МСС 📏",
+    "courseName": "3 курс ⭐⭐⭐",
+    "customerId": 1012758149,
+    "customerUsername": "pavelren",
+    "executorId": 7195122925,
+    "executorUsername": "SmartDealsManager",
+    "price": 392,
+    "commission": 20,
+    "status": "active",
+    "createdAt": "07.08.2026, 23:15:22",
+    "acceptedAt": "07.08.2026, 23:15:33",
+    "completedAt": null
+  },
+  {
+    "orderNumber": 10001,
+    "id": "order_1786133989952_li9b6",
+    "workId": "GMOS_PZ2",
+    "workTitle": "Практическая работа №2 🪁",
+    "subjectName": "ГМОС 🌦️",
+    "courseName": "3 курс ⭐⭐⭐",
+    "customerId": 1012758149,
+    "customerUsername": "pavelren",
+    "executorId": 7195122925,
+    "executorUsername": "SmartDealsManager",
+    "price": 472,
+    "commission": 20,
+    "status": "active",
+    "createdAt": "07.08.2026, 23:19:49",
+    "acceptedAt": "07.08.2026, 23:20:10",
+    "completedAt": null
   }
 ]
