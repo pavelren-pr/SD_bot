@@ -71,6 +71,7 @@ function getSubjectWorks(subjectId) {
 }
 
 // 🌟 Карточка работы с кнопками редактирования
+// 🌟 Карточка работы с кнопками редактирования
 function getWorkCard(workId) {
   const work = catalog.getWork(workId);
   const subject = catalog.getSubject(work.subjectId);
@@ -80,6 +81,12 @@ function getWorkCard(workId) {
   text += `📚 *Курс:* ${course.name}\n`;
   text += `📖 *Предмет:* ${subject.name}\n\n`;
   text += `📝 *Название:* ${work.title}\n`;
+  
+  // 🌟 Добавляем описание, если оно существует
+  if (work.description && work.description.trim() !== '') {
+    text += `📄 *Описание:* ${work.description}\n`;
+  }
+  
   text += `💰 *Цена:* ${work.price} ₽\n`;
   text += `📊 *Комиссия:* ${work.commission}%\n`;
   text += `💳 *Оплата:* \`${work.paymentEnv}\`\n`;
@@ -693,10 +700,12 @@ function register(bot) {
       const workId = action.split(':')[1];
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('📝 Название', 'admin:edit_field:title:' + workId)],
+        [Markup.button.callback('📄 Описание', 'admin:edit_field:description:' + workId)], // 🌟 НОВАЯ КНОПКА
         [Markup.button.callback('💰 Цена', 'admin:edit_field:price:' + workId)],
         [Markup.button.callback('📊 Комиссия', 'admin:edit_field:commission:' + workId)],
         [Markup.button.callback('💬 Чат (env)', 'admin:edit_field:chatEnv:' + workId)],
         [Markup.button.callback('💳 Оплата (env)', 'admin:edit_field:paymentEnv:' + workId)],
+        [Markup.button.callback('📋 Требования (needs)', 'admin:edit_field:needs:' + workId)],
         [Markup.button.callback('📌 Подсказка (prompt)', 'admin:edit_field:prompt:' + workId)],
         [Markup.button.callback('⬅️ Назад', `admin:catalog_work:${workId}`)]
       ]);
@@ -705,15 +714,44 @@ function register(bot) {
         ...keyboard
       });
     }
+        // === РЕДАКТИРОВАНИЕ РАБОТЫ: выбор поля и показ текущего значения ===
     else if (action.startsWith('edit_field:')) {
       const parts = action.split(':');
       const field = parts[1];
       const workId = parts[2];
+      
+      // Получаем текущие данные работы
+      const work = catalog.getWork(workId);
+      let oldValue = work ? work[field] : undefined;
+      
+      // 🌟 Форматируем старое значение для удобного чтения
+      if (field === 'needs') {
+        oldValue = Array.isArray(oldValue) && oldValue.length > 0 ? oldValue.join(', ') : 'нет';
+      } else if (field === 'price') {
+        oldValue = `${oldValue} ₽`;
+      } else if (field === 'commission') {
+        oldValue = `${oldValue}%`;
+      } else if (oldValue === undefined || oldValue === null || oldValue === '') {
+        oldValue = 'не указано';
+      }
+
+      // 🌟 Сохраняем состояние для обработки ввода
       ctx.session.adminState = `edit_work_input:${workId}:${field}`;
-      await ctx.editMessageText(`✏️ *Введите новое значение для поля "${field}":*`, {
-        parse_mode: 'Markdown',
-        ...getBackToAdminMenu()
-      });
+      
+      // 🌟 Создаём кнопку "Назад", которая возвращает к карточке работы
+      const backToWorkKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('⬅️ Назад', `admin:edit_work:${workId}`)]
+      ]);
+      
+      await ctx.editMessageText(
+        `✏️ *Введите новое значение для поля "${field}":*\n\n` +
+        `📌 *Текущее значение:* \`${oldValue}\`\n\n` +
+        `_(Для отмены нажмите "Назад")_`,
+        {
+          parse_mode: 'Markdown',
+          ...backToWorkKeyboard
+        }
+      );
     }
 
     // === ИЗМЕНЕНИЕ РАНГА ===

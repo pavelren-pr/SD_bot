@@ -1,85 +1,909 @@
 {
   "courses": [
-    { "id": "course1", "name": "1 курс ⭐" },
-    { "id": "course2", "name": "2 курс ⭐⭐" },
-    { "id": "course3", "name": "3 курс ⭐⭐⭐" },
-    { "id": "course4", "name": "4 курс ⭐⭐⭐⭐" }
+    {
+      "id": "course1",
+      "name": "1 курс ⭐"
+    },
+    {
+      "id": "course2",
+      "name": "2 курс ⭐⭐"
+    },
+    {
+      "id": "course3",
+      "name": "3 курс ⭐⭐⭐"
+    },
+    {
+      "id": "course4",
+      "name": "4 курс ⭐⭐⭐⭐"
+    }
   ],
   "subjects": [
-    { "id": "math1", "courseId": "course1", "name": "Вышмат 📐" },
-    { "id": "nachert", "courseId": "course2", "name": "Начерталка 📒" },
-    { "id": "injgraf", "courseId": "course2", "name": "Инженерная графика 🗜️" },
-    { "id": "mech", "courseId": "course2", "name": "Механика ⚙" },
-    { "id": "math2", "courseId": "course2", "name": "Вышмат 📐" },
-    { "id": "mss", "courseId": "course3", "name": "МСС 📏" },
-    { "id": "tus", "courseId": "course3", "name": "ТУС 🚢" },
-    { "id": "mos", "courseId": "course3", "name": "МОС 🧮" },
-    { "id": "bs_vvp", "courseId": "course3", "name": "Безопасность судоходства на ВВП 🛟" },
-    { "id": "ol_vvp", "courseId": "course3", "name": "Общая лоция ВВП 🌉" },
-    { "id": "gmos", "courseId": "course3", "name": "ГМОС 🌦️" },
-    { "id": "astro3", "courseId": "course3", "name": "Астрономия 🌌" },
-    { "id": "nil3", "courseId": "course3", "name": "НиЛ 🧭" },
-    { "id": "tss3", "courseId": "course3", "name": "ТСС 📺" },
-    { "id": "nil4", "courseId": "course4", "name": "НиЛ 🧭" },
-    { "id": "mius", "courseId": "course4", "name": "МиУС 🚢" },
-    { "id": "tss4", "courseId": "course4", "name": "ТСС 📺" },
-    { "id": "astro4", "courseId": "course4", "name": "Астрономия 🌌" },
-    { "id": "pss", "courseId": "course4", "name": "ПСС 🛟" },
-    { "id": "radio_vvp", "courseId": "course4", "name": "Радиосвязь на ВВП 📻" },
-    { "id": "tiompg", "courseId": "course4", "name": "ТиОМПГ 🏗" }
+    {
+      "id": "math1",
+      "courseId": "course1",
+      "name": "Вышмат 📐"
+    },
+    {
+      "id": "nachert",
+      "courseId": "course2",
+      "name": "Начерталка 📒"
+    },
+    {
+      "id": "injgraf",
+      "courseId": "course2",
+      "name": "Инженерная графика 🗜️"
+    },
+    {
+      "id": "mech",
+      "courseId": "course2",
+      "name": "Механика ⚙"
+    },
+    {
+      "id": "math2",
+      "courseId": "course2",
+      "name": "Вышмат 📐"
+    },
+    {
+      "id": "mss",
+      "courseId": "course3",
+      "name": "МСС 📏"
+    },
+    {
+      "id": "tus",
+      "courseId": "course3",
+      "name": "ТУС 🚢"
+    },
+    {
+      "id": "mos",
+      "courseId": "course3",
+      "name": "МОС 🧮"
+    },
+    {
+      "id": "bs_vvp",
+      "courseId": "course3",
+      "name": "Безопасность судоходства на ВВП 🛟"
+    },
+    {
+      "id": "ol_vvp",
+      "courseId": "course3",
+      "name": "Общая лоция ВВП 🌉"
+    },
+    {
+      "id": "gmos",
+      "courseId": "course3",
+      "name": "ГМОС 🌦️"
+    },
+    {
+      "id": "astro3",
+      "courseId": "course3",
+      "name": "Астрономия 🌌"
+    },
+    {
+      "id": "nil3",
+      "courseId": "course3",
+      "name": "НиЛ 🧭"
+    },
+    {
+      "id": "tss3",
+      "courseId": "course3",
+      "name": "ТСС 📺"
+    },
+    {
+      "id": "nil4",
+      "courseId": "course4",
+      "name": "НиЛ 🧭"
+    },
+    {
+      "id": "mius",
+      "courseId": "course4",
+      "name": "МиУС 🚢"
+    },
+    {
+      "id": "tss4",
+      "courseId": "course4",
+      "name": "ТСС 📺"
+    },
+    {
+      "id": "astro4",
+      "courseId": "course4",
+      "name": "Астрономия 🌌"
+    },
+    {
+      "id": "pss",
+      "courseId": "course4",
+      "name": "ПСС 🛟"
+    },
+    {
+      "id": "radio_vvp",
+      "courseId": "course4",
+      "name": "Радиосвязь на ВВП 📻"
+    },
+    {
+      "id": "tiompg",
+      "courseId": "course4",
+      "name": "ТиОМПГ 🏗"
+    }
   ],
   "works": [
-    { "id": "nach1_9", "courseId": "course2", "subjectId": "nachert", "title": "1–9 задачи (каждая отдельно) 📎", "price": 520, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографию(и) вашего задания (1–9) 📸" },
-    { "id": "nach10_12", "courseId": "course2", "subjectId": "nachert", "title": "10–12 задачи (каждая отдельно) 🖼️", "price": 590, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографию вашего задания (10–12) 📸" },
-    { "id": "nachall1_9", "courseId": "course2", "subjectId": "nachert", "title": "1–9 задачи вместе 🪢", "price": 3890, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографии всех заданий 1–9 📸" },
-    { "id": "nachall10_12", "courseId": "course2", "subjectId": "nachert", "title": "10–12 задачи вместе 🧺", "price": 1680, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографии всех заданий 10–12 📸" },
-    { "id": "inj146", "courseId": "course2", "subjectId": "injgraf", "title": "1–4 и 6 работа (каждая отдельно) 🕋", "price": 1190, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографию(и) задания (1–4 и 6) 📸\n(если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру) 🤝" },
-    { "id": "inj5", "courseId": "course2", "subjectId": "injgraf", "title": "5 работа (эскизирование) 🖼️", "price": 890, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографию(и) задания (Эскизирование) 📸" },
-    { "id": "injALL", "courseId": "course2", "subjectId": "injgraf", "title": "🦁 Весь комплект 🦁", "price": 6690, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографии всех заданий по Инженерной графике 📸\n(если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру)" },
-    { "id": "nachANDinjgraf", "courseId": "course2", "subjectId": "injgraf", "title": "👑 Царский набор 👑", "price": 10190, "commission": 20, "chatEnv": "CHERCHENIE_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографии всех заданий по Начерту и Инжграфу 📸\n(если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру)" },
-    { "id": "mech_beam", "courseId": "course2", "subjectId": "mech", "title": "Расчёт Балки 🧮", "price": 1290, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "mech_val", "courseId": "course2", "subjectId": "mech", "title": "Расчёт Вала 📏", "price": 1290, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "mech_val_beam", "courseId": "course2", "subjectId": "mech", "title": "Расчёт Вала и Балки (вместе) 👑", "price": 1990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "mss_pz1", "courseId": "course3", "subjectId": "mss", "title": "ПЗ №1 🗒️", "price": 490, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте последнюю цифру Вашего номера по журналу группы" },
-    { "id": "mss_pz2", "courseId": "course3", "subjectId": "mss", "title": "ПЗ №2 📓", "price": 990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографию Ваших измерений 📸" },
-    { "id": "mss_pz3", "courseId": "course3", "subjectId": "mss", "title": "ПЗ №3 📒", "price": 490, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте последнюю цифру Вашего номера по журналу группы" },
-    { "id": "mss_pz4", "courseId": "course3", "subjectId": "mss", "title": "ПЗ №4 📔", "price": 1190, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте Ваш номер по журналу группы" },
-    { "id": "GMOS_PZ1", "courseId": "course3", "subjectId": "gmos", "title": "Практическая работа №1 🌡️", "price": 490, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 25, то вариант = номеру по списку, иначе вариант = (номер по списку - 25) :-)" },
-    { "id": "GMOS_PZ2", "courseId": "course3", "subjectId": "gmos", "title": "Практическая работа №2 🪁", "price": 590, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 12, то вариант = номеру по списку, иначе вариант = (номер по списку - (12 или 24)) :-)" },
-    { "id": "GMOS_PZ3", "courseId": "course3", "subjectId": "gmos", "title": "Практическая работа №3 💦", "price": 490, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 20, то вариант = номеру по списку, иначе вариант = (номер по списку - 20) :-)" },
-    { "id": "GMOS_PZ4", "courseId": "course3", "subjectId": "gmos", "title": "Практическая работа №4 ⛈️", "price": 790, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 16, то вариант = номеру по списку, иначе вариант = (номер по списку - 16) :-)" },
-    { "id": "GMOS_laba", "courseId": "course3", "subjectId": "gmos", "title": "БОЛЬШАЯ ЛАБА (Бояринов) 💎", "price": 8990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n(Если каких-то данных не хватает или Вы их не знаете - не пишите их, позже наш менеджер уточнит всё)\n1. Порт отхода\n2. Порт прихода\n3. Дату и время выхода\n4. Скорость хода на тихой воде\n5. Водоизмещение\n6. Период собственного колебания судна\n7. Осадку судна в порту выхода\n8. Фамилию и инициалы всех в команде" },
-    { "id": "tus_kurs", "courseId": "course3", "subjectId": "tus", "title": "Курсовая работа 🎯", "price": 2190, "commission": 20, "chatEnv": "KURS_MOS_TUS_CHAT_ID", "paymentEnv": "VICTOR_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "mos_kurs", "courseId": "course3", "subjectId": "mos", "title": "Курсовая работа 🚢", "price": 1790, "commission": 20, "chatEnv": "KURS_MOS_TUS_CHAT_ID", "paymentEnv": "VICTOR_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер варианта\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "mos_river_pz2", "courseId": "course3", "subjectId": "mos", "title": "ПЗ №2. Сферические треугольники (Река-море)", "price": 690, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте номер своего варианта" },
-    { "id": "mos_river_pz4", "courseId": "course3", "subjectId": "mos", "title": "ПЗ №4. ОМС по 2 линиям положения (Река-море)", "price": 690, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте номер своего варианта" },
-    { "id": "bs_high", "courseId": "course3", "subjectId": "bs_vvp", "title": "Определение высоты подмостового габарита", "price": 890, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы\n4. День и месяц рождения" },
-    { "id": "VVP_Tug", "courseId": "course3", "subjectId": "bs_vvp", "title": "РГР План безопасной буксировки ⛴️", "price": 4190, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["photo"], "prompt": "📸 Прикрепите фотографию задания 📸" },
-    { "id": "olvvp_stvor", "courseId": "course3", "subjectId": "ol_vvp", "title": "ПЗ «Расчёт линейного навигационного створа»", "price": 790, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте номер варианта (две последние цифры номера зачётки)" },
-    { "id": "NIL_VertAngl_RGR", "courseId": "course3", "subjectId": "nil3", "title": "РГР «вертикальный угол» (4 задачи) 📐", "price": 1290, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер варианта\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "nil_river_rgr9", "courseId": "course3", "subjectId": "nil3", "title": "РГР «9 задач по 6 сборникам» 📚", "price": 2790, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте номер своего варианта" },
-    { "id": "nil_Chart_RGR", "courseId": "course3", "subjectId": "nil3", "title": "Расчёт Сетки и рамки карты 🗺️", "price": 990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["variant"], "prompt": "Отправьте номер своего варианта" },
-    { "id": "tss_test", "courseId": "course3", "subjectId": "tss3", "title": "10 тестов (РЛС, РНС, АИС и др.) 🖥️", "price": 3990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "tss_test_pract", "courseId": "course3", "subjectId": "tss3", "title": "5 тестов на фарватере (практика) 🖥️", "price": 2990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "Astro_kr1", "courseId": "course3", "subjectId": "astro3", "title": "Помощь на контрольной по ТВА (Килнас) 🔭", "price": 1390, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением дату проведения контрольной работы." },
-    { "id": "nil_1tide", "courseId": "course4", "subjectId": "nil4", "title": "Приливы 1 задача 🏄", "price": 1490, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте номер своего варианта (101 - 170)" },
-    { "id": "nil_2tide", "courseId": "course4", "subjectId": "nil4", "title": "Приливы 2 задача 🦞", "price": 390, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте номер своего варианта (201 - 270)" },
-    { "id": "nil_3tide", "courseId": "course4", "subjectId": "nil4", "title": "Приливы 3 задача 🚤", "price": 390, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте номер своего варианта (301 - 370)" },
-    { "id": "nil_4tide", "courseId": "course4", "subjectId": "nil4", "title": "Приливы 4 задача 🚣", "price": 450, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте номер своего варианта (401 - 470)" },
-    { "id": "nil_5tide", "courseId": "course4", "subjectId": "nil4", "title": "Приливы 5 задача 🪸", "price": 450, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте номер своего варианта (501 - 570)" },
-    { "id": "nil_ALLtide", "courseId": "course4", "subjectId": "nil4", "title": "👑 Все задачи на приливы 👑", "price": 2990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте номер своего варианта (01 - 70)" },
-    { "id": "MiUS_tasks", "courseId": "course4", "subjectId": "mius", "title": "7 задач по пособию 🚤", "price": 2390, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "MiUS_tasks_break", "courseId": "course4", "subjectId": "mius", "title": "Задачи на торможение 🐌", "price": 1590, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "MiUS_tasks_tasksbreak", "courseId": "course4", "subjectId": "mius", "title": "Все задачи по пособию и торможению 👑", "price": 3383, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы" },
-    { "id": "tss_test2", "courseId": "course4", "subjectId": "tss4", "title": "10 тестов (РЛС, РНС, АИС и др.) 🖥️", "price": 3990, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "tss_test_pract2", "courseId": "course4", "subjectId": "tss4", "title": "5 тестов на фарватере (практика) 🖥️", "price": 2990, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "Astro_kr2", "courseId": "course4", "subjectId": "astro4", "title": "Помощь на контрольной по МАЕ (Килнас) 🔭", "price": 1690, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением дату проведения контрольной работы." },
-    { "id": "VVPRadio_kurs", "courseId": "course4", "subjectId": "radio_vvp", "title": "Курсовая работа 🎛️", "price": 3470, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте свой номер по журналу группы." },
-    { "id": "PSS_test", "courseId": "course4", "subjectId": "pss", "title": "Весь фарватер 🖥️", "price": 8490, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "PSS_Test_Preamble", "courseId": "course4", "subjectId": "pss", "title": "Фарватер. Вводная часть 💡", "price": 569, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "PSS_Test_P1", "courseId": "course4", "subjectId": "pss", "title": "Фарватер. 1 Раздел 🥇", "price": 3250, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "PSS_Test_P2", "courseId": "course4", "subjectId": "pss", "title": "Фарватер. 2 Раздел 🥈", "price": 2650, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "PSS_Test_P3", "courseId": "course4", "subjectId": "pss", "title": "Фарватер. 3 Раздел 🥉", "price": 2865, "commission": 20, "chatEnv": "OTHER_ORDERS_CHAT_ID", "paymentEnv": "IVAN_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением логин и пароль от фарватера." },
-    { "id": "TiOMPG_kurs", "courseId": "course4", "subjectId": "tiompg", "title": "Курсовая работа 🧮", "price": 2390, "commission": 20, "chatEnv": "MY_CHAT_ID", "paymentEnv": "MY_CARD_NUMBER", "needs": ["details"], "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы" }
+    {
+      "id": "nach1_9",
+      "courseId": "course2",
+      "subjectId": "nachert",
+      "title": "1–9 задачи (каждая отдельно) 📎",
+      "description": "Работы по номерам:\n1. Выполнить проекцию точки на всех плоскостях по двум проекциям.\n2. Выполнить проекцию точки на всех плоскостях по координатам.\n3. Выполнить проекцию фигуры на плоскости.\n4. Найти пересечение фигур.\n5. Найти пересечение прямой с плоскостью.\n6. Найти фигуру пересечения плоскости с объемной фигурой.\n7. Найти фигуру пересечения плоскости с объемной фигурой.\n8. Найти точки пересечения прямой с фигурой.\n9. Выполнить вырез в фигуре на всех плоскостях.\n\nПосле оплаты отправьте менеджеру фотографию задания 📸\nПримеры работ доступны по ссылке 🔍",
+      "price": 520,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографию(и) вашего задания (1–9) 📸"
+    },
+    {
+      "id": "nach10_12",
+      "courseId": "course2",
+      "subjectId": "nachert",
+      "title": "10–12 задачи (каждая отдельно) 🖼️",
+      "description": "Работы по номерам:\n1. Построить линию пересечения поверхностей геометрических тел.\n2. Определить расстояние от точки А до прямой l.\n3. Определить расстояние от точки A до плоскости ɑ.\n\nПосле оплаты отправьте менеджеру фотографию задания 📸\nПримеры работ доступны по ссылке 🔍",
+      "price": 590,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографию вашего задания (10–12) 📸"
+    },
+    {
+      "id": "nachall1_9",
+      "courseId": "course2",
+      "subjectId": "nachert",
+      "title": "1–9 задачи вместе 🪢",
+      "description": "Работы по номерам:\n1. Выполнить проекцию точки на всех плоскостях по двум проекциям.\n2. Выполнить проекцию точки на всех плоскостях по координатам.\n3. Выполнить проекцию фигуры на плоскости.\n4. Найти пересечение фигур.\n5. Найти пересечение прямой с плоскостью.\n6. Найти фигуру пересечения плоскости с объемной фигурой.\n7. Найти фигуру пересечения плоскости с объемной фигурой.\n8. Найти точки пересечения прямой с фигурой.\n9. Выполнить вырез в фигуре на всех плоскостях.\n\nПосле оплаты отправьте менеджеру фотографии всех заданий 📸\nПримеры работ доступны по ссылке 🔍",
+      "price": 3890,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографии всех заданий 1–9 📸"
+    },
+    {
+      "id": "nachall10_12",
+      "courseId": "course2",
+      "subjectId": "nachert",
+      "title": "10–12 задачи вместе 🧺",
+      "description": "Работы по номерам:\n1. Построить линию пересечения поверхностей геометрических тел.\n2. Определить расстояние от точки А до прямой l.\n3. Определить расстояние от точки A до плоскости ɑ.\n\nПосле оплаты отправьте менеджеру фотографии всех заданий 📸\nПримеры работ доступны по ссылке 🔍",
+      "price": 1680,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографии всех заданий 10–12 📸"
+    },
+    {
+      "id": "inj146",
+      "courseId": "course2",
+      "subjectId": "injgraf",
+      "title": "1–4 и 6 работа (каждая отдельно) 🕋",
+      "description": "Работы по номерам:\n1. Выполнить чертёж детали.\n2. Выполнить чертёж детали.\n3. Выполнить чертёж в двух проекциях болтового соединения.\n4. Выполнить чертёж в двух проекциях шпилечного соединения.\n6. Выполнить чертёж отдельной детали со сборного чертежа.\n\nПосле оплаты отправьте менеджеру фотографии заданий 📸\n(Если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру) 🤝\nПримеры работ доступны по ссылке 🔍",
+      "price": 1190,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографию(и) задания (1–4 и 6) 📸\n(если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру) 🤝"
+    },
+    {
+      "id": "inj5",
+      "courseId": "course2",
+      "subjectId": "injgraf",
+      "title": "5 работа (эскизирование) 🖼️",
+      "description": "5 работа (эскизирование) 🎈\n\nПосле оплаты отправьте менеджеру фотографию задания 📸\nПримеры работ доступны по ссылке 🔍",
+      "price": 890,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографию(и) задания (Эскизирование) 📸"
+    },
+    {
+      "id": "injALL",
+      "courseId": "course2",
+      "subjectId": "injgraf",
+      "title": "🦁 Весь комплект 🦁",
+      "description": "‼️ Выгода 1460 ₽ ‼️\n\nРаботы по номерам:\n1. Выполнить чертёж детали.\n2. Выполнить чертёж детали.\n3. Выполнить чертёж в двух проекциях болтового соединения.\n4. Выполнить чертёж в двух проекциях шпилечного соединения.\n5. Выполнить эскиз детали.\n6. Выполнить чертёж отдельной детали со сборного чертежа.\n\nПосле оплаты отправьте менеджеру фотографии всех заданий по Инженерной графике 📸\n(Если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру)\nПримеры работ доступны по ссылке 🔍",
+      "price": 6690,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографии всех заданий по Инженерной графике 📸\n(если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру)"
+    },
+    {
+      "id": "nachANDinjgraf",
+      "courseId": "course2",
+      "subjectId": "injgraf",
+      "title": "👑 Царский набор 👑",
+      "description": "🦁 Весь начерт и инжграф 🦁\n👑 Царский набор 👑\n\nЧто входит в заказ:\n1. Все нужные для зачёта работы по начерталке (1 - 9).\n2. Все работы по инженерной графике (1 - 6).\n\nПосле оплаты отправьте менеджеру фотографии всех заданий 📸\n(Если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру)\nПримеры работ доступны по ссылке 🔍",
+      "price": 10190,
+      "commission": 20,
+      "chatEnv": "CHERCHENIE_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографии всех заданий по Начерту и Инжграфу 📸\n(если каких-то заданий у Вас ещё нет, Вы можете отправить их позже менеджеру)"
+    },
+    {
+      "id": "mech_beam",
+      "courseId": "course2",
+      "subjectId": "mech",
+      "title": "Расчёт Балки 🧮",
+      "description": "Работа выполняется полностью в электронном виде, Вам нужно будет только распечатать её и сдать.\n\nДля расчёта необходимы следующие данные:\n1. Ваш номер по журналу (у преподавателя могут быть свои списки, поэтому лучше уточнить).\n2. Ваш номер учебной группы.\n3. Ваша фамилия и инициалы.",
+      "price": 1290,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "mech_val",
+      "courseId": "course2",
+      "subjectId": "mech",
+      "title": "Расчёт Вала 📏",
+      "description": "Работа выполняется полностью в электронном виде, Вам нужно будет только распечатать её и сдать.\nСрок выполнения: 1 день.\n\nДля расчёта необходимы следующие данные:\n1. Ваш номер по журналу (у преподавателя могут быть свои списки, поэтому лучше уточнить).\n2. Ваш номер учебной группы.\n3. Ваша фамилия и инициалы.",
+      "price": 1290,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "mech_val_beam",
+      "courseId": "course2",
+      "subjectId": "mech",
+      "title": "Расчёт Вала и Балки (вместе) 👑",
+      "description": "‼️ Выгода 590 ₽ ‼️\n\nРабота выполняется полностью в электронном виде, Вам нужно будет только распечатать её и сдать.\nСрок выполнения: 1 день.\n\nДля расчёта необходимы следующие данные:\n1. Ваш номер по журналу (у преподавателя могут быть свои списки, поэтому лучше уточнить).\n2. Ваш номер учебной группы.\n3. Ваша фамилия и инициалы.",
+      "price": 1990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "mss_pz1",
+      "courseId": "course3",
+      "subjectId": "mss",
+      "title": "ПЗ №1 🗒️",
+      "description": "Работа выполняется в электронном виде.\nДля выполнения работы нам необходим Ваш номер варианта - это последняя цифра номера по списку группы.\nПример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 490,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте последнюю цифру Вашего номера по журналу группы"
+    },
+    {
+      "id": "mss_pz2",
+      "courseId": "course3",
+      "subjectId": "mss",
+      "title": "ПЗ №2 📓",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографию Ваших измерений 📸"
+    },
+    {
+      "id": "mss_pz3",
+      "courseId": "course3",
+      "subjectId": "mss",
+      "title": "ПЗ №3 📒",
+      "description": "Номер варианта - это последняя цифра номера по списку.\nСрок выполнения: 1 день.",
+      "price": 490,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте последнюю цифру Вашего номера по журналу группы"
+    },
+    {
+      "id": "mss_pz4",
+      "courseId": "course3",
+      "subjectId": "mss",
+      "title": "ПЗ №4 📔",
+      "description": "Номер варианта - это последняя цифра номера по списку.\nСрок выполнения: 1-2 дня.",
+      "price": 1190,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте Ваш номер по журналу группы"
+    },
+    {
+      "id": "GMOS_PZ1",
+      "courseId": "course3",
+      "subjectId": "gmos",
+      "title": "Практическая работа №1 🌡️",
+      "description": "Срок выполнения: 1 день.",
+      "price": 490,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 25, то вариант = номеру по списку, иначе вариант = (номер по списку - 25) :-)"
+    },
+    {
+      "id": "GMOS_PZ2",
+      "courseId": "course3",
+      "subjectId": "gmos",
+      "title": "Практическая работа №2 🪁",
+      "description": "Срок выполнения: 1 день.",
+      "price": 590,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 12, то вариант = номеру по списку, иначе вариант = (номер по списку - (12 или 24)) :-)"
+    },
+    {
+      "id": "GMOS_PZ3",
+      "courseId": "course3",
+      "subjectId": "gmos",
+      "title": "Практическая работа №3 💦",
+      "description": "Срок выполнения: 1 день.",
+      "price": 490,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 20, то вариант = номеру по списку, иначе вариант = (номер по списку - 20) :-)"
+    },
+    {
+      "id": "GMOS_PZ4",
+      "courseId": "course3",
+      "subjectId": "gmos",
+      "title": "Практическая работа №4 ⛈️",
+      "description": "Срок выполнения: 1 день.",
+      "price": 790,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте Ваш вариант (Если Ваш номер по списку ≤ 16, то вариант = номеру по списку, иначе вариант = (номер по списку - 16) :-)"
+    },
+    {
+      "id": "GMOS_laba",
+      "courseId": "course3",
+      "subjectId": "gmos",
+      "title": "БОЛЬШАЯ ЛАБА (Бояринов) 💎",
+      "description": "БОЛЬШАЯ ЛАБА (Бояринов) 💎\nСрок выполнения: 1 день.",
+      "price": 8990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n(Если каких-то данных не хватает или Вы их не знаете - не пишите их, позже наш менеджер уточнит всё)\n1. Порт отхода\n2. Порт прихода\n3. Дату и время выхода\n4. Скорость хода на тихой воде\n5. Водоизмещение\n6. Период собственного колебания судна\n7. Осадку судна в порту выхода\n8. Фамилию и инициалы всех в команде"
+    },
+    {
+      "id": "tus_kurs",
+      "courseId": "course3",
+      "subjectId": "tus",
+      "title": "Курсовая работа 🎯",
+      "description": "Работа выполняется полностью в электронном виде со всеми графиками и титульным листом.\nВам будет нужно только распечатать её и сдать.\nСрок выполнения: 1 день.\n\nДля выполнения работы необходимы следующие данные:\n1. Ваш номер по журналу.\n2. Ваш номер учебной группы.\n3. Ваша фамилия и инициалы.",
+      "price": 2190,
+      "commission": 20,
+      "chatEnv": "KURS_MOS_TUS_CHAT_ID",
+      "paymentEnv": "VICTOR_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "mos_kurs",
+      "courseId": "course3",
+      "subjectId": "mos",
+      "title": "Курсовая работа 🚢",
+      "description": "Работа выполняется в электронном виде 💡\nДля её сдачи Вам будет необходимо переписать расчётную часть работы от руки. Графики предоставляются в электронном виде.\nВ подарок предоставляется гайд, как правильно чертить графики в курсовой, а также вся необходимая теория к курсовой.\nДля выполнения курсовой необходим Ваш вариант по журналу преподавателя, эти варианты могут не совпадать с номером по журналу группы 📜",
+      "price": 1790,
+      "commission": 20,
+      "chatEnv": "KURS_MOS_TUS_CHAT_ID",
+      "paymentEnv": "VICTOR_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер варианта\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "mos_river_pz2",
+      "courseId": "course3",
+      "subjectId": "mos",
+      "title": "Поток: Река-море 🌉🌊\nПЗ №2. Сферические треугольники",
+      "description": "Поток: Река-море 🌉🌊\nЗадание: ПЗ №2. Сферические треугольники.",
+      "price": 690,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте номер своего варианта"
+    },
+    {
+      "id": "mos_river_pz4",
+      "courseId": "course3",
+      "subjectId": "mos",
+      "title": "Поток: Река-море 🌉🌊\nПЗ №4. ОМС по 2 линиям положения",
+      "description": "Поток: Река-море 🌉🌊\nЗадание: ПЗ №4. ОМС по 2 линиям положения.",
+      "price": 690,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте номер своего варианта"
+    },
+    {
+      "id": "bs_high",
+      "courseId": "course3",
+      "subjectId": "bs_vvp",
+      "title": "Определение высоты подмостового габарита",
+      "description": "Работа выполняется в электронном виде с графиком, рисунком моста и титульным листом 💡\nГрафик мы предоставляем в электронном виде для печати, титульный лист также печатается 🖨️\nВсю остальную работу, вместе с рисунком моста, Вам необходимо будет переписать от руки на листах А4 и скрепить все листы степлером 📎\nСтраницы для печати: 1 и 4.\nСрок выполнения: 1 день.\n\nДля выполнения работы необходимы следующие данные:\n1. Ваш номер по журналу.\n2. Ваш номер учебной группы.\n3. Ваша фамилия и инициалы.\n4. День и месяц вашего рождения.",
+      "price": 890,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер по журналу группы\n2. Номер группы\n3. Вашу фамилию и инициалы\n4. День и месяц рождения"
+    },
+    {
+      "id": "VVP_Tug",
+      "courseId": "course3",
+      "subjectId": "bs_vvp",
+      "title": "РГР План безопасной буксировки ⛴️",
+      "description": "Работа выполняется в электронном виде. Для выполнения работы необходима фотография вашего задания 📸\nСрок выполнения: до 3 дней 🗓️",
+      "price": 4190,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "photo"
+      ],
+      "prompt": "📸 Прикрепите фотографию задания 📸"
+    },
+    {
+      "id": "olvvp_stvor",
+      "courseId": "course3",
+      "subjectId": "ol_vvp",
+      "title": "ПЗ «Расчёт линейного навигационного створа»",
+      "description": "Номер варианта - последние две цифры номера в вашем студенческом/курсантском/зачётной книжке.",
+      "price": 790,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте номер варианта (две последние цифры номера зачётки)"
+    },
+    {
+      "id": "NIL_VertAngl_RGR",
+      "courseId": "course3",
+      "subjectId": "nil3",
+      "title": "РГР «вертикальный угол» (4 задачи) 📐",
+      "description": "Работа выполняется полностью в электронном виде со всеми графиками и титульным листом 💡\nВам будет нужно только распечатать её и сдать 🖨️\nСрок выполнения: 1 день.",
+      "price": 1290,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер варианта\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "nil_river_rgr9",
+      "courseId": "course3",
+      "subjectId": "nil3",
+      "title": "РГР «9 задач по 6 сборникам» 📚",
+      "description": "РГР 9 задач по 6 сборникам 📚",
+      "price": 2790,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте номер своего варианта"
+    },
+    {
+      "id": "nil_Chart_RGR",
+      "courseId": "course3",
+      "subjectId": "nil3",
+      "title": "Расчёт Сетки и рамки карты 🗺️",
+      "description": "Расчёт Сетки и Рамки Карты 🗺️",
+      "price": 990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "variant"
+      ],
+      "prompt": "Отправьте номер своего варианта"
+    },
+    {
+      "id": "tss_test",
+      "courseId": "course3",
+      "subjectId": "tss3",
+      "title": "10 тестов (РЛС, РНС, АИС и др.) 🖥️",
+      "description": "Срок выполнения: 4 - 7 дней.\nДля выполнения работы Вам нужно отправить логин и пароль от фарватера.",
+      "price": 3990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "tss_test_pract",
+      "courseId": "course3",
+      "subjectId": "tss3",
+      "title": "5 тестов на фарватере (практика) 🖥️",
+      "description": "Срок выполнения: 4 - 7 дней.\nДля выполнения работы Вам нужно отправить логин и пароль от фарватера.",
+      "price": 2990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "Astro_kr1",
+      "courseId": "course3",
+      "subjectId": "astro3",
+      "title": "Помощь на контрольной по ТВА (Килнас) 🔭",
+      "description": "Для согласования помощи на контрольной, напишите дату проведения контрольной ✍️",
+      "price": 1390,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением дату проведения контрольной работы."
+    },
+    {
+      "id": "nil_1tide",
+      "courseId": "course4",
+      "subjectId": "nil4",
+      "title": "Приливы 1 задача 🏄",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 1490,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте номер своего варианта (101 - 170)"
+    },
+    {
+      "id": "nil_2tide",
+      "courseId": "course4",
+      "subjectId": "nil4",
+      "title": "Приливы 2 задача 🦞",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 390,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте номер своего варианта (201 - 270)"
+    },
+    {
+      "id": "nil_3tide",
+      "courseId": "course4",
+      "subjectId": "nil4",
+      "title": "Приливы 3 задача 🚤",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 390,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте номер своего варианта (301 - 370)"
+    },
+    {
+      "id": "nil_4tide",
+      "courseId": "course4",
+      "subjectId": "nil4",
+      "title": "Приливы 4 задача 🚣",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 450,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте номер своего варианта (401 - 470)"
+    },
+    {
+      "id": "nil_5tide",
+      "courseId": "course4",
+      "subjectId": "nil4",
+      "title": "Приливы 5 задача 🪸",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 450,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте номер своего варианта (501 - 570)"
+    },
+    {
+      "id": "nil_ALLtide",
+      "courseId": "course4",
+      "subjectId": "nil4",
+      "title": "👑 Все задачи на приливы 👑",
+      "description": "👑 Все задачи на приливы 👑\nПример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 2990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте номер своего варианта (01 - 70)"
+    },
+    {
+      "id": "MiUS_tasks",
+      "courseId": "course4",
+      "subjectId": "mius",
+      "title": "7 задач по пособию 🚤",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 2390,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "MiUS_tasks_break",
+      "courseId": "course4",
+      "subjectId": "mius",
+      "title": "Задачи на торможение 🐌",
+      "description": "Пример готовой работы доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 1590,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "MiUS_tasks_tasksbreak",
+      "courseId": "course4",
+      "subjectId": "mius",
+      "title": "Все задачи по пособию и торможению 👑",
+      "description": "Все задачи по пособию и на торможение (выгода 600 руб.) 👑\nПример готовой работы по пособию доступен по ссылке 🔍\nПример готовой работы на торможение доступен по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 3383,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "id": "tss_test2",
+      "courseId": "course4",
+      "subjectId": "tss4",
+      "title": "10 тестов (РЛС, РНС, АИС и др.) 🖥️",
+      "description": "Срок выполнения: 1 - 2 дня.\nДля выполнения работы Вам нужно отправить логин и пароль от фарватера.",
+      "price": 3990,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "tss_test_pract2",
+      "courseId": "course4",
+      "subjectId": "tss4",
+      "title": "5 тестов на фарватере (практика) 🖥️",
+      "description": "Срок выполнения: 4 - 7 дней.\nДля выполнения работы Вам нужно отправить логин и пароль от фарватера.",
+      "price": 2990,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "Astro_kr2",
+      "courseId": "course4",
+      "subjectId": "astro4",
+      "title": "Помощь на контрольной по МАЕ (Килнас) 🔭",
+      "description": "Для согласования помощи на контрольной, напишите дату проведения контрольной ✍️",
+      "price": 1690,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением дату проведения контрольной работы."
+    },
+    {
+      "id": "VVPRadio_kurs",
+      "courseId": "course4",
+      "subjectId": "radio_vvp",
+      "title": "Курсовая работа 🎛️",
+      "description": "Срок выполнения: 4 - 7 дней.",
+      "price": 3470,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте свой номер по журналу группы."
+    },
+    {
+      "id": "PSS_test",
+      "courseId": "course4",
+      "subjectId": "pss",
+      "title": "Весь фарватер 🖥️",
+      "description": "👑 Весь фарватер по ПСС 👑\nСрок выполнения: 7 - 14 дней.",
+      "price": 8490,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "PSS_Test_Preamble",
+      "courseId": "course4",
+      "subjectId": "pss",
+      "title": "Фарватер. Вводная часть 💡",
+      "description": "Фарватер. Вводная часть 💡\nСрок выполнения: 1 день.",
+      "price": 569,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "PSS_Test_P1",
+      "courseId": "course4",
+      "subjectId": "pss",
+      "title": "Фарватер. 1 Раздел 🥇",
+      "description": "Фарватер. 1 Раздел 🥇\nСрок выполнения: 2 - 4 дня.",
+      "price": 3250,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "PSS_Test_P2",
+      "courseId": "course4",
+      "subjectId": "pss",
+      "title": "Фарватер. 2 Раздел 🥈",
+      "description": "Фарватер. 2 Раздел 🥈\nСрок выполнения: 2 - 4 дня.",
+      "price": 2650,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "PSS_Test_P3",
+      "courseId": "course4",
+      "subjectId": "pss",
+      "title": "Фарватер. 3 Раздел 🥉",
+      "description": "Фарватер. 3 Раздел 🥉\nСрок выполнения: 2 - 4 дня.",
+      "price": 2865,
+      "commission": 20,
+      "chatEnv": "OTHER_ORDERS_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением логин и пароль от фарватера."
+    },
+    {
+      "id": "TiOMPG_kurs",
+      "courseId": "course4",
+      "subjectId": "tiompg",
+      "title": "Курсовая работа 🧮",
+      "description": "Планирование рейса на т/х \"Dmitry Varvarin\" (перевозка леса или контейнеров).\nМетодические указания доступны по ссылке 🔍\nСрок выполнения: 1 день.",
+      "price": 2390,
+      "commission": 20,
+      "chatEnv": "MY_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details"
+      ],
+      "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    }
   ]
 }

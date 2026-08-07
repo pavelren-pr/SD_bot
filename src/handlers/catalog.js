@@ -44,37 +44,38 @@ function register(bot) {
     );
   });
 
-    // 4. Детали работы и кнопка заказа
-  bot.action(/^catalog:details:(.+)$/, (ctx) => {
+      // 4. Детали работы и кнопка заказа
+  bot.action(/^catalog:details:(.+)$/, async (ctx) => {
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
     const subject = catalog.getSubject(work.subjectId);
     const course = catalog.getCourse(subject.courseId);
+    const pricing = require('../data/loyalty').calculatePrice(work.price, ctx.from.id);
 
-    // 🌟 Формируем текст карточки
-    let text = ` *${work.title}*\n\n`;
+    let text = `🎯 *${work.title}*\n\n`;
     
-    // Показываем описание, если оно есть
+    // 🌟 Безопасно показываем описание, если оно есть и не пустое
     if (work.description && work.description.trim() !== '') {
       text += `${work.description}\n\n`;
     }
     
     text += `💰 *Стоимость:* ${work.price} ₽\n`;
-    text += ` *Ваша скидка:* ${pricing.discountPercent}%\n`;
-    text += `✅ *Итого:* ${pricing.finalPrice} ₽\n\n`;
-    text += ` *Что нужно для заказа:*\n${work.prompt}`;
+    if (pricing.discountPercent > 0) {
+      text += `🎉 *Ваша скидка:* ${pricing.discountPercent}%\n`;
+    }
+    text += `✅ *Итого к оплате:* ${pricing.finalPrice} ₽\n\n`;
+    text += `📌 *Что нужно для заказа:*\n${work.prompt}`;
 
-    // 🌟 Умная кнопка "Назад"
     const buttons = [
       [{ text: '✅ Оформить этот заказ', callback: `order:start:${workId}` }],
       [{ text: '⬅️ Назад к работам предмета', callback: `catalog:work:${work.subjectId}` }]
     ];
 
-    ctx.editMessageText(
+    await ctx.editMessageText(
       text,
       {
         parse_mode: 'Markdown',
-        ...createInlineKeyboard(buttons)
+        ...require('../utils/keyboard').createInlineKeyboard(buttons)
       }
     );
   });
