@@ -354,35 +354,50 @@ function register(bot) {
   });
 
   // 🌟 Обновлённый обработчик "Написать исполнителю" для заказчика
-  bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
+bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
-    
+
     if (!order || !order.executorId) {
-      await ctx.answerCbQuery('❌ Исполнитель не назначен');
-      return;
+        await ctx.answerCbQuery('❌ Исполнитель не назначен');
+        return;
     }
+
+    // 🌟 Пытаемся найти активный чат для этого заказа
+    const { findChatByOrderId } = require('./order');
+    const chatInfo = findChatByOrderId(orderId);
     
+    // 🌟 Если чат не найден, создаём его структуру
+    let chatId;
+    if (chatInfo) {
+        chatId = chatInfo.chatId;
+    } else {
+        // Формируем chatId как в accept_order
+        chatId = `order_${ctx.from.id}_${order.workId}`;
+    }
+
     ctx.session = ctx.session || {};
     ctx.session.customerReplyToExecutorId = order.executorId;
     ctx.session.customerReplyOrderId = orderId;
     ctx.session.customerReplyOrderTitle = order.workTitle;
     ctx.session.customerReplyOrderDate = order.createdAt;
-    
+    ctx.session.customerReplyOrderNumber = order.orderNumber || '—';
+    ctx.session.customerReplyChatId = chatId; // 🌟 Сохраняем chatId
+
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('❌ Отмена', `orders:customer:view:${orderId}`)]
+        [Markup.button.callback('❌ Отмена', `orders:customer:view:${orderId}`)]
     ]);
-    
+
     await ctx.editMessageText(
-      `💬 *Режим ответа исполнителю*\n\n` +
-      `📚 *Заказ:* ${order.workTitle}\n` +
-      `📅 *Дата:* ${order.createdAt}\n\n` +
-      `Напишите сообщение или прикрепите файл.\n\n` +
-      `_(Для отмены нажмите "Отмена")_`,
-      { parse_mode: 'Markdown', ...keyboard }
+        `💬 *Режим ответа исполнителю*\n\n` +
+        `📚 *Заказ:* ${order.workTitle}\n` +
+        `📅 *Дата:* ${order.createdAt}\n\n` +
+        `Напишите сообщение или прикрепите файл.\n\n` +
+        `_(Для отмены нажмите "Отмена")_`,
+        { parse_mode: 'Markdown', ...keyboard }
     );
     await ctx.answerCbQuery();
-  });
+});
 
   // ==========================================
   // ИСТОРИЯ ЗАКАЗОВ ПОЛЬЗОВАТЕЛЯ (с пагинацией)
