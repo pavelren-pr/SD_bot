@@ -23,8 +23,9 @@ function getAdminMainMenu() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('🗂 Управление каталогом', 'admin:catalog')],
     [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
-    [Markup.button.callback('🏅 Изменить ранг пользователя', 'admin:set_user_rank')],
-    [Markup.button.callback('❌ Закрыть панель', 'admin:close')]
+    [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
+    [Markup.button.callback('Назначить исполнителя/администратора', 'admin:set_user_rank')],
+    [Markup.button.callback('🔙 Назад', 'profile:main')]
   ]);
 }
 
@@ -502,6 +503,8 @@ function register(bot) {
         [Markup.button.callback(`🔨 В работе (${a})`, 'admin:orders_list:active:0')],
         [Markup.button.callback(`✅ Выполнены (${c})`, 'admin:orders_list:completed:0')],
         [Markup.button.callback('📦 Все заказы', 'admin:orders_list:all:0')],
+        [Markup.button.callback('➕ Добавить заказ', 'admin:add_order_start')],
+        [Markup.button.callback('🔍 Поиск по номеру', 'admin:search_order_prompt')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
       await ctx.editMessageText(`📦 *Управление заказами*\n\nВсего: *${all.length}*\n⏳ Ожидают: *${p}*\n🔨 В работе: *${a}*\n✅ Выполнены: *${c}*`, { parse_mode: 'Markdown', ...keyboard });
@@ -525,7 +528,7 @@ function register(bot) {
       let text = `${title}\n\nСтраница ${currentPage + 1} из ${totalPages}\nВсего: ${filtered.length}`;
       const buttons = displayOrders.map(o => {
         const customer = o.customerUsername ? `@${o.customerUsername}` : `ID:${o.customerId}`;
-        const date = o.createdAt.split(' ')[0];
+        const date = (o.createdAt && typeof o.createdAt === 'string') ? o.createdAt.split(' ')[0] : 'N/A';
         return [Markup.button.callback(`📝 ${o.workTitle.substring(0, 20)} | ${date}`, `admin:order_view:${o.id}`)];
       });
       if (buttons.length === 0) buttons.push([Markup.button.callback('— пусто —', 'noop')]);
@@ -670,36 +673,152 @@ function register(bot) {
 }
 
 
-module.exports = { register, showAdminMenu };
 // Обработчик отправки сообщения заказчику
 bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
   const state = ctx.session.adminState;
-  if (!state || !state.startsWith('send_message_to_customer:')) {
-    await next();
-    return;
-  }
-  if (!isAdmin(ctx.from.id)) return;
   
-  const orderId = state.split(':')[1];
-  const order = ordersDb.getOrder(orderId);
-  if (!order) {
-    await ctx.reply('❌ Заказ не найден');
+  // Обработка состояния для отправки сообщения заказчику
+  if (state && state.startsWith('send_message_to_customer:')) {
+    if (!isAdmin(ctx.from.id)) return;
+    
+    const orderId = state.split(':')[1];
+    const order = ordersDb.getOrder(orderId);
+    if (!order) {
+      await ctx.reply('❌ Заказ не найден');
+      ctx.session.adminState = null;
+      return;
+    }
+    
+    const messageText = ctx.message.text;
+    const customerId = order.customerId;
+    
+    try {
+      await ctx.telegram.sendMessage(customerId, `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`, { parse_mode: 'Markdown' });
+      await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
+    } catch (err) {
+      await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+    }
+    
     ctx.session.adminState = null;
     return;
   }
   
-  const messageText = ctx.message.text;
-  const customerId = order.customerId;
-  
-  try {
-    await ctx.telegram.sendMessage(customerId, `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\\n\\n${messageText}`, { parse_mode: 'Markdown' });
-    await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
-  } catch (err) {
-    await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+  // Обработка состояния для поиска заказа по номеру
+  if (state && state === 'search_order_prompt') {
+    if (!isAdmin(ctx.from.id)) return;
+    
+    const searchText = ctx.message.text.trim();
+    const order = ordersDb.getAllOrders().find(o => String(o.orderNumber) === searchText);
+    
+    if (!order) {
+      await ctx.reply('❌ Заказ с таким номером не найден.');
+      ctx.session.adminState = null;
+      return;
+    }
+    
+    const card = formatOrderCard(order, true);
+    const buttons = Markup.inlineKeyboard([
+      [Markup.button.callback('✏️ Изменить заказ', `admin:edit_order:${order.id}`)],
+      [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${order.id}`)],
+      [Markup.button.callback('🗑 Удалить заказ', `admin:delete_order_confirm:${order.id}`)],
+      [Markup.button.callback('⬅️ Назад к поиску', 'admin:search_order_prompt')]
+    ]);
+    
+    await ctx.reply(card.text, { parse_mode: 'Markdown', ...buttons });
+    ctx.session.adminState = null;
+    return;
   }
   
-  ctx.session.adminState = null;
+  // Обработка состояния для добавления нового заказа
+  if (state && state.startsWith('add_order:')) {
+    if (!isAdmin(ctx.from.id)) return;
+    
+    const step = state.split(':')[1];
+    const draft = ctx.session.addOrderDraft || {};
+    
+    if (step === 'customer_id') {
+      const customerId = ctx.message.text.trim();
+      if (!/^\d+$/.test(customerId)) {
+        await ctx.reply('❌ Введите корректный Telegram ID заказчика (число).');
+        return;
+      }
+      draft.customerId = customerId;
+      ctx.session.addOrderDraft = draft;
+      ctx.session.adminState = 'add_order:work_title';
+      await ctx.reply('📚 Введите название работы (например: "Контрольная работа по математике"):');
+      return;
+    }
+    
+    if (step === 'work_title') {
+      draft.workTitle = ctx.message.text.trim();
+      ctx.session.addOrderDraft = draft;
+      ctx.session.adminState = 'add_order:subject';
+      await ctx.reply('📖 Введите предмет (например: "Математика"):');
+      return;
+    }
+    
+    if (step === 'subject') {
+      draft.subject = ctx.message.text.trim();
+      ctx.session.addOrderDraft = draft;
+      ctx.session.adminState = 'add_order:course';
+      await ctx.reply('🎓 Введите курс (например: "2 курс" или просто "2"):');
+      return;
+    }
+    
+    if (step === 'course') {
+      draft.course = ctx.message.text.trim();
+      ctx.session.addOrderDraft = draft;
+      ctx.session.adminState = 'add_order:price';
+      await ctx.reply('💰 Введите цену заказа в рублях (только число):');
+      return;
+    }
+    
+    if (step === 'price') {
+      const price = parseInt(ctx.message.text.trim());
+      if (isNaN(price) || price <= 0) {
+        await ctx.reply('❌ Введите корректную цену (положительное число).');
+        return;
+      }
+      draft.price = price;
+      ctx.session.addOrderDraft = draft;
+      ctx.session.adminState = 'add_order:commission';
+      await ctx.reply('📊 Введите комиссию в процентах (например, 15):');
+      return;
+    }
+    
+    if (step === 'commission') {
+      const commission = parseInt(ctx.message.text.trim());
+      if (isNaN(commission) || commission < 0 || commission > 100) {
+        await ctx.reply('❌ Введите корректную комиссию (0-100).');
+        return;
+      }
+      draft.commission = commission;
+      ctx.session.addOrderDraft = draft;
+      
+      // Показываем карточку для подтверждения
+      const orderNumber = ordersDb.getNextOrderNumber();
+      let cardText = `🔍 *Проверьте данные перед добавлением заказа №${orderNumber}*\n\n`;
+      cardText += `👤 Заказчик ID: \`${draft.customerId}\`\n`;
+      cardText += `📚 Работа: ${draft.workTitle}\n`;
+      cardText += `📖 Предмет: ${draft.subject}\n`;
+      cardText += `🎓 Курс: ${draft.course}\n`;
+      cardText += `💰 Цена: ${draft.price} ₽\n`;
+      cardText += `📊 Комиссия: ${draft.commission}%\n`;
+      cardText += `\nВыберите действие:`;
+      
+      const buttons = Markup.inlineKeyboard([
+        [Markup.button.callback('✏️ Изменить данные', 'admin:add_order_edit')],
+        [Markup.button.callback('✅ Добавить заказ', `admin:add_order_confirm:${JSON.stringify(draft)}`)]
+      ]);
+      
+      await ctx.reply(cardText, { parse_mode: 'Markdown', ...buttons });
+      ctx.session.adminState = null;
+      return;
+    }
+  }
+  
+  await next();
 });
 
 module.exports = { register, showAdminMenu };
