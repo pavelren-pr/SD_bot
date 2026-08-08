@@ -51,22 +51,31 @@ function getOrder(orderId) {
 function getNextOrderNumber() {
   const data = loadData();
   
-  // Ищем _meta либо как свойство массива, либо в первом элементе
-  let meta = data._meta;
-  if (!meta && data.length > 0 && data[0]._meta) {
+  // Проверяем, является ли первый элемент метаданными
+  let meta = null;
+  let metaIndex = -1;
+  
+  if (data.length > 0 && data[0]._meta && Object.keys(data[0]).length === 1) {
+    // _meta находится в первом элементе как отдельный объект
     meta = data[0]._meta;
+    metaIndex = 0;
+  } else if (data._meta) {
+    // _meta как свойство массива
+    meta = data._meta;
   }
   
-  // Если счётчика ещё нет — инициализируем с 10000
+  // Если счётчика ещё нет — инициализируем с 10001
   if (!meta || !meta.nextOrderNumber) {
-    const newMeta = { nextOrderNumber: 10000 };
+    const newMeta = { nextOrderNumber: 10001 };
     if (data.length === 0) {
-      data._meta = newMeta;
-    } else {
+      data.unshift({ _meta: newMeta });
+    } else if (metaIndex === 0) {
       data[0]._meta = newMeta;
+    } else {
+      data._meta = newMeta;
     }
     saveData(data);
-    return 10000;
+    return 10001;
   }
   
   return meta.nextOrderNumber;
@@ -76,18 +85,27 @@ function getNextOrderNumber() {
 function incrementOrderNumber() {
   const data = loadData();
   
-  // Ищем _meta либо как свойство массива, либо в первом элементе
-  let meta = data._meta;
-  if (!meta && data.length > 0 && data[0]._meta) {
+  // Проверяем, является ли первый элемент метаданными
+  let meta = null;
+  let metaIndex = -1;
+  
+  if (data.length > 0 && data[0]._meta && Object.keys(data[0]).length === 1) {
+    // _meta находится в первом элементе как отдельный объект
     meta = data[0]._meta;
+    metaIndex = 0;
+  } else if (data._meta) {
+    // _meta как свойство массива
+    meta = data._meta;
   }
   
   if (!meta) {
-    meta = { nextOrderNumber: 10000 };
+    meta = { nextOrderNumber: 10001 };
     if (data.length === 0) {
-      data._meta = meta;
-    } else {
+      data.unshift({ _meta: meta });
+    } else if (metaIndex === 0) {
       data[0]._meta = meta;
+    } else {
+      data._meta = meta;
     }
   }
   
@@ -99,27 +117,36 @@ function incrementOrderNumber() {
 function migrateOrders() {
   const data = loadData();
   
-  // Ищем _meta либо как свойство массива, либо в первом элементе
-  let meta = data._meta;
-  if (!meta && data.length > 0 && data[0]._meta) {
+  // Проверяем, является ли первый элемент метаданными
+  let meta = null;
+  let metaIndex = -1;
+  
+  if (data.length > 0 && data[0]._meta && Object.keys(data[0]).length === 1) {
+    // _meta находится в первом элементе как отдельный объект
     meta = data[0]._meta;
+    metaIndex = 0;
+  } else if (data._meta) {
+    // _meta как свойство массива
+    meta = data._meta;
   }
   
   if (!meta) {
-    meta = { nextOrderNumber: 10000 };
+    meta = { nextOrderNumber: 10001 };
     if (data.length === 0) {
-      data._meta = meta;
-    } else {
+      data.unshift({ _meta: meta });
+    } else if (metaIndex === 0) {
       data[0]._meta = meta;
+    } else {
+      data._meta = meta;
     }
   }
   
   let migrated = false;
   let nextNum = meta.nextOrderNumber;
   
-  // Находим все заказы без номера (пропуская _meta если он в первом элементе)
+  // Находим все заказы без номера (пропуская элемент с _meta если он первый)
   const ordersWithoutNumber = data.filter((o, index) => {
-    // Пропускаем первый элемент, если он содержит только _meta или является метаданными
+    // Пропускаем первый элемент, если он содержит только _meta
     if (index === 0 && o._meta && Object.keys(o).length === 1) {
       return false;
     }
