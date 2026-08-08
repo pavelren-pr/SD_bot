@@ -25,7 +25,7 @@ function getAdminMainMenu() {
     [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
     [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
     [Markup.button.callback('Назначить исполнителя/администратора', 'admin:set_user_rank')],
-    [Markup.button.callback('🔙 Назад', 'profile:main')]
+    [Markup.button.callback('🔙 Назад', 'profile:back')]
   ]);
 }
 
@@ -508,6 +508,14 @@ function register(bot) {
       ]);
       await ctx.editMessageText(`📦 *Управление заказами*\n\nВсего: *${all.length}*\n⏳ Ожидают: *${p}*\n🔨 В работе: *${a}*\n✅ Выполнены: *${c}*`, { parse_mode: 'Markdown', ...keyboard });
     }
+    else if (action === 'add_order_start') {
+      ctx.session.adminState = 'add_order:customer_id';
+      await ctx.editMessageText('✏️ *Добавление нового заказа*\n\nВведите Telegram ID заказчика:', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+    }
+    else if (action === 'search_order_prompt') {
+      ctx.session.adminState = 'search_order_prompt';
+      await ctx.editMessageText('🔍 *Поиск заказа по номеру*\n\nВведите номер заказа:', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+    }
     else if (action.startsWith('orders_list:')) {
       const parts = action.split(':');
       const filter = parts[1];
@@ -678,12 +686,14 @@ function register(bot) {
             id: order.customerId,
             username: order.customerUsername || 'N/A',
             totalSpent: 0,
-            orderCount: 0
+            orderCount: 0,
+            orders: []
           });
         }
         const customer = customerMap.get(order.customerId);
         if (order.price) customer.totalSpent += parseFloat(order.price);
         customer.orderCount++;
+        customer.orders.push(order);
       });
       
       const customers = Array.from(customerMap.values());
@@ -789,8 +799,12 @@ function register(bot) {
     }
     else if (action.startsWith('customer_edit_spent:')) {
       const customerId = action.split(':')[1];
+      const loyaltyData = loyalty.loadData();
+      const userData = loyaltyData[customerId] || { totalSpent: 0 };
+      const currentAmount = userData.totalSpent || 0;
+      
       ctx.session.adminState = `edit_customer_spent:${customerId}`;
-      await ctx.editMessageText(`✏️ Введите новую сумму выкупа для заказчика ${customerId}:\n\n(Введите число в рублях)`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:customer_view:${customerId}`)]]) });
+      await ctx.editMessageText(`✏️ Введите новую сумму выкупа для заказчика ${customerId}:\n\nТекущая сумма: ${currentAmount} ₽\n(Введите число в рублях)`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:customer_view:${customerId}`)]]) });
     }
     else if (action === 'search_customer_prompt') {
       ctx.session.adminState = 'search_customer_prompt';
@@ -963,63 +977,62 @@ bot.on('text', async (ctx, next) => {
   // Обработка состояния для поиска заказчика по ID/username
   if (state && state === 'search_customer_prompt') {
     if (!isAdmin(ctx.from.id)) return;
-    
+
     const searchText = ctx.message.text.trim();
     const allOrders = ordersDb.getAllOrders();
     const customerMap = new Map();
-    
+
     allOrders.forEach(order => {
       if (!customerMap.has(order.customerId)) {
         customerMap.set(order.customerId, {
           id: order.customerId,
           username: order.customerUsername || 'N/A',
           totalSpent: 0,
-          orderCount: 0
+          orderCount: 0,
+          orders: []
         });
       }
       const customer = customerMap.get(order.customerId);
       if (order.price) customer.totalSpent += parseFloat(order.price);
       customer.orderCount++;
+        customer.orders.push(order);
     });
-    
+
     const customers = Array.from(customerMap.values());
     const foundCustomer = customers.find(c => String(c.id) === searchText || c.username.toLowerCase() === searchText.toLowerCase() || c.username.toLowerCase().includes(searchText.toLowerCase()));
-    
+
     if (!foundCustomer) {
       await ctx.reply('❌ Заказчик с таким ID или username не найден.');
       ctx.session.adminState = null;
       return;
     }
-    
-    let text = `👤 *Информация о заказчике*\n\n`;
-    text += `ID: ${foundCustomer.id}\n`;
-    text += `Username: ${foundCustomer.username !== 'N/A' ? '@' + foundCustomer.username : 'не указан'}\n`;
-    text += `Сумма выкупа: *${foundCustomer.totalSpent} ₽*
-`;
-    text += `Количество заказов: *${foundCustomer.orderCount}*
 
-`;
-    
+    const customerOrders = foundCustomer.orders || [];
+
+    let text = `👤 *Информация о заказчике*\n\n`;
+    text += `ID: \`${foundCustomer.id}\`\n`;
+    text += `Username: ${foundCustomer.username !== 'N/A' ? '@' + foundCustomer.username : 'не указан'}\n`;
+    text += `Сумма выкупа: *${foundCustomer.totalSpent} ₽*\n`;
+    text += `Количество заказов: *${foundCustomer.orderCount}*\n\n`;
+
     if (customerOrders.length > 0) {
-      text += `📦 *Последние заказы:*
-`;
+      text += `📦 *Последние заказы:*\n`;
       customerOrders.slice(0, 5).forEach((o, i) => {
-        text += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}
-`;
+        text += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}\n`;
       });
     }
-    
+
     const buttons = [
       [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${foundCustomer.id}`)],
       [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${foundCustomer.id}`)],
       [Markup.button.callback('⬅️ Назад к поиску', 'admin:search_customer_prompt')]
     ];
-    
+
     await ctx.reply(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     ctx.session.adminState = null;
     return;
   }
-  
+
   // Обработка состояния для изменения суммы выкупа заказчика
   if (state && state.startsWith('edit_customer_spent:')) {
     if (!isAdmin(ctx.from.id)) return;
@@ -1032,8 +1045,14 @@ bot.on('text', async (ctx, next) => {
       return;
     }
     
-    // Здесь можно сохранить новую сумму в базу данных, если есть такая функция
-    // Пока просто подтверждаем изменение
+    // Сохраняем новую сумму в файл loyalty.json
+    const loyaltyData = loyalty.loadData();
+    if (!loyaltyData[customerId]) {
+      loyaltyData[customerId] = { username: '', totalSpent: 0 };
+    }
+    loyaltyData[customerId].totalSpent = newAmount;
+    loyalty.saveData(loyaltyData);
+    
     await ctx.reply(`✅ Сумма выкупа для заказчика ${customerId} изменена на ${newAmount} ₽`);
     ctx.session.adminState = null;
     return;
