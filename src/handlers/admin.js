@@ -546,9 +546,10 @@ function register(bot) {
       
       const text = formatOrderCard(order, 'admin');
       const buttons = [
-        [Markup.button.callback('✏️ Изменить информацию', `admin:order_edit:${orderId}`)]
+        [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
+        [Markup.button.callback('💬 Написать заказчику', `admin:order_message_customer:${orderId}`)]
       ];
-      if (order.customerUsername) buttons.push([Markup.button.url('💬 Связаться с заказчиком', `https://t.me/${order.customerUsername}`)]);
+      if (order.customerUsername) buttons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${order.customerUsername}`)]);
       
       if (order.status === 'pending') {
         buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
@@ -580,7 +581,7 @@ function register(bot) {
         [Markup.button.callback('👷 Username исполнителя', `admin:order_field:${orderId}:executorUsername`)],
         [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
       ]);
-      await ctx.editMessageText(`✏️ *Редактирование заказа*\n\nЗаказ: *${order.workTitle.substring(0, 30)}*\n\nВыберите поле:`, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(`✏️ *Редактирование заказа №${order.orderNumber}*\n\nВыберите поле для изменения:`, { parse_mode: 'Markdown', ...keyboard });
     }
     else if (action.startsWith('order_field:')) {
       const parts = action.split(':');
@@ -611,9 +612,9 @@ function register(bot) {
       const updatedOrder = ordersDb.getOrder(orderId);
       const text = formatOrderCard(updatedOrder, 'admin');
       const buttons = [
-        [Markup.button.callback('✏️ Изменить информацию', `admin:order_edit:${orderId}`)]
+        [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)]
       ];
-      if (updatedOrder.customerUsername) buttons.push([Markup.button.url('💬 Связаться с заказчиком', `https://t.me/${updatedOrder.customerUsername}`)]);
+      if (updatedOrder.customerUsername) buttons.push([Markup.button.url('💬 Профиль заказчика', `https://t.me/${updatedOrder.customerUsername}`)]);
       
       if (updatedOrder.status === 'pending') {
         buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
@@ -667,5 +668,38 @@ function register(bot) {
     await ctx.answerCbQuery();
   });
 }
+
+
+module.exports = { register, showAdminMenu };
+// Обработчик отправки сообщения заказчику
+bot.on('text', async (ctx, next) => {
+  ctx.session = ctx.session || {};
+  const state = ctx.session.adminState;
+  if (!state || !state.startsWith('send_message_to_customer:')) {
+    await next();
+    return;
+  }
+  if (!isAdmin(ctx.from.id)) return;
+  
+  const orderId = state.split(':')[1];
+  const order = ordersDb.getOrder(orderId);
+  if (!order) {
+    await ctx.reply('❌ Заказ не найден');
+    ctx.session.adminState = null;
+    return;
+  }
+  
+  const messageText = ctx.message.text;
+  const customerId = order.customerId;
+  
+  try {
+    await ctx.telegram.sendMessage(customerId, `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\\n\\n${messageText}`, { parse_mode: 'Markdown' });
+    await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
+  } catch (err) {
+    await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+  }
+  
+  ctx.session.adminState = null;
+});
 
 module.exports = { register, showAdminMenu };
