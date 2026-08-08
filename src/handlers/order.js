@@ -75,7 +75,7 @@ function register(bot) {
       await ctx.telegram.sendMessage(
         targetUserId,
         `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${orderId}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
-        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Ответить заказчику', `admin_reply:${ctx.from.id}_${orderId}`)]])) }
+        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Ответить заказчику', `admin_reply:${ctx.from.id}_${orderId}`)]]) }
       );
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
