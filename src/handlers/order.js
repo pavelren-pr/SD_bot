@@ -45,16 +45,17 @@ function register(bot) {
       const targetUserId = ctx.session.adminReplyToCustomerId;
       const orderTitle = ctx.session.adminReplyOrderTitle;
       const orderDate = ctx.session.adminReplyOrderDate;
+      const orderId = ctx.session.adminReplyOrderId;
       const messageText = ctx.message.text || '[Фото/Файл]';
-      
+
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 *Вам сообщение от исполнителя*\n\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
-        { parse_mode: 'Markdown' }
+        `💬 *Вам сообщение от администратора*\n\n🆔 *Номер заказа:* №${orderId}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
+        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Ответить администратору', `admin_reply:${targetUserId}_${orderId}`)]]) }
       );
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
-      
+
       await ctx.reply(`✅ Сообщение отправлено заказчику (ID: ${targetUserId})`);
       ctx.session.adminReplyToCustomerId = null;
       ctx.session.adminReplyOrderId = null;
@@ -68,12 +69,13 @@ function register(bot) {
       const targetUserId = ctx.session.customerReplyToExecutorId;
       const orderTitle = ctx.session.customerReplyOrderTitle;
       const orderDate = ctx.session.customerReplyOrderDate;
+      const orderId = ctx.session.customerReplyOrderId;
       const messageText = ctx.message.text || '[Фото/Файл]';
       
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 *Вам сообщение от заказчика*\n\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
-        { parse_mode: 'Markdown' }
+        `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${orderId}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
+        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Ответить заказчику', `admin_reply:${ctx.from.id}_${orderId}`)]])) }
       );
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
@@ -519,6 +521,28 @@ function register(bot) {
     await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery('Чат завершён');
   });
+
+  bot.action(/^admin_reply:(\d+)_(.+)$/, async (ctx) => {
+    const parts = ctx.match[0].split(':');
+    const data = parts[1]; // "userId_orderId"
+    const underscoreIndex = data.lastIndexOf('_');
+    const targetUserId = data.substring(0, underscoreIndex);
+    const orderId = data.substring(underscoreIndex + 1);
+    
+    // Получить информацию о заказе
+    const order = require('../data/orders').getOrder(orderId);
+    const orderNumber = order ? order.orderNumber : orderId;
+    const orderTitle = order ? order.workTitle : 'Заказ';
+    
+    ctx.session.adminReplyToCustomerId = targetUserId;
+    ctx.session.adminReplyOrderId = orderId;
+    ctx.session.adminReplyOrderTitle = orderTitle;
+    ctx.session.adminReplyOrderDate = order ? order.createdAt : new Date().toLocaleString('ru-RU');
+    
+    await ctx.editMessageText(`✏️ *Режим ответа заказчику*\n\n🆔 *Номер заказа:* №${orderNumber}\n👤 *Заказчик ID:* ${targetUserId}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено заказчику.`, { parse_mode: 'Markdown' });
+    await ctx.answerCbQuery('✅ Готов к отправке ответа');
+  });
+
 
   function findExecutorChat(userId) {
     for (const chatData of activeChats.values()) {
