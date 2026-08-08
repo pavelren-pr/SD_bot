@@ -584,11 +584,20 @@ function register(bot) {
     const active = executorOrders.filter(o => o.status === 'active').length;
     const completed = executorOrders.filter(o => o.status === 'completed').length;
     
+    // Рассчитываем общий заработок (цена - комиссия) для выполненных заказов
+    let totalEarnings = 0;
+    executorOrders.forEach(order => {
+      if (order.status === 'completed' && order.price && order.commission) {
+        totalEarnings += (order.price - order.commission);
+      }
+    });
+    
     const text = 
       `📋 *Мои заказы (Исполнитель)*\n\n` +
       `📦 *Всего принятых:* ${executorOrders.length}\n\n` +
       `🔨 *В работе:* ${active}\n` +
-      `✅ *Выполнено:* ${completed}`;
+      `✅ *Выполнено:* ${completed}\n\n` +
+      `💰 *Общий заработок:* ${totalEarnings} ₽`;
     
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback(`🔨 Активные (${active})`, 'orders:executor:list:active:0')],
