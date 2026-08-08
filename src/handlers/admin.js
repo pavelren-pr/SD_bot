@@ -670,8 +670,6 @@ function register(bot) {
 
     await ctx.answerCbQuery();
   });
-}
-
 
 // Обработчик отправки сообщения заказчику
 bot.on('text', async (ctx, next) => {
@@ -820,5 +818,7 @@ bot.on('text', async (ctx, next) => {
   
   await next();
 });
+
+}
 
 module.exports = { register, showAdminMenu };
