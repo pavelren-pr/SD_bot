@@ -79,8 +79,11 @@ function register(bot) {
       
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 *Вам сообщение от заказчика*\\n\\n🆔 *Номер заказа:* №${orderNumber}\\n📚 *Заказ:* ${orderTitle}\\n📅 *Дата заказа:* ${orderDate}\\n\\n${messageText}`,
-        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Ответить заказчику', `admin_reply:${ctx.from.id}_${orderId}`)]]) }
+        `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
+        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([
+          [Markup.button.callback('✏️ Отправить сообщение', `executor_reply_msg:${orderId}`)],
+          [Markup.button.callback('📎 Отправить файл', `executor_reply_file:${orderId}`)]
+        ]) }
       );
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
@@ -482,6 +485,10 @@ function register(bot) {
     const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
     if (!chatData || chatData.customerUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'waiting_customer_message';
+    ctx.session.customerReplyToExecutorId = chatData.executorUserId;
+    ctx.session.customerReplyOrderId = chatData.orderId;
+    ctx.session.customerReplyOrderTitle = chatData.workTitle;
+    ctx.session.customerReplyOrderDate = chatData.createdAt ? (typeof chatData.createdAt === 'number' ? new Date(chatData.createdAt).toLocaleString('ru-RU') : chatData.createdAt) : new Date().toLocaleString('ru-RU');
     await ctx.editMessageText(`✏️ *Напишите сообщение исполнителю:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery();
   });
@@ -511,7 +518,15 @@ function register(bot) {
     await ctx.answerCbQuery();
   });
   bot.action(/^executor_reply_msg:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
+    const orderId = ctx.match[1];
+    // Пытаемся найти чат по orderId
+    let chatData = null;
+    for (const [chatId, data] of activeChats.entries()) {
+      if (data.orderId === orderId) {
+        chatData = data;
+        break;
+      }
+    }
     if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'waiting_executor_message';
     await ctx.editMessageText(`✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
@@ -519,7 +534,15 @@ function register(bot) {
   });
 
   bot.action(/^executor_reply_file:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
+    const orderId = ctx.match[1];
+    // Пытаемся найти чат по orderId
+    let chatData = null;
+    for (const [chatId, data] of activeChats.entries()) {
+      if (data.orderId === orderId) {
+        chatData = data;
+        break;
+      }
+    }
     if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'waiting_executor_file';
     await ctx.editMessageText(`📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
