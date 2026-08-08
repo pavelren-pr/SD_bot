@@ -669,6 +669,36 @@ function register(bot) {
       await ctx.editMessageText(`✅ *Заказ удалён!*\n\n📦 *Управление заказами*\n\nВсего заказов: *${all.length}*`, { parse_mode: 'Markdown', ...keyboard });
     }
 
+    else if (action.startsWith('order_message_customer:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      
+      if (!order) {
+        await ctx.answerCbQuery('❌ Заказ не найден');
+        return;
+      }
+      
+      ctx.session = ctx.session || {};
+      ctx.session.adminReplyToCustomerId = order.customerId;
+      ctx.session.adminReplyOrderId = orderId;
+      ctx.session.adminReplyOrderTitle = order.workTitle;
+      ctx.session.adminReplyOrderDate = order.createdAt;
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('❌ Отмена', `admin:order_view:${orderId}`)]
+      ]);
+      
+      await ctx.editMessageText(
+        `💬 *Режим ответа заказчику*\n\n` +
+        `📚 *Заказ:* ${order.workTitle}\n` +
+        `📅 *Дата:* ${order.createdAt}\n\n` +
+        `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.\n\n` +
+        `_(Для отмены нажмите "Отмена")_`,
+        { parse_mode: 'Markdown', ...keyboard }
+      );
+      await ctx.answerCbQuery();
+    }
+
     // --- РАНГИ ---
     else if (action === 'set_user_rank') {
       ctx.session.adminState = 'awaiting_user_id_for_rank';
@@ -828,258 +858,6 @@ function register(bot) {
 
     await ctx.answerCbQuery();
   });
-
-// Обработчик отправки сообщения заказчику
-bot.on('text', async (ctx, next) => {
-  ctx.session = ctx.session || {};
-  const state = ctx.session.adminState;
-  
-  // Обработка состояния для отправки сообщения заказчику
-  if (state && state.startsWith('send_message_to_customer:')) {
-    if (!isAdmin(ctx.from.id)) return;
-    
-    const orderId = state.split(':')[1];
-    const order = ordersDb.getOrder(orderId);
-    if (!order) {
-      await ctx.reply('❌ Заказ не найден');
-      ctx.session.adminState = null;
-      return;
-    }
-    
-    const messageText = ctx.message.text;
-    const customerId = order.customerId;
-    
-    try {
-      await ctx.telegram.sendMessage(customerId, `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`, { parse_mode: 'Markdown' });
-      await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
-    } catch (err) {
-      await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
-    }
-    
-    ctx.session.adminState = null;
-    return;
-  }
-  
-  // Обработка состояния для поиска заказа по номеру
-  if (state && state === 'search_order_prompt') {
-    if (!isAdmin(ctx.from.id)) return;
-    
-    const searchText = ctx.message.text.trim();
-    const order = ordersDb.getAllOrders().find(o => String(o.orderNumber) === searchText);
-    
-    if (!order) {
-      await ctx.reply('❌ Заказ с таким номером не найден.');
-      ctx.session.adminState = null;
-      return;
-    }
-    
-    const card = formatOrderCard(order, true);
-    const buttons = Markup.inlineKeyboard([
-      [Markup.button.callback('✏️ Изменить заказ', `admin:edit_order:${order.id}`)],
-      [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${order.id}`)],
-      [Markup.button.callback('🗑 Удалить заказ', `admin:delete_order_confirm:${order.id}`)],
-      [Markup.button.callback('⬅️ Назад к поиску', 'admin:search_order_prompt')]
-    ]);
-    
-    await ctx.reply(card.text, { parse_mode: 'Markdown', ...buttons });
-    ctx.session.adminState = null;
-    return;
-  }
-  
-  // Обработка состояния для добавления нового заказа
-  if (state && state.startsWith('add_order:')) {
-    if (!isAdmin(ctx.from.id)) return;
-    
-    const step = state.split(':')[1];
-    const draft = ctx.session.addOrderDraft || {};
-    
-    if (step === 'customer_id') {
-      const customerId = ctx.message.text.trim();
-      if (!/^\d+$/.test(customerId)) {
-        await ctx.reply('❌ Введите корректный Telegram ID заказчика (число).');
-        return;
-      }
-      draft.customerId = customerId;
-      ctx.session.addOrderDraft = draft;
-      ctx.session.adminState = 'add_order:work_title';
-      await ctx.reply('📚 Введите название работы (например: "Контрольная работа по математике"):');
-      return;
-    }
-    
-    if (step === 'work_title') {
-      draft.workTitle = ctx.message.text.trim();
-      ctx.session.addOrderDraft = draft;
-      ctx.session.adminState = 'add_order:subject';
-      await ctx.reply('📖 Введите предмет (например: "Математика"):');
-      return;
-    }
-    
-    if (step === 'subject') {
-      draft.subject = ctx.message.text.trim();
-      ctx.session.addOrderDraft = draft;
-      ctx.session.adminState = 'add_order:course';
-      await ctx.reply('🎓 Введите курс (например: "2 курс" или просто "2"):');
-      return;
-    }
-    
-    if (step === 'course') {
-      draft.course = ctx.message.text.trim();
-      ctx.session.addOrderDraft = draft;
-      ctx.session.adminState = 'add_order:price';
-      await ctx.reply('💰 Введите цену заказа в рублях (только число):');
-      return;
-    }
-    
-    if (step === 'price') {
-      const price = parseInt(ctx.message.text.trim());
-      if (isNaN(price) || price <= 0) {
-        await ctx.reply('❌ Введите корректную цену (положительное число).');
-        return;
-      }
-      draft.price = price;
-      ctx.session.addOrderDraft = draft;
-      ctx.session.adminState = 'add_order:commission';
-      await ctx.reply('📊 Введите комиссию в процентах (например, 15):');
-      return;
-    }
-    
-    if (step === 'commission') {
-      const commission = parseInt(ctx.message.text.trim());
-      if (isNaN(commission) || commission < 0 || commission > 100) {
-        await ctx.reply('❌ Введите корректную комиссию (0-100).');
-        return;
-      }
-      draft.commission = commission;
-      ctx.session.addOrderDraft = draft;
-      
-      // Показываем карточку для подтверждения
-      const orderNumber = ordersDb.getNextOrderNumber();
-      let cardText = `🔍 *Проверьте данные перед добавлением заказа №${orderNumber}*\n\n`;
-      cardText += `👤 Заказчик ID: \`${draft.customerId}\`\n`;
-      cardText += `📚 Работа: ${draft.workTitle}\n`;
-      cardText += `📖 Предмет: ${draft.subject}\n`;
-      cardText += `🎓 Курс: ${draft.course}\n`;
-      cardText += `💰 Цена: ${draft.price} ₽\n`;
-      cardText += `📊 Комиссия: ${draft.commission}%\n`;
-      cardText += `\nВыберите действие:`;
-      
-      const buttons = Markup.inlineKeyboard([
-        [Markup.button.callback('✏️ Изменить данные', 'admin:add_order_edit')],
-        [Markup.button.callback('✅ Добавить заказ', `admin:add_order_confirm:${JSON.stringify(draft)}`)]
-      ]);
-      
-      await ctx.reply(cardText, { parse_mode: 'Markdown', ...buttons });
-      ctx.session.adminState = null;
-      return;
-    }
-  }
-  
-  // Обработка состояния для поиска заказчика по ID/username
-  if (state && state === 'search_customer_prompt') {
-    if (!isAdmin(ctx.from.id)) return;
-
-    const searchText = ctx.message.text.trim();
-    const allOrders = ordersDb.getAllOrders();
-    const customerMap = new Map();
-
-    allOrders.forEach(order => {
-      if (!customerMap.has(order.customerId)) {
-        customerMap.set(order.customerId, {
-          id: order.customerId,
-          username: order.customerUsername || 'N/A',
-          totalSpent: 0,
-          orderCount: 0,
-          orders: []
-        });
-      }
-      const customer = customerMap.get(order.customerId);
-      if (order.price) customer.totalSpent += parseFloat(order.price);
-      customer.orderCount++;
-        customer.orders.push(order);
-    });
-
-    const customers = Array.from(customerMap.values());
-    const foundCustomer = customers.find(c => String(c.id) === searchText || c.username.toLowerCase() === searchText.toLowerCase() || c.username.toLowerCase().includes(searchText.toLowerCase()));
-
-    if (!foundCustomer) {
-      await ctx.reply('❌ Заказчик с таким ID или username не найден.');
-      ctx.session.adminState = null;
-      return;
-    }
-
-    const customerOrders = foundCustomer.orders || [];
-
-    let text = `👤 *Информация о заказчике*\n\n`;
-    text += `ID: \`${foundCustomer.id}\`\n`;
-    text += `Username: ${foundCustomer.username !== 'N/A' ? '@' + foundCustomer.username : 'не указан'}\n`;
-    text += `Сумма выкупа: *${foundCustomer.totalSpent} ₽*\n`;
-    text += `Количество заказов: *${foundCustomer.orderCount}*\n\n`;
-
-    if (customerOrders.length > 0) {
-      text += `📦 *Последние заказы:*\n`;
-      customerOrders.slice(0, 5).forEach((o, i) => {
-        text += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}\n`;
-      });
-    }
-
-    const buttons = [
-      [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${foundCustomer.id}`)],
-      [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${foundCustomer.id}`)],
-      [Markup.button.callback('⬅️ Назад к поиску', 'admin:search_customer_prompt')]
-    ];
-
-    await ctx.reply(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
-    ctx.session.adminState = null;
-    return;
-  }
-
-  // Обработка состояния для изменения суммы выкупа заказчика
-  if (state && state.startsWith('edit_customer_spent:')) {
-    if (!isAdmin(ctx.from.id)) return;
-    
-    const customerId = state.split(':')[1];
-    const newAmount = parseFloat(ctx.message.text.trim());
-    
-    if (isNaN(newAmount) || newAmount < 0) {
-      await ctx.reply('❌ Введите корректную сумму (неотрицательное число).');
-      return;
-    }
-    
-    // Сохраняем новую сумму в файл loyalty.json
-    const loyaltyData = loyalty.loadData();
-    if (!loyaltyData[customerId]) {
-      loyaltyData[customerId] = { username: '', totalSpent: 0 };
-    }
-    loyaltyData[customerId].totalSpent = newAmount;
-    loyalty.saveData(loyaltyData);
-    
-    await ctx.reply(`✅ Сумма выкупа для заказчика ${customerId} изменена на ${newAmount} ₽`);
-    ctx.session.adminState = null;
-    return;
-  }
-  
-  // Обработка состояния для отправки сообщения заказчику по ID
-  if (state && state.startsWith('send_message_to_customer_by_id:')) {
-    if (!isAdmin(ctx.from.id)) return;
-    
-    const customerId = state.split(':')[1];
-    const messageText = ctx.message.text;
-    
-    try {
-      await ctx.telegram.sendMessage(customerId, `📬 *Сообщение от администрации*
-
-${messageText}`, { parse_mode: 'Markdown' });
-      await ctx.reply(`✅ Сообщение отправлено заказчику ID: ${customerId}`);
-    } catch (err) {
-      await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
-    }
-    
-    ctx.session.adminState = null;
-    return;
-  }
-
-  await next();
-});
 
 }
 
