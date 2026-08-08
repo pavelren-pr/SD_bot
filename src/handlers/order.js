@@ -63,8 +63,7 @@ function register(bot) {
       ctx.session.adminReplyOrderDate = null;
       return;
     }
-    
-    // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ
+
     // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ
 if (ctx.session.customerReplyToExecutorId) {
   const targetUserId = ctx.session.customerReplyToExecutorId;
