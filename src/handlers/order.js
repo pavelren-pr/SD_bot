@@ -72,10 +72,15 @@ function register(bot) {
       const orderId = ctx.session.customerReplyOrderId;
       const messageText = ctx.message.text || '[Фото/Файл]';
       
+      // Получаем номер заказа из базы данных
+      const ordersData = require('../data/orders');
+      const order = ordersData.getOrder(orderId);
+      const orderNumber = order ? order.orderNumber : orderId;
+      
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${orderId}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
-        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([Markup.button.callback('✏️ Ответить заказчику', `admin_reply:${ctx.from.id}_${orderId}`)]) }
+        `💬 *Вам сообщение от заказчика*\\n\\n🆔 *Номер заказа:* №${orderNumber}\\n📚 *Заказ:* ${orderTitle}\\n📅 *Дата заказа:* ${orderDate}\\n\\n${messageText}`,
+        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Ответить заказчику', `admin_reply:${ctx.from.id}_${orderId}`)]]) }
       );
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
@@ -410,6 +415,7 @@ function register(bot) {
         acceptedAt: new Date().toLocaleString('ru-RU')
       });
       activeChats.get(chatId).orderId = activeOrder.id;
+      activeChats.get(chatId).orderNumber = activeOrder.orderNumber;
     }
 
     const executorFullKeyboard = Markup.inlineKeyboard([
