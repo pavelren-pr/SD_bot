@@ -667,10 +667,7 @@ function register(bot) {
 
     await ctx.answerCbQuery();
   });
-}
 
-
-module.exports = { register, showAdminMenu };
 // Обработчик отправки сообщения заказчику
 bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
@@ -701,5 +698,7 @@ bot.on('text', async (ctx, next) => {
   
   ctx.session.adminState = null;
 });
+
+}
 
 module.exports = { register, showAdminMenu };
