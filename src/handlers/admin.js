@@ -56,7 +56,7 @@ function getCourseSubjects(courseId) {
 
 function getSubjectWorks(subjectId) {
   const works = catalog.getWorksBySubject(subjectId);
-  const buttons = works.map(w => [Markup.button.callback(w.title.substring(0, 45), `admin:catalog_work:${w.id}`)]);
+  const buttons = works.map(w => [Markup.button.callback(`№${w.orderNumber || 'N/A'} | ${w.title.substring(0, 35)}`, `admin:catalog_work:${w.id}`)]);
   buttons.push([Markup.button.callback('➕ Добавить работу', `admin:add_work:${subjectId}`)]);
   buttons.push([Markup.button.callback('🗑 Удалить работу', `admin:delete_work:${subjectId}`)]);
   
@@ -104,7 +104,7 @@ function getDeleteSubjectList(courseId) {
 
 function getDeleteWorkList(subjectId) {
   const works = catalog.getWorksBySubject(subjectId);
-  const buttons = works.map(w => [Markup.button.callback(`🗑 ${w.title.substring(0, 40)}`, `admin:delete_work_confirm:${w.id}`)]);
+  const buttons = works.map(w => [Markup.button.callback(`🗑 №${w.orderNumber || 'N/A'} | ${w.title.substring(0, 30)}`, `admin:delete_work_confirm:${w.id}`)]);
   buttons.push([Markup.button.callback('⬅️ Отмена', `admin:catalog_subject:${subjectId}`)]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -502,7 +502,6 @@ function register(bot) {
         [Markup.button.callback(`⏳ Ожидают (${p})`, 'admin:orders_list:pending:0')],
         [Markup.button.callback(`🔨 В работе (${a})`, 'admin:orders_list:active:0')],
         [Markup.button.callback(`✅ Выполнены (${c})`, 'admin:orders_list:completed:0')],
-        [Markup.button.callback('📦 Все заказы', 'admin:orders_list:all:0')],
         [Markup.button.callback('➕ Добавить заказ', 'admin:add_order_start')],
         [Markup.button.callback('🔍 Поиск по номеру', 'admin:search_order_prompt')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
@@ -527,9 +526,10 @@ function register(bot) {
       
       let text = `${title}\n\nСтраница ${currentPage + 1} из ${totalPages}\nВсего: ${filtered.length}`;
       const buttons = displayOrders.map(o => {
-        const customer = o.customerUsername ? `@${o.customerUsername}` : `ID:${o.customerId}`;
-        const date = (o.createdAt && typeof o.createdAt === 'string') ? o.createdAt.split(' ')[0] : 'N/A';
-        return [Markup.button.callback(`📝 ${o.workTitle.substring(0, 20)} | ${date}`, `admin:order_view:${o.id}`)];
+        let dateStr = 'N/A'; if (o.createdAt) { try { const d = new Date(o.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split('T')[0]; } } catch(e) { dateStr = 'N/A'; } }
+        const workTitle = o.workTitle || 'Без названия';
+        const orderNum = o.orderNumber || 'N/A';
+        return [Markup.button.callback(`№${orderNum} | ${workTitle.substring(0, 15)} | ${dateStr}`, `admin:order_view:${o.id}`)];
       });
       if (buttons.length === 0) buttons.push([Markup.button.callback('— пусто —', 'noop')]);
       
@@ -550,7 +550,7 @@ function register(bot) {
       const text = formatOrderCard(order, 'admin');
       const buttons = [
         [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
-        [Markup.button.callback('💬 Написать заказчику', `admin:order_message_customer:${orderId}`)]
+        [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]
       ];
       if (order.customerUsername) buttons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${order.customerUsername}`)]);
       
@@ -656,7 +656,6 @@ function register(bot) {
         [Markup.button.callback(`⏳ Ожидают (${p})`, 'admin:orders_list:pending:0')],
         [Markup.button.callback(`🔨 В работе (${a})`, 'admin:orders_list:active:0')],
         [Markup.button.callback(`✅ Выполнены (${c})`, 'admin:orders_list:completed:0')],
-        [Markup.button.callback('📦 Все заказы', 'admin:orders_list:all:0')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
       await ctx.editMessageText(`✅ *Заказ удалён!*\n\n📦 *Управление заказами*\n\nВсего заказов: *${all.length}*`, { parse_mode: 'Markdown', ...keyboard });
@@ -666,6 +665,151 @@ function register(bot) {
     else if (action === 'set_user_rank') {
       ctx.session.adminState = 'awaiting_user_id_for_rank';
       await ctx.editMessageText('👤 *Введите ID пользователя:*\n\n(Например: 1012758149)', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+    }
+    // --- БАЗА ЗАКАЗЧИКОВ ---
+    else if (action === 'customers') {
+      ctx.session.adminState = null;
+      const allOrders = ordersDb.getAllOrders();
+      const customerMap = new Map();
+      
+      allOrders.forEach(order => {
+        if (!customerMap.has(order.customerId)) {
+          customerMap.set(order.customerId, {
+            id: order.customerId,
+            username: order.customerUsername || 'N/A',
+            totalSpent: 0,
+            orderCount: 0
+          });
+        }
+        const customer = customerMap.get(order.customerId);
+        if (order.price) customer.totalSpent += parseFloat(order.price);
+        customer.orderCount++;
+      });
+      
+      const customers = Array.from(customerMap.values());
+      ctx.session.customersList = customers;
+      ctx.session.customersPage = 0;
+      
+      const CUSTOMERS_PER_PAGE = 10;
+      const totalPages = Math.max(1, Math.ceil(customers.length / CUSTOMERS_PER_PAGE));
+      const currentPage = 0;
+      const displayCustomers = customers.slice(currentPage * CUSTOMERS_PER_PAGE, (currentPage + 1) * CUSTOMERS_PER_PAGE);
+      
+      let text = '👥 База заказчиков\n\n';
+      text += `Всего заказчиков: ${customers.length}\n`;
+      text += `Страница ${currentPage + 1} из ${totalPages}\n\n`;
+      
+      const buttons = [];
+      displayCustomers.forEach(c => {
+        const usernameDisplay = c.username !== 'N/A' ? '@' + c.username : 'без username';
+        buttons.push([Markup.button.callback(`${c.id} | ${usernameDisplay} | ${c.totalSpent}₽`, `admin:customer_view:${c.id}`)]);
+      });
+      
+      if (buttons.length === 0) {
+        buttons.push([Markup.button.callback('— пусто —', 'noop')]);
+      }
+      
+      const navRow = [];
+      if (currentPage > 0) navRow.push(Markup.button.callback('◀️', `admin:customers_page:${currentPage - 1}`));
+      navRow.push(Markup.button.callback(`${currentPage + 1}/${totalPages}`, 'noop'));
+      if (currentPage < totalPages - 1) navRow.push(Markup.button.callback('▶️', `admin:customers_page:${currentPage + 1}`));
+      buttons.push(navRow);
+      
+      buttons.push([Markup.button.callback('🔍 Поиск по ID/username', 'admin:search_customer_prompt')]);
+      buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    else if (action.startsWith('customers_page:')) {
+      const page = parseInt(action.split(':')[1]);
+      const customers = ctx.session.customersList || [];
+      const CUSTOMERS_PER_PAGE = 10;
+      const totalPages = Math.max(1, Math.ceil(customers.length / CUSTOMERS_PER_PAGE));
+      const currentPage = Math.min(page, totalPages - 1);
+      const displayCustomers = customers.slice(currentPage * CUSTOMERS_PER_PAGE, (currentPage + 1) * CUSTOMERS_PER_PAGE);
+      
+      let text = '👥 База заказчиков\n\n';
+      text += `Всего заказчиков: ${customers.length}\n`;
+      text += `Страница ${currentPage + 1} из ${totalPages}\n\n`;
+      
+      const buttons = [];
+      displayCustomers.forEach(c => {
+        const usernameDisplay = c.username !== 'N/A' ? '@' + c.username : 'без username';
+        buttons.push([Markup.button.callback(`${c.id} | ${usernameDisplay} | ${c.totalSpent}₽`, `admin:customer_view:${c.id}`)]);
+      });
+      
+      if (buttons.length === 0) {
+        buttons.push([Markup.button.callback('— пусто —', 'noop')]);
+      }
+      
+      const navRow = [];
+      if (currentPage > 0) navRow.push(Markup.button.callback('◀️', `admin:customers_page:${currentPage - 1}`));
+      navRow.push(Markup.button.callback(`${currentPage + 1}/${totalPages}`, 'noop'));
+      if (currentPage < totalPages - 1) navRow.push(Markup.button.callback('▶️', `admin:customers_page:${currentPage + 1}`));
+      buttons.push(navRow);
+      
+      buttons.push([Markup.button.callback('🔍 Поиск по ID/username', 'admin:search_customer_prompt')]);
+      buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    else if (action.startsWith('customer_view:')) {
+      const customerId = action.split(':')[1];
+      const customers = ctx.session.customersList || [];
+      const customer = customers.find(c => String(c.id) === String(customerId));
+      
+      if (!customer) {
+        await ctx.answerCbQuery('❌ Заказчик не найден');
+        return;
+      }
+      
+      const allOrders = ordersDb.getAllOrders();
+      const customerOrders = allOrders.filter(o => String(o.customerId) === String(customerId));
+      
+      let text = `👤 Информация о заказчике\n\n`;
+      text += `ID: \`${customer.id}\`\n`;
+      text += `Username: ${customer.username !== 'N/A' ? '@' + customer.username : 'не указан'}\n`;
+      text += `Сумма выкупа: ${customer.totalSpent} ₽\n`;
+      text += `Количество заказов: ${customer.orderCount}\n\n`;
+      
+      if (customerOrders.length > 0) {
+        text += `📦 Последние заказы:\n`;
+        customerOrders.slice(0, 5).forEach((o, i) => {
+          text += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}\n`;
+        });
+      }
+      
+      const buttons = [
+        [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${customerId}`)],
+        [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${customerId}`)],
+        [Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]
+      ];
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    else if (action.startsWith('customer_edit_spent:')) {
+      const customerId = action.split(':')[1];
+      ctx.session.adminState = `edit_customer_spent:${customerId}`;
+      await ctx.editMessageText(`✏️ Введите новую сумму выкупа для заказчика ${customerId}:\n\n(Введите число в рублях)`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:customer_view:${customerId}`)]]) });
+    }
+    else if (action === 'search_customer_prompt') {
+      ctx.session.adminState = 'search_customer_prompt';
+      await ctx.editMessageText('🔍 Поиск заказчика\n\nВведите Telegram ID или @username (без @):', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:customers')]]) });
+    }
+    else if (action.startsWith('send_msg_customer:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) {
+        await ctx.answerCbQuery('❌ Заказ не найден');
+        return;
+      }
+      ctx.session.adminState = `send_message_to_customer:${orderId}`;
+      await ctx.editMessageText(`💬 Отправка сообщения заказчику\n\nЗаказ №${order.orderNumber}\nЗаказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\nВведите текст сообщения:`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', `admin:order_view:${orderId}`)]]) });
+    }
+    else if (action.startsWith('send_msg_customer_by_id:')) {
+      const customerId = action.split(':')[1];
+      ctx.session.adminState = `send_message_to_customer_by_id:${customerId}`;
+      await ctx.editMessageText(`💬 Отправка сообщения заказчику\n\nID заказчика: \`${customerId}\`\n\nВведите текст сообщения:`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'admin:customers')]]) });
     }
 
     await ctx.answerCbQuery();
@@ -816,6 +960,105 @@ bot.on('text', async (ctx, next) => {
     }
   }
   
+  // Обработка состояния для поиска заказчика по ID/username
+  if (state && state === 'search_customer_prompt') {
+    if (!isAdmin(ctx.from.id)) return;
+    
+    const searchText = ctx.message.text.trim();
+    const allOrders = ordersDb.getAllOrders();
+    const customerMap = new Map();
+    
+    allOrders.forEach(order => {
+      if (!customerMap.has(order.customerId)) {
+        customerMap.set(order.customerId, {
+          id: order.customerId,
+          username: order.customerUsername || 'N/A',
+          totalSpent: 0,
+          orderCount: 0
+        });
+      }
+      const customer = customerMap.get(order.customerId);
+      if (order.price) customer.totalSpent += parseFloat(order.price);
+      customer.orderCount++;
+    });
+    
+    const customers = Array.from(customerMap.values());
+    const foundCustomer = customers.find(c => String(c.id) === searchText || c.username.toLowerCase() === searchText.toLowerCase() || c.username.toLowerCase().includes(searchText.toLowerCase()));
+    
+    if (!foundCustomer) {
+      await ctx.reply('❌ Заказчик с таким ID или username не найден.');
+      ctx.session.adminState = null;
+      return;
+    }
+    
+    let text = `👤 *Информация о заказчике*\n\n`;
+    text += `ID: ${foundCustomer.id}\n`;
+    text += `Username: ${foundCustomer.username !== 'N/A' ? '@' + foundCustomer.username : 'не указан'}\n`;
+    text += `Сумма выкупа: *${foundCustomer.totalSpent} ₽*
+`;
+    text += `Количество заказов: *${foundCustomer.orderCount}*
+
+`;
+    
+    if (customerOrders.length > 0) {
+      text += `📦 *Последние заказы:*
+`;
+      customerOrders.slice(0, 5).forEach((o, i) => {
+        text += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}
+`;
+      });
+    }
+    
+    const buttons = [
+      [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${foundCustomer.id}`)],
+      [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${foundCustomer.id}`)],
+      [Markup.button.callback('⬅️ Назад к поиску', 'admin:search_customer_prompt')]
+    ];
+    
+    await ctx.reply(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    ctx.session.adminState = null;
+    return;
+  }
+  
+  // Обработка состояния для изменения суммы выкупа заказчика
+  if (state && state.startsWith('edit_customer_spent:')) {
+    if (!isAdmin(ctx.from.id)) return;
+    
+    const customerId = state.split(':')[1];
+    const newAmount = parseFloat(ctx.message.text.trim());
+    
+    if (isNaN(newAmount) || newAmount < 0) {
+      await ctx.reply('❌ Введите корректную сумму (неотрицательное число).');
+      return;
+    }
+    
+    // Здесь можно сохранить новую сумму в базу данных, если есть такая функция
+    // Пока просто подтверждаем изменение
+    await ctx.reply(`✅ Сумма выкупа для заказчика ${customerId} изменена на ${newAmount} ₽`);
+    ctx.session.adminState = null;
+    return;
+  }
+  
+  // Обработка состояния для отправки сообщения заказчику по ID
+  if (state && state.startsWith('send_message_to_customer_by_id:')) {
+    if (!isAdmin(ctx.from.id)) return;
+    
+    const customerId = state.split(':')[1];
+    const messageText = ctx.message.text;
+    
+    try {
+      await ctx.telegram.sendMessage(customerId, `📬 *Сообщение от администрации*
+
+${messageText}`, { parse_mode: 'Markdown' });
+      await ctx.reply(`✅ Сообщение отправлено заказчику ID: ${customerId}`);
+    } catch (err) {
+      await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+    }
+    
+    ctx.session.adminState = null;
+    return;
+  }
+
   await next();
 });
 

@@ -126,6 +126,34 @@
   ],
   "works": [
     {
+      "id": "math_custom_1",
+      "courseId": "course1",
+      "subjectId": "math1",
+      "title": "📝 Отправить задание (Вышмат 1 курс) 📐",
+      "description": "Индивидуальный заказ по высшей математике для 1 курса.\n\nПосле нажатия кнопки ниже вы сможете отправить текстовое описание задания с указанием сроков и дополнительной информации, а затем прикрепить файл с заданием.",
+      "price": 0,
+      "commission": 20,
+      "chatEnv": "MATH_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMB",
+      "needs": ["custom_math"],
+      "prompt": "custom_math",
+      "isCustomMath": true
+    },
+    {
+      "id": "math_custom_2",
+      "courseId": "course2",
+      "subjectId": "math2",
+      "title": "📝 Отправить задание (Вышмат 2 курс) 📐",
+      "description": "Индивидуальный заказ по высшей математике для 2 курса.\n\nПосле нажатия кнопки ниже вы сможете отправить текстовое описание задания с указанием сроков и дополнительной информации, а затем прикрепить файл с заданием.",
+      "price": 0,
+      "commission": 20,
+      "chatEnv": "MATH_CHAT_ID",
+      "paymentEnv": "IVAN_CARD_NUMB",
+      "needs": ["custom_math"],
+      "prompt": "custom_math",
+      "isCustomMath": true
+    },
+    {
       "id": "nach1_9",
       "courseId": "course2",
       "subjectId": "nachert",

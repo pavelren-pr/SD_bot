@@ -123,9 +123,9 @@ function register(bot) {
     
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
-      const date = order.createdAt.split(' ')[0];
+      let dateStr = 'N/A'; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split('T')[0]; } } catch(e) { dateStr = 'N/A'; } };
       buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${date}`,
+        `№${order.orderNumber} | ${title} | ${dateStr}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -176,9 +176,9 @@ function register(bot) {
     
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
-      const date = order.createdAt.split(' ')[0];
+      let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
       buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${date}`,
+        `№${order.orderNumber} | ${title} | ${dateStr}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -298,9 +298,9 @@ function register(bot) {
     
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
-      const date = order.createdAt.split(' ')[0];
+      let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
       buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${date}`,
+        `№${order.orderNumber} | ${title} | ${dateStr}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -440,9 +440,9 @@ function register(bot) {
     
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
-      const date = order.createdAt.split(' ')[0];
+      let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
       buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${date}`,
+        `№${order.orderNumber} | ${title} | ${dateStr}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -517,9 +517,9 @@ function register(bot) {
     
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
-      const date = order.createdAt.split(' ')[0];
+      let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
       buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${date}`,
+        `№${order.orderNumber} | ${title} | ${dateStr}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -627,9 +627,9 @@ function register(bot) {
     
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
-      const date = order.createdAt.split(' ')[0];
+      let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
       buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${date}`,
+        `№${order.orderNumber} | ${title} | ${dateStr}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -703,9 +703,9 @@ function register(bot) {
     
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
-      const date = order.createdAt.split(' ')[0];
+      let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
       buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${date}`,
+        `№${order.orderNumber} | ${title} | ${dateStr}`,
         `orders:customer:view:${order.id}`
       )]);
     });
@@ -787,27 +787,33 @@ function formatOrderCard(order, role) {
   } else {
     text += `\n`;
   }
+
+  // Отображение ID заказчика и исполнителя для админа и исполнителя
+  if (role === 'admin' || role === 'executor') {
+    const customerDisplay = order.customerUsername 
+      ? `${order.customerId} (@${order.customerUsername})`
+      : `${order.customerId}`;
+    text += `👤 *Заказчик:* ${customerDisplay}\n`;
+    
+    if (role === 'admin') {
+      const executorDisplay = order.executorUsername 
+        ? `${order.executorId} (@${order.executorUsername})`
+        : (order.executorId ? `${order.executorId}` : '_не назначен_');
+      text += `👷 *Исполнитель:* ${executorDisplay}\n\n`;
+    } else if (role === 'executor' && order.executorId) {
+      const executorDisplay = order.executorUsername 
+        ? `${order.executorId} (@${order.executorUsername})`
+        : `${order.executorId}`;
+      text += `👷 *Вы (исполнитель):* ${executorDisplay}\n\n`;
+    }
+  }
   
   if (role === 'customer') {
     if (order.executorUsername) {
       text += `✅ *Исполнитель назначен*\n\n`;
     }
   }
-  
-  if (role === 'executor') {
-    const customer = order.customerUsername ? `@${order.customerUsername}` : `ID: ${order.customerId}`;
-    text += `👤 *Заказчик:* ${customer}\n\n`;
-  }
-  
-  if (role === 'admin') {
-    const customer = order.customerUsername ? `@${order.customerUsername}` : `ID: ${order.customerId}`;
-    const executor = order.executorUsername 
-      ? `@${order.executorUsername}` 
-      : (order.executorId ? `ID: ${order.executorId}` : '_не назначен_');
-    text += `👤 *Заказчик:* ${customer}\n`;
-    text += `👷 *Исполнитель:* ${executor}\n\n`;
-  }
-  
+
   text += `📅 *Создан:* ${order.createdAt}\n`;
   if (order.acceptedAt) text += `🔨 *Принят:* ${order.acceptedAt}\n`;
   if (order.completedAt) text += `✅ *Выполнен:* ${order.completedAt}\n`;
@@ -853,8 +859,7 @@ async function showProfile(ctx) {
   }
   
   if (loyaltyInfo.hasFullAccess) {
-    profileButtons.push([Markup.button.callback('🛠 Изменить информацию о работах', 'profile:edit_works')]);
-    profileButtons.push([Markup.button.callback('📦 Все заказы', 'profile:all_orders')]); // 🌟 Переименовано
+    profileButtons.push([Markup.button.callback('🛠 Админ панель', 'profile:edit_works')]);
   }
   
   const profileKeyboard = Markup.inlineKeyboard(profileButtons);
