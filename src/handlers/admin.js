@@ -314,6 +314,49 @@ function register(bot) {
       await ctx.reply(`✅ Ранг пользователя \`${userId}\` изменён на "${rankName}"`, { parse_mode: 'Markdown', ...getAdminMainMenu() });
       ctx.session.adminState = null; ctx.session.tempRankUserId = null; return;
     }
+
+    // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из карточки заказа)
+ if (state.startsWith('send_message_to_customer:')) {
+   const orderId = state.split(':')[1];
+   const order = ordersDb.getOrder(orderId);
+   if (!order) {
+     await ctx.reply('❌ Заказ не найден');
+     ctx.session.adminState = null;
+     return;
+   }
+   const messageText = ctx.message.text;
+   const customerId = order.customerId;
+   try {
+     await ctx.telegram.sendMessage(
+       customerId,
+       `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`,
+       { parse_mode: 'Markdown' }
+     );
+     await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
+   } catch (err) {
+     await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+   }
+   ctx.session.adminState = null;
+   return;
+ }
+
+ // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из базы заказчиков по ID)
+ if (state.startsWith('send_message_to_customer_by_id:')) {
+   const customerId = state.split(':')[1];
+   const messageText = ctx.message.text;
+   try {
+     await ctx.telegram.sendMessage(
+       customerId,
+       `📬 *Сообщение от администрации*\n\n${messageText}`,
+       { parse_mode: 'Markdown' }
+     );
+     await ctx.reply(`✅ Сообщение отправлено заказчику ID: ${customerId}`);
+   } catch (err) {
+     await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+   }
+   ctx.session.adminState = null;
+   return;
+ }
   });
 
   // ==========================================
@@ -331,10 +374,6 @@ function register(bot) {
     if (action === 'main') {
       ctx.session.adminState = null;
       await ctx.editMessageText('🛠 *Панель управления*', { parse_mode: 'Markdown', ...getAdminMainMenu() });
-    }
-    else if (action === 'close') {
-      ctx.session.adminState = null;
-      await ctx.editMessageText('✅ *Панель управления закрыта.*', { parse_mode: 'Markdown' });
     }
 
     // --- КАТАЛОГ: Навигация ---
