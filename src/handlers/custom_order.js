@@ -289,10 +289,10 @@ function register(bot) {
     }
     
     await ctx.editMessageText(
-      `💰 *Назначение цены*\n\n` +
+      `💰 *${orderData.price ? 'Изменение цены' : 'Назначение цены'}*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${orderData.subjectName}\n\n` +
-      `Отправьте цену заказа в рублях (только число):`,
+      `📚 *Предмет:* ${orderData.subjectName}${orderData.price ? '\n💵 *Текущая цена:* ' + orderData.price + ' ₽' : ''}\n\n` +
+      `Отправьте ${orderData.price ? 'новую' : ''}цену заказа в рублях (только число):`,
       { parse_mode: 'Markdown' }
     );
     
@@ -325,7 +325,7 @@ function register(bot) {
     // Сохраняем цену
     orderData.price = price;
     orderData.executorId = executorId;
-    orderData.status = 'price_set';
+    orderData.status = 'price_negotiating';  // Статус: идёт согласование цены
     
     const executorUser = ctx.from;
     const executorName = executorUser.username ? `@${executorUser.username}` : executorUser.first_name;
@@ -338,11 +338,11 @@ function register(bot) {
       `🎓 *Курс:* ${orderData.courseName}\n` +
       `📅 *Дата заказа:* ${orderData.createdAt}\n` +
       `💵 *Назначенная цена:* ${price} ₽\n\n` +
-      `Выберите действие:`;
+      `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
     
     const customerKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('💳 Перейти к оплате', `custom_pay:${orderNumber}`)],
-      [Markup.button.callback('✉️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
+      [Markup.button.callback('✉️ Обсудить цену с исполнителем', `custom_write_executor:${orderNumber}`)],
+      [Markup.button.callback('💳 Перейти к оплате', `custom_pay:${orderNumber}`)]
     ]);
     
     try {
@@ -363,7 +363,7 @@ function register(bot) {
       updatedText += `📚 *Предмет:* ${orderData.subjectName}\n`;
       updatedText += `💰 *Цена:* ${price} ₽\n`;
       updatedText += `👷 *Исполнитель:* ${executorName}\n`;
-      updatedText += `🟢 *Статус:* ОЖИДАЕТ ОПЛАТЫ`;
+      updatedText += `🟡 *Статус:* СОГЛАСОВАНИЕ ЦЕНЫ`;
       
       await ctx.telegram.editMessageText(orderData.chatId, orderData.managerMessageId, null, updatedText, {
         parse_mode: 'Markdown',
@@ -373,7 +373,7 @@ function register(bot) {
         ]).reply_markup
       });
       
-      await ctx.reply(`✅ Цена ${price} ₽ назначена. Ожидайте оплаты от заказчика.`);
+      await ctx.reply(`✅ Цена ${price} ₽ назначена. Теперь заказчик может обсудить цену или перейти к оплате.`);
       
       ctx.session.waitingCustomPrice = null;
       await ctx.answerCbQuery('✅ Цена назначена');
