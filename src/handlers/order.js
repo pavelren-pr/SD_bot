@@ -33,6 +33,12 @@ function register(bot) {
     ctx.session = ctx.session || {};
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
+    
+    // Пропускаем если работа требует индивидуальной логики заказа
+    if (work && work.isCustomOrder) {
+      return; // Передаём управление обработчику custom_order.js
+    }
+    
     ctx.session.order = { workId, step: 'waiting_details', details: { text: null, files: [] } };
     await ctx.editMessageText(`📎 Отлично!\n\n${work.prompt}`);
   });
@@ -167,6 +173,11 @@ if (ctx.session.customerReplyToExecutorId) {
     if (ctx.chat?.type !== 'private' || ctx.from?.is_bot) return;
     
     const order = ctx.session.order;
+
+    // Пропускаем если это индивидуальный заказ (обрабатывается в custom_order.js)
+    if (order && ctx.session.customOrder) {
+      return next();
+    }
 
     const executorChat = findExecutorChat(ctx.from.id);
     if (executorChat && (executorChat.status === 'waiting_executor_message' || executorChat.status === 'waiting_executor_file')) {
