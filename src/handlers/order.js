@@ -235,9 +235,27 @@ if (ctx.session.customerReplyToExecutorId) {
         const chatId = `order_${ctx.from.id}_${order.workId}`;
         const executorKeyboard = createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `accept_order:${chatId}` }]]);
         
-        await ctx.telegram.editMessageText(targetChatId, order.managerMessageId, null, updatedText, { 
-          parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
-        });
+        try {
+          await ctx.telegram.editMessageText(targetChatId, order.managerMessageId, null, updatedText, { 
+            parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
+          });
+        } catch (e) {
+          // 🌟 Обработка ошибки миграции группы в супергруппу при обновлении сообщения
+          if (e.response && e.response.parameters && e.response.parameters.migrate_to_chat_id) {
+            const newChatId = e.response.parameters.migrate_to_chat_id;
+            console.log(`⚠️ Группа обновлена до супергруппы при обновлении сообщения. Новый chat_id: ${newChatId}`);
+            try {
+              await ctx.telegram.sendMessage(newChatId, updatedText, { 
+                parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
+              });
+              order.managerMessageId = null; // Сбрасываем ID, так как сообщение теперь в новом чате
+            } catch (retryError) {
+              console.log('Не удалось отправить сообщение в супергруппу:', retryError.message);
+            }
+          } else {
+            console.log('Не удалось обновить сообщение менеджера:', e.message);
+          }
+        }
         
         if (ctx.message.photo || ctx.message.document) {
           const fileToSend = ctx.message.photo ? ctx.message.photo[ctx.message.photo.length - 1].file_id : ctx.message.document.file_id;
@@ -281,7 +299,20 @@ if (ctx.session.customerReplyToExecutorId) {
             parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
           });
         } catch (e) {
-          console.log('Не удалось обновить сообщение менеджера с номером:', e.message);
+          // 🌟 Обработка ошибки миграции группы в супергруппу при обновлении сообщения
+          if (e.response && e.response.parameters && e.response.parameters.migrate_to_chat_id) {
+            const newChatId = e.response.parameters.migrate_to_chat_id;
+            console.log(`⚠️ Группа обновлена до супергруппы при обновлении сообщения. Новый chat_id: ${newChatId}`);
+            try {
+              await ctx.telegram.sendMessage(newChatId, updatedOrderText, { 
+                parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
+              });
+            } catch (retryError) {
+              console.log('Не удалось отправить сообщение в супергруппу:', retryError.message);
+            }
+          } else {
+            console.log('Не удалось обновить сообщение менеджера с номером:', e.message);
+          }
         }
         
         const managerUrl = 'https://t.me/SmartDealsManager';
@@ -412,6 +443,30 @@ if (ctx.session.customerReplyToExecutorId) {
       await ctx.reply(`✅ *Заказ успешно оформлен!*\n\nДля завершения переведите **${pricing.finalPrice} ₽** на карту/телефон:\n\`${paymentDetails}\`\n\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и менеджер сразу приступит к работе! 🚀`, { parse_mode: 'Markdown' });
       await ctx.answerCbQuery('✅ Заказ отправлен!');
     } catch (error) {
+      // 🌟 Обработка ошибки миграции группы в супергруппу
+      if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
+        const newChatId = error.response.parameters.migrate_to_chat_id;
+        console.log(`⚠️ Группа обновлена до супергруппы. Новый chat_id: ${newChatId}`);
+        
+        // Сохраняем новый chat_id для будущей работы (можно добавить в .env или базу данных)
+        // Временно используем новый chat_id для повторной отправки
+        try {
+          const sentMsg = await ctx.telegram.sendMessage(newChatId, orderText, { 
+            parse_mode: 'Markdown', reply_markup: createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `accept_order:${chatId}` }]]).reply_markup 
+          });
+          order.managerMessageId = sentMsg.message_id;
+          for (const file of order.details.files) {
+            if (file.type === 'photo') await ctx.telegram.sendPhoto(newChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
+            else if (file.type === 'document') await ctx.telegram.sendDocument(newChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
+          }
+          order.createdAt = createdAt; order.finalPrice = pricing.finalPrice; order.discountPercent = pricing.discountPercent; order.paymentDetails = paymentDetails; order.step = 'awaiting_payment';
+          await ctx.reply(`✅ *Заказ успешно оформлен!*\\n\\nДля завершения переведите **${pricing.finalPrice} ₽** на карту/телефон:\\n\`${paymentDetails}\`\\n\\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и менеджер сразу приступит к работе! 🚀`, { parse_mode: 'Markdown' });
+          await ctx.answerCbQuery('✅ Заказ отправлен!');
+          return;
+        } catch (retryError) {
+          console.error('Ошибка отправки заказа в супергруппу:', retryError);
+        }
+      }
       console.error('Ошибка отправки заказа:', error);
       await ctx.reply('❌ Произошла ошибка при отправке заказа.');
     }
