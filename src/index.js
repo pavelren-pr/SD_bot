@@ -16,10 +16,10 @@ const customOrder = require('./handlers/custom_order');
 menu.register(bot);
 commands.register(bot);
 catalog.register(bot);
-order.register(bot);
+customOrder.register(bot); // Сначала индивидуальные заказы (чтобы перехватывали isCustomOrder)
+order.register(bot);        // Затем стандартные заказы
 admin.register(bot);
 treasure.register(bot);
-customOrder.register(bot);
 
 // Запуск бота
 bot.launch();
