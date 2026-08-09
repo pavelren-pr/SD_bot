@@ -10,7 +10,7 @@ const catalog = require('./handlers/catalog');
 const order = require('./handlers/order');
 const admin = require('./handlers/admin');
 const treasure = require('./handlers/treasure');
-const mathOrder = require('./handlers/math_order');
+const customOrder = require('./handlers/custom_order');
 
 // Регистрируем обработчики в правильном порядке:
 menu.register(bot);
@@ -19,7 +19,7 @@ catalog.register(bot);
 order.register(bot);
 admin.register(bot);
 treasure.register(bot);
-mathOrder.register(bot);
+customOrder.register(bot);
 
 // Запуск бота
 bot.launch();

@@ -1,60 +1,90 @@
 const catalog = require('../data/catalog');
 const orders = require('../data/orders');
-const loyalty = require('../data/loyalty');
 const { createInlineKeyboard } = require('../utils/keyboard');
 const { Markup } = require('telegraf');
 
-// Хранилище состояний для математических заказов
-const mathOrderStates = new Map();
+// Хранилище состояний для индивидуальных заказов
+const customOrderStates = new Map();
 
 function escapeMarkdown(text) {
   if (!text) return '';
   return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 }
 
+/**
+ * Получает конфигурацию чата и оплаты для работы
+ * @param {Object} work - объект работы из каталога
+ * @returns {Object} - { chatEnvVar, paymentEnvVar, chatId, paymentValue }
+ */
+function getWorkConfig(work) {
+  const chatEnvVar = work.chatEnv || 'DEFAULT_CHAT_ID';
+  const paymentEnvVar = work.paymentEnv || 'DEFAULT_CARD_NUMBER';
+  
+  const chatId = process.env[chatEnvVar];
+  const paymentValue = process.env[paymentEnvVar];
+  
+  return { chatEnvVar, paymentEnvVar, chatId, paymentValue };
+}
+
+/**
+ * Формирует название предмета с курсом
+ */
+function getSubjectFullName(work) {
+  const subject = catalog.getSubject(work.subjectId);
+  const course = catalog.getCourse(subject.courseId);
+  return { subjectName: subject.name, courseName: course.name };
+}
+
 function register(bot) {
-  // Обработка кнопки "Отправить задание" для Вышмата (1 и 2 курс)
-  bot.action(/^order:start:(math_custom_1|math_custom_2)$/, async (ctx) => {
+  // Обработка кнопки "Отправить задание" для индивидуальных заказов
+  bot.action(/^order:start:(.+)$/, async (ctx, next) => {
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
     
-    if (!work || !work.isCustomMath) {
+    // Пропускаем если работа не требует индивидуальной логики заказа
+    if (!work || !work.isCustomOrder) {
       return next(); // Передаём управление стандартному обработчику
     }
     
+    const { subjectName, courseName } = getSubjectFullName(work);
+    
     ctx.session = ctx.session || {};
-    ctx.session.mathOrder = { 
+    ctx.session.customOrder = { 
       workId, 
       step: 'waiting_description', 
       description: null, 
       file: null 
     };
     
-    await ctx.editMessageText(
-      `📐 *Высшая математика - Индивидуальный заказ*\n\n` +
-      `📝 *Шаг 1: Описание задания*\n\n` +
+    const promptText = work.prompt || 
       `Пожалуйста, отправьте текстовое описание вашего задания:\n` +
       `• Сроки исполнения\n` +
       `• Дополнительная информация\n` +
       `• Другие важные детали\n\n` +
-      `💡 *Подсказка:* После отправки текста вы сможете прикрепить файл с заданием.`,
+      `💡 *Подсказка:* После отправки текста вы сможете прикрепить файл с заданием.`;
+    
+    await ctx.editMessageText(
+      `📝 *${subjectName} - Индивидуальный заказ*\n\n` +
+      `🎓 *Курс:* ${courseName}\n\n` +
+      `📝 *Шаг 1: Описание задания*\n\n` +
+      `${promptText}`,
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCbQuery();
   });
 
-  // Приём текстового описания для математического заказа
+  // Приём текстового описания для индивидуального заказа
   bot.on('text', async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    // Пропускаем если это не математический заказ
-    if (!ctx.session.mathOrder || ctx.session.mathOrder.step !== 'waiting_description') {
+    // Пропускаем если это не индивидуальный заказ в режиме ожидания описания
+    if (!ctx.session.customOrder || ctx.session.customOrder.step !== 'waiting_description') {
       return next();
     }
     
-    const mathOrder = ctx.session.mathOrder;
-    mathOrder.description = ctx.message.text;
-    mathOrder.step = 'waiting_file';
+    const customOrder = ctx.session.customOrder;
+    customOrder.description = ctx.message.text;
+    customOrder.step = 'waiting_file';
     
     await ctx.reply(
       `✅ *Описание получено!*\n\n` +
@@ -65,16 +95,16 @@ function register(bot) {
     );
   });
 
-  // Приём файла для математического заказа
+  // Приём файла для индивидуального заказа
   bot.on(['photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    // Пропускаем если это не математический заказ в режиме ожидания файла
-    if (!ctx.session.mathOrder || ctx.session.mathOrder.step !== 'waiting_file') {
+    // Пропускаем если это не индивидуальный заказ в режиме ожидания файла
+    if (!ctx.session.customOrder || ctx.session.customOrder.step !== 'waiting_file') {
       return next();
     }
     
-    const mathOrder = ctx.session.mathOrder;
+    const customOrder = ctx.session.customOrder;
     const fileInfo = {};
     
     if (ctx.message.photo) {
@@ -87,35 +117,34 @@ function register(bot) {
       fileInfo.fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
     }
     
-    mathOrder.file = fileInfo;
-    mathOrder.step = 'confirmation';
+    customOrder.file = fileInfo;
+    customOrder.step = 'confirmation';
     
     // Показываем страницу подтверждения
-    await showMathConfirmation(ctx);
+    await showConfirmation(ctx);
   });
 
-  // Показать подтверждение математического заказа
-  async function showMathConfirmation(ctx) {
-    const mathOrder = ctx.session.mathOrder;
-    const work = catalog.getWork(mathOrder.workId);
-    const subject = catalog.getSubject(work.subjectId);
-    const course = catalog.getCourse(subject.courseId);
+  // Показать подтверждение индивидуального заказа
+  async function showConfirmation(ctx) {
+    const customOrder = ctx.session.customOrder;
+    const work = catalog.getWork(customOrder.workId);
+    const { subjectName, courseName } = getSubjectFullName(work);
     
-    let summary = `📐 *Подтверждение заказа по Высшей математике*\n\n`;
-    summary += `🎓 *Курс:* ${course.name}\n`;
-    summary += `📚 *Предмет:* ${subject.name}\n\n`;
-    summary += `📝 *Описание задания:*\n\`${escapeMarkdown(mathOrder.description)}\`\n\n`;
+    let summary = `📝 *Подтверждение индивидуального заказа*\n\n`;
+    summary += `🎓 *Курс:* ${courseName}\n`;
+    summary += `📚 *Предмет:* ${subjectName}\n\n`;
+    summary += `📝 *Описание задания:*\n\`${escapeMarkdown(customOrder.description)}\`\n\n`;
     
-    if (mathOrder.file) {
-      summary += `📎 *Прикреплённый файл:* ${mathOrder.file.fileName}\n\n`;
+    if (customOrder.file) {
+      summary += `📎 *Прикреплённый файл:* ${customOrder.file.fileName}\n\n`;
     }
     
     summary += `Проверьте информацию и выберите действие:`;
     
     const buttons = [
-      [{ text: '✅ Отправить заказ на оценку', callback: 'math_order:send_for_evaluation' }],
-      [{ text: '✏️ Изменить описание', callback: 'math_order:edit_description' }],
-      [{ text: '📎 Изменить файл', callback: 'math_order:edit_file' }]
+      [{ text: '✅ Отправить заказ на оценку', callback: 'custom_order:send_for_evaluation' }],
+      [{ text: '✏️ Изменить описание', callback: 'custom_order:edit_description' }],
+      [{ text: '📎 Изменить файл', callback: 'custom_order:edit_file' }]
     ];
     
     await ctx.reply(summary, { 
@@ -125,11 +154,11 @@ function register(bot) {
   }
 
   // Изменить описание
-  bot.action('math_order:edit_description', async (ctx) => {
-    const mathOrder = ctx.session.mathOrder;
-    if (!mathOrder) return ctx.answerCbQuery('❌ Заказ не найден');
+  bot.action('custom_order:edit_description', async (ctx) => {
+    const customOrder = ctx.session.customOrder;
+    if (!customOrder) return ctx.answerCbQuery('❌ Заказ не найден');
     
-    mathOrder.step = 'waiting_description';
+    customOrder.step = 'waiting_description';
     await ctx.editMessageText(
       `✏️ *Редактирование описания*\n\n` +
       `Отправьте новое текстовое описание задания:`,
@@ -139,12 +168,12 @@ function register(bot) {
   });
 
   // Изменить файл
-  bot.action('math_order:edit_file', async (ctx) => {
-    const mathOrder = ctx.session.mathOrder;
-    if (!mathOrder) return ctx.answerCbQuery('❌ Заказ не найден');
+  bot.action('custom_order:edit_file', async (ctx) => {
+    const customOrder = ctx.session.customOrder;
+    if (!customOrder) return ctx.answerCbQuery('❌ Заказ не найден');
     
-    mathOrder.file = null;
-    mathOrder.step = 'waiting_file';
+    customOrder.file = null;
+    customOrder.step = 'waiting_file';
     await ctx.editMessageText(
       `📎 *Загрузка нового файла*\n\n` +
       `Прикрепите файл с вашим заданием:`,
@@ -154,98 +183,99 @@ function register(bot) {
   });
 
   // Отправить заказ на оценку
-  bot.action('math_order:send_for_evaluation', async (ctx) => {
-    const mathOrder = ctx.session.mathOrder;
-    if (!mathOrder || !mathOrder.description || !mathOrder.file) {
-      return ctx.answerCbQuery('❌ incomplete заказ. Заполните все поля.');
+  bot.action('custom_order:send_for_evaluation', async (ctx) => {
+    const customOrder = ctx.session.customOrder;
+    if (!customOrder || !customOrder.description || !customOrder.file) {
+      return ctx.answerCbQuery('❌ Неполный заказ. Заполните все поля.');
     }
     
-    const work = catalog.getWork(mathOrder.workId);
-    const subject = catalog.getSubject(work.subjectId);
-    const course = catalog.getCourse(subject.courseId);
+    const work = catalog.getWork(customOrder.workId);
+    const { subjectName, courseName } = getSubjectFullName(work);
+    const { chatId } = getWorkConfig(work);
+    
     const userLink = ctx.from.username ? `@${ctx.from.username}` : `[${ctx.from.first_name}](tg://user?id=${ctx.from.id})`;
     const createdAt = new Date().toLocaleString('ru-RU');
     
-    // Получаем ID чата математиков из env
-    const mathChatId = process.env.MATH_CHAT_ID;
-    if (!mathChatId) {
-      await ctx.reply('❌ Ошибка: Не настроен MATH_CHAT_ID в .env файле');
+    if (!chatId) {
+      await ctx.reply(`❌ Ошибка: Не настроен ${work.chatEnv} в .env файле`);
       return;
     }
     
     // Создаём предварительный заказ
-    const tempOrderNumber = `M-${Date.now()}`;
+    const tempOrderNumber = `C-${Date.now()}`;
     
-    let orderText = `🔔 *НОВЫЙ ЗАКАЗ ПО ВЫСШЕЙ МАТЕМАТИКЕ!*\n\n`;
-    orderText += `🆔 *Номер заказа:* №${tempOrderNumber}\n`;
-    orderText += `👤 *Заказчик:* ${userLink}\n`;
-    orderText += `🎓 *Курс:* ${course.name}\n`;
-    orderText += `📚 *Предмет:* ${subject.name}\n`;
-    orderText += `📝 *Описание:* ${escapeMarkdown(mathOrder.description)}\n`;
-    orderText += `📎 *Файл:* ${mathOrder.file.fileName}\n`;
-    orderText += `⏰ *Создан:* ${createdAt}\n`;
+    let orderText = `🔔 *НОВЫЙ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ!*\\n\\n`;
+    orderText += `🆔 *Номер заказа:* №${tempOrderNumber}\\n`;
+    orderText += `👤 *Заказчик:* ${userLink}\\n`;
+    orderText += `🎓 *Курс:* ${courseName}\\n`;
+    orderText += `📚 *Предмет:* ${subjectName}\\n`;
+    orderText += `📝 *Описание:* ${escapeMarkdown(customOrder.description)}\\n`;
+    orderText += `📎 *Файл:* ${customOrder.file.fileName}\\n`;
+    orderText += `⏰ *Создан:* ${createdAt}\\n`;
     orderText += `🟡 *Статус:* ОЖИДАЕТ ОЦЕНКИ`;
     
     try {
-      // Отправляем в чат математиков
-      const sentMsg = await ctx.telegram.sendMessage(mathChatId, orderText, {
+      // Отправляем в чат исполнителей
+      const sentMsg = await ctx.telegram.sendMessage(chatId, orderText, {
         parse_mode: 'Markdown',
         reply_markup: createInlineKeyboard([
-          [{ text: '💰 Назначить цену', callback: `math_set_price:${ctx.from.id}_${tempOrderNumber}` }],
-          [{ text: '✉️ Написать сообщение заказчику', callback: `math_write_customer:${ctx.from.id}_${tempOrderNumber}` }]
+          [{ text: '💰 Назначить цену', callback: `custom_set_price:${ctx.from.id}_${tempOrderNumber}` }],
+          [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${ctx.from.id}_${tempOrderNumber}` }]
         ]).reply_markup
       });
       
       // Отправляем файл следом
-      if (mathOrder.file.type === 'photo') {
-        await ctx.telegram.sendPhoto(mathChatId, mathOrder.file.fileId, { 
-          caption: `📎 Файл задания: ${mathOrder.file.fileName}`,
+      if (customOrder.file.type === 'photo') {
+        await ctx.telegram.sendPhoto(chatId, customOrder.file.fileId, { 
+          caption: `📎 Файл задания: ${customOrder.file.fileName}`,
           reply_to_message_id: sentMsg.message_id 
         });
       } else {
-        await ctx.telegram.sendDocument(mathChatId, mathOrder.file.fileId, { 
-          caption: `📎 Файл задания: ${mathOrder.file.fileName}`,
+        await ctx.telegram.sendDocument(chatId, customOrder.file.fileId, { 
+          caption: `📎 Файл задания: ${customOrder.file.fileName}`,
           reply_to_message_id: sentMsg.message_id 
         });
       }
       
       // Сохраняем состояние для обработки цены и сообщений
-      mathOrderStates.set(tempOrderNumber, {
+      customOrderStates.set(tempOrderNumber, {
         customerId: ctx.from.id,
         customerUsername: ctx.from.username,
-        workId: mathOrder.workId,
-        subjectName: subject.name,
-        courseName: course.name,
-        description: mathOrder.description,
-        fileName: mathOrder.file.fileName,
-        fileId: mathOrder.file.fileId,
-        fileType: mathOrder.file.type,
+        workId: customOrder.workId,
+        subjectName: subjectName,
+        courseName: courseName,
+        description: customOrder.description,
+        fileName: customOrder.file.fileName,
+        fileId: customOrder.file.fileId,
+        fileType: customOrder.file.type,
         createdAt: createdAt,
         status: 'waiting_price',
-        managerMessageId: sentMsg.message_id
+        managerMessageId: sentMsg.message_id,
+        chatId: chatId,
+        commission: work.commission || 20
       });
       
       await ctx.reply(
         `✅ *Ваш заказ отправлен на оценку!*\n\n` +
         `🆔 *Номер заказа:* №${tempOrderNumber}\n` +
-        `📚 *Предмет:* ${subject.name}\n\n` +
+        `📚 *Предмет:* ${subjectName}\n\n` +
         `Ожидайте, исполнители ознакомятся с заданием и назначат цену.\n` +
         `Как только цена будет назначена, вы получите уведомление.`,
         { parse_mode: 'Markdown' }
       );
       
       // Очищаем сессию
-      ctx.session.mathOrder = null;
+      ctx.session.customOrder = null;
       
       await ctx.answerCbQuery('✅ Заказ отправлен на оценку');
     } catch (error) {
-      console.error('Ошибка отправки математического заказа:', error);
+      console.error('Ошибка отправки индивидуального заказа:', error);
       await ctx.reply('❌ Произошла ошибка при отправке заказа.');
     }
   });
 
-  // Установить цену для математического заказа
-  bot.action(/^math_set_price:(\d+)_(.+)$/, async (ctx) => {
+  // Установить цену для индивидуального заказа
+  bot.action(/^custom_set_price:(\d+)_(.+)$/, async (ctx) => {
     const executorId = parseInt(ctx.match[1]);
     const orderNumber = ctx.match[2];
     
@@ -253,7 +283,7 @@ function register(bot) {
       return ctx.answerCbQuery('❌ Это не ваш заказ');
     }
     
-    const orderData = mathOrderStates.get(orderNumber);
+    const orderData = customOrderStates.get(orderNumber);
     if (!orderData) {
       return ctx.answerCbQuery('❌ Заказ не найден');
     }
@@ -267,7 +297,7 @@ function register(bot) {
     );
     
     // Устанавливаем состояние ожидания цены
-    ctx.session.waitingMathPrice = { orderNumber, executorId };
+    ctx.session.waitingCustomPrice = { orderNumber, executorId };
     await ctx.answerCbQuery();
   });
 
@@ -275,15 +305,15 @@ function register(bot) {
   bot.on('text', async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    if (!ctx.session.waitingMathPrice) {
+    if (!ctx.session.waitingCustomPrice) {
       return next();
     }
     
-    const { orderNumber, executorId } = ctx.session.waitingMathPrice;
-    const orderData = mathOrderStates.get(orderNumber);
+    const { orderNumber, executorId } = ctx.session.waitingCustomPrice;
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData) {
-      ctx.session.waitingMathPrice = null;
+      ctx.session.waitingCustomPrice = null;
       return ctx.reply('❌ Заказ не найден. Начните заново.');
     }
     
@@ -311,8 +341,8 @@ function register(bot) {
       `Выберите действие:`;
     
     const customerKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('💳 Перейти к оплате', `math_pay:${orderNumber}`)],
-      [Markup.button.callback('✉️ Написать исполнителю', `math_write_executor:${orderNumber}`)]
+      [Markup.button.callback('💳 Перейти к оплате', `custom_pay:${orderNumber}`)],
+      [Markup.button.callback('✉️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
     ]);
     
     try {
@@ -326,9 +356,8 @@ function register(bot) {
         }
       );
       
-      // Обновляем сообщение в чате математиков
-      const mathChatId = process.env.MATH_CHAT_ID;
-      let updatedText = `🔔 *ЗАКАЗ ПО ВЫСШЕЙ МАТЕМАТИКЕ*\n\n`;
+      // Обновляем сообщение в чате исполнителей
+      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
       updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
       updatedText += `👤 *Заказчик:* ${orderData.customerUsername ? '@' + orderData.customerUsername : 'ID: ' + orderData.customerId}\n`;
       updatedText += `📚 *Предмет:* ${orderData.subjectName}\n`;
@@ -336,17 +365,17 @@ function register(bot) {
       updatedText += `👷 *Исполнитель:* ${executorName}\n`;
       updatedText += `🟢 *Статус:* ОЖИДАЕТ ОПЛАТЫ`;
       
-      await ctx.telegram.editMessageText(mathChatId, orderData.managerMessageId, null, updatedText, {
+      await ctx.telegram.editMessageText(orderData.chatId, orderData.managerMessageId, null, updatedText, {
         parse_mode: 'Markdown',
         reply_markup: createInlineKeyboard([
-          [{ text: '💰 Изменить цену', callback: `math_set_price:${executorId}_${orderNumber}` }],
-          [{ text: '✉️ Написать сообщение заказчику', callback: `math_write_customer:${executorId}_${orderNumber}` }]
+          [{ text: '💰 Изменить цену', callback: `custom_set_price:${executorId}_${orderNumber}` }],
+          [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${executorId}_${orderNumber}` }]
         ]).reply_markup
       });
       
       await ctx.reply(`✅ Цена ${price} ₽ назначена. Ожидайте оплаты от заказчика.`);
       
-      ctx.session.waitingMathPrice = null;
+      ctx.session.waitingCustomPrice = null;
       await ctx.answerCbQuery('✅ Цена назначена');
     } catch (error) {
       console.error('Ошибка назначения цены:', error);
@@ -354,8 +383,8 @@ function register(bot) {
     }
   });
 
-  // Написать сообщение заказчику (из чата математиков)
-  bot.action(/^math_write_customer:(\d+)_(.+)$/, async (ctx) => {
+  // Написать сообщение заказчику (из чата исполнителей)
+  bot.action(/^custom_write_customer:(\d+)_(.+)$/, async (ctx) => {
     const executorId = parseInt(ctx.match[1]);
     const orderNumber = ctx.match[2];
     
@@ -363,7 +392,7 @@ function register(bot) {
       return ctx.answerCbQuery('❌ Это не ваш заказ');
     }
     
-    const orderData = mathOrderStates.get(orderNumber);
+    const orderData = customOrderStates.get(orderNumber);
     if (!orderData) {
       return ctx.answerCbQuery('❌ Заказ не найден');
     }
@@ -375,7 +404,7 @@ function register(bot) {
       { parse_mode: 'Markdown' }
     );
     
-    ctx.session.waitingMathMessageToCustomer = { orderNumber, executorId };
+    ctx.session.waitingCustomMessageToCustomer = { orderNumber, executorId };
     await ctx.answerCbQuery();
   });
 
@@ -383,15 +412,15 @@ function register(bot) {
   bot.on('text', async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    if (!ctx.session.waitingMathMessageToCustomer) {
+    if (!ctx.session.waitingCustomMessageToCustomer) {
       return next();
     }
     
-    const { orderNumber, executorId } = ctx.session.waitingMathMessageToCustomer;
-    const orderData = mathOrderStates.get(orderNumber);
+    const { orderNumber, executorId } = ctx.session.waitingCustomMessageToCustomer;
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData) {
-      ctx.session.waitingMathMessageToCustomer = null;
+      ctx.session.waitingCustomMessageToCustomer = null;
       return ctx.reply('❌ Заказ не найден.');
     }
     
@@ -409,7 +438,7 @@ function register(bot) {
       `✏️ Для ответа используйте кнопку ниже:`;
     
     const replyKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✏️ Ответить исполнителю', `math_reply_executor:${orderNumber}`)]
+      [Markup.button.callback('✏️ Ответить исполнителю', `custom_reply_executor:${orderNumber}`)]
     ]);
     
     try {
@@ -420,12 +449,7 @@ function register(bot) {
       
       await ctx.reply('✅ Сообщение отправлено заказчику.');
       
-      // Возвращаемся в режим ожидания действий в чате
-      const mathChatId = process.env.MATH_CHAT_ID;
-      await ctx.telegram.editMessageText(mathChatId, orderData.managerMessageId, null, 
-        ctx.message.text, { parse_mode: 'Markdown' });
-      
-      ctx.session.waitingMathMessageToCustomer = null;
+      ctx.session.waitingCustomMessageToCustomer = null;
     } catch (error) {
       console.error('Ошибка отправки сообщения заказчику:', error);
       await ctx.reply('❌ Произошла ошибка.');
@@ -433,9 +457,9 @@ function register(bot) {
   });
 
   // Ответить исполнителю (от заказчика)
-  bot.action(/^math_reply_executor:(.+)$/, async (ctx) => {
+  bot.action(/^custom_reply_executor:(.+)$/, async (ctx) => {
     const orderNumber = ctx.match[1];
-    const orderData = mathOrderStates.get(orderNumber);
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData) {
       return ctx.answerCbQuery('❌ Заказ не найден');
@@ -448,7 +472,7 @@ function register(bot) {
       { parse_mode: 'Markdown' }
     );
     
-    ctx.session.waitingMathReplyToExecutor = { orderNumber };
+    ctx.session.waitingCustomReplyToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -456,15 +480,15 @@ function register(bot) {
   bot.on('text', async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    if (!ctx.session.waitingMathReplyToExecutor) {
+    if (!ctx.session.waitingCustomReplyToExecutor) {
       return next();
     }
     
-    const { orderNumber } = ctx.session.waitingMathReplyToExecutor;
-    const orderData = mathOrderStates.get(orderNumber);
+    const { orderNumber } = ctx.session.waitingCustomReplyToExecutor;
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData) {
-      ctx.session.waitingMathReplyToExecutor = null;
+      ctx.session.waitingCustomReplyToExecutor = null;
       return ctx.reply('❌ Заказ не найден.');
     }
     
@@ -472,8 +496,7 @@ function register(bot) {
     const customerUser = ctx.from;
     const customerName = customerUser.username ? `@${customerUser.username}` : customerUser.first_name;
     
-    // Отправляем сообщение в чат математиков
-    const mathChatId = process.env.MATH_CHAT_ID;
+    // Отправляем сообщение в чат исполнителей
     const executorMessage = 
       `💬 *Вам сообщение от заказчика*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
@@ -482,19 +505,19 @@ function register(bot) {
       `✏️ Для ответа используйте кнопки:`;
     
     const executorKeyboard = createInlineKeyboard([
-      [{ text: '💰 Изменить цену', callback: `math_set_price:${orderData.executorId}_${orderNumber}` }],
-      [{ text: '✉️ Написать сообщение заказчику', callback: `math_write_customer:${orderData.executorId}_${orderNumber}` }]
+      [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderData.executorId}_${orderNumber}` }],
+      [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderData.executorId}_${orderNumber}` }]
     ]);
     
     try {
-      await ctx.telegram.sendMessage(mathChatId, executorMessage, {
+      await ctx.telegram.sendMessage(orderData.chatId, executorMessage, {
         parse_mode: 'Markdown',
         reply_markup: executorKeyboard.reply_markup
       });
       
       await ctx.reply('✅ Сообщение отправлено исполнителю.');
       
-      ctx.session.waitingMathReplyToExecutor = null;
+      ctx.session.waitingCustomReplyToExecutor = null;
     } catch (error) {
       console.error('Ошибка отправки сообщения исполнителю:', error);
       await ctx.reply('❌ Произошла ошибка.');
@@ -502,17 +525,19 @@ function register(bot) {
   });
 
   // Перейти к оплате
-  bot.action(/^math_pay:(.+)$/, async (ctx) => {
+  bot.action(/^custom_pay:(.+)$/, async (ctx) => {
     const orderNumber = ctx.match[1];
-    const orderData = mathOrderStates.get(orderNumber);
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData || orderData.customerId !== ctx.from.id) {
       return ctx.answerCbQuery('❌ Это не ваш заказ');
     }
     
-    const cardNumber = process.env.IVAN_CARD_NUMB;
-    if (!cardNumber) {
-      return ctx.reply('❌ Ошибка: Не настроен IVAN_CARD_NUMB в .env файле');
+    const work = catalog.getWork(orderData.workId);
+    const { paymentValue } = getWorkConfig(work);
+    
+    if (!paymentValue) {
+      return ctx.reply(`❌ Ошибка: Не настроен ${work.paymentEnv} в .env файле`);
     }
     
     await ctx.editMessageText(
@@ -520,12 +545,12 @@ function register(bot) {
       `🆔 *Номер заказа:* №${orderNumber}\n` +
       `💵 *Сумма к оплате:* ${orderData.price} ₽\n\n` +
       `Переведите сумму на карту:\n` +
-      `\`${cardNumber}\`\n\n` +
+      `\`${paymentValue}\`\n\n` +
       `📸 *После оплаты отправьте скриншот чека в этот чат.*`,
       { parse_mode: 'Markdown' }
     );
     
-    ctx.session.waitingMathPayment = { orderNumber };
+    ctx.session.waitingCustomPayment = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -533,18 +558,16 @@ function register(bot) {
   bot.on(['photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    if (!ctx.session.waitingMathPayment) {
+    if (!ctx.session.waitingCustomPayment) {
       return next();
     }
     
-    const { orderNumber } = ctx.session.waitingMathPayment;
-    const orderData = mathOrderStates.get(orderNumber);
+    const { orderNumber } = ctx.session.waitingCustomPayment;
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData || orderData.customerId !== ctx.from.id) {
       return next();
     }
-    
-    const mathChatId = process.env.MATH_CHAT_ID;
     
     // Получаем файл скриншота
     let fileId, fileType;
@@ -557,21 +580,21 @@ function register(bot) {
     }
     
     try {
-      // Отправляем скриншот в чат математиков
+      // Отправляем скриншот в чат исполнителей
       const paymentMsg = `💳 *ПОДТВЕРЖДЕНИЕ ОПЛАТЫ*\n\n🆔 *Номер заказа:* №${orderNumber}\n👤 *Заказчик:* ${orderData.customerUsername ? '@' + orderData.customerUsername : 'ID: ' + orderData.customerId}`;
       
       if (fileType === 'photo') {
-        await ctx.telegram.sendPhoto(mathChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+        await ctx.telegram.sendPhoto(orderData.chatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
       } else {
-        await ctx.telegram.sendDocument(mathChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+        await ctx.telegram.sendDocument(orderData.chatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
       }
       
       // Обновляем статус заказа
       orderData.status = 'paid';
       orderData.paidAt = new Date().toLocaleString('ru-RU');
       
-      // Обновляем сообщение в чате математиков
-      let updatedText = `🔔 *ЗАКАЗ ПО ВЫСШЕЙ МАТЕМАТИКЕ*\n\n`;
+      // Обновляем сообщение в чате исполнителей
+      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
       updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
       updatedText += `👤 *Заказчик:* ${orderData.customerUsername ? '@' + orderData.customerUsername : 'ID: ' + orderData.customerId}\n`;
       updatedText += `📚 *Предмет:* ${orderData.subjectName}\n`;
@@ -580,7 +603,7 @@ function register(bot) {
       updatedText += `✅ *Оплачен:* ${orderData.paidAt}\n`;
       updatedText += `🟢 *Статус:* ОПЛАЧЕН - В РАБОТЕ`;
       
-      await ctx.telegram.editMessageText(mathChatId, orderData.managerMessageId, null, updatedText, {
+      await ctx.telegram.editMessageText(orderData.chatId, orderData.managerMessageId, null, updatedText, {
         parse_mode: 'Markdown'
       });
       
@@ -593,23 +616,24 @@ function register(bot) {
       );
       
       // Создаём запись в базе заказов
+      const work = catalog.getWork(orderData.workId);
       const newOrder = orders.createOrder({
         workId: orderData.workId,
-        workTitle: `Вышмат (${orderData.subjectName})`,
+        workTitle: `${orderData.subjectName}`,
         subjectName: orderData.subjectName,
         courseName: orderData.courseName,
         customerId: orderData.customerId,
         customerUsername: orderData.customerUsername,
         executorId: orderData.executorId,
         price: orderData.price,
-        commission: 20,
+        commission: orderData.commission,
         createdAt: orderData.createdAt,
         paidAt: orderData.paidAt,
         status: 'paid',
         orderNumber: orderNumber
       });
       
-      ctx.session.waitingMathPayment = null;
+      ctx.session.waitingCustomPayment = null;
     } catch (error) {
       console.error('Ошибка обработки оплаты:', error);
       await ctx.reply('❌ Произошла ошибка. Напишите менеджеру.');
@@ -617,9 +641,9 @@ function register(bot) {
   });
 
   // Написать исполнителю (от заказчика, когда цена ещё не оплачена)
-  bot.action(/^math_write_executor:(.+)$/, async (ctx) => {
+  bot.action(/^custom_write_executor:(.+)$/, async (ctx) => {
     const orderNumber = ctx.match[1];
-    const orderData = mathOrderStates.get(orderNumber);
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData || orderData.customerId !== ctx.from.id) {
       return ctx.answerCbQuery('❌ Это не ваш заказ');
@@ -632,7 +656,7 @@ function register(bot) {
       { parse_mode: 'Markdown' }
     );
     
-    ctx.session.waitingMathWriteToExecutor = { orderNumber };
+    ctx.session.waitingCustomWriteToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -640,15 +664,15 @@ function register(bot) {
   bot.on('text', async (ctx, next) => {
     ctx.session = ctx.session || {};
     
-    if (!ctx.session.waitingMathWriteToExecutor) {
+    if (!ctx.session.waitingCustomWriteToExecutor) {
       return next();
     }
     
-    const { orderNumber } = ctx.session.waitingMathWriteToExecutor;
-    const orderData = mathOrderStates.get(orderNumber);
+    const { orderNumber } = ctx.session.waitingCustomWriteToExecutor;
+    const orderData = customOrderStates.get(orderNumber);
     
     if (!orderData) {
-      ctx.session.waitingMathWriteToExecutor = null;
+      ctx.session.waitingCustomWriteToExecutor = null;
       return ctx.reply('❌ Заказ не найден.');
     }
     
@@ -656,8 +680,7 @@ function register(bot) {
     const customerUser = ctx.from;
     const customerName = customerUser.username ? `@${customerUser.username}` : customerUser.first_name;
     
-    // Отправляем в чат математиков
-    const mathChatId = process.env.MATH_CHAT_ID;
+    // Отправляем в чат исполнителей
     const executorMessage = 
       `💬 *Сообщение от заказчика*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
@@ -666,19 +689,19 @@ function register(bot) {
       `✏️ Действия:`;
     
     const executorKeyboard = createInlineKeyboard([
-      [{ text: '💰 Изменить цену', callback: `math_set_price:${orderData.executorId}_${orderNumber}` }],
-      [{ text: '✉️ Написать сообщение заказчику', callback: `math_write_customer:${orderData.executorId}_${orderNumber}` }]
+      [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderData.executorId}_${orderNumber}` }],
+      [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderData.executorId}_${orderNumber}` }]
     ]);
     
     try {
-      await ctx.telegram.sendMessage(mathChatId, executorMessage, {
+      await ctx.telegram.sendMessage(orderData.chatId, executorMessage, {
         parse_mode: 'Markdown',
         reply_markup: executorKeyboard.reply_markup
       });
       
       await ctx.reply('✅ Сообщение отправлено исполнителю. Ожидайте ответа.');
       
-      ctx.session.waitingMathWriteToExecutor = null;
+      ctx.session.waitingCustomWriteToExecutor = null;
     } catch (error) {
       console.error('Ошибка отправки сообщения:', error);
       await ctx.reply('❌ Произошла ошибка.');

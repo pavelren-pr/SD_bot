@@ -135,9 +135,11 @@
       "commission": 20,
       "chatEnv": "MATH_CHAT_ID",
       "paymentEnv": "IVAN_CARD_NUMB",
-      "needs": ["custom_math"],
+      "needs": [
+        "custom_math"
+      ],
       "prompt": "📝 _Пожалуйста, опишите ваше задание:_ укажите сроки исполнения, номер варианта (если есть), конкретные темы или номера задач, а также любую дополнительную информацию.\n\n_После отправки текста вы сможете прикрепить файл с условием._",
-      "isCustomMath": true
+      "isCustomOrder": true
     },
     {
       "id": "math_custom_2",
@@ -149,9 +151,11 @@
       "commission": 20,
       "chatEnv": "MATH_CHAT_ID",
       "paymentEnv": "IVAN_CARD_NUMB",
-      "needs": ["custom_math"],
+      "needs": [
+        "custom_math"
+      ],
       "prompt": "📝 _Пожалуйста, опишите ваше задание:_ укажите сроки исполнения, номер варианта (если есть), конкретные темы или номера задач, а также любую дополнительную информацию.\n\n_После отправки текста вы сможете прикрепить файл с условием._",
-      "isCustomMath": true
+      "isCustomOrder": true
     },
     {
       "id": "nach1_9",
