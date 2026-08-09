@@ -201,31 +201,53 @@ function register(bot) {
       return;
     }
     
-    // Создаём предварительный заказ
-    const tempOrderNumber = `C-${Date.now()}`;
+    // 🌟 СОЗДАЁМ ЗАКАЗ В orders.json СРАЗУ
+    const orderData = orders.createOrder({
+      customerId: ctx.from.id,
+      customerUsername: ctx.from.username,
+      workId: customOrder.workId,
+      workTitle: `${subjectName} - Индивидуальный заказ`,
+      subjectName: subjectName,
+      courseName: courseName,
+      price: 0,
+      commission: work.commission || 20,
+      description: customOrder.description,
+      fileName: customOrder.file.fileName,
+      fileId: customOrder.file.fileId,
+      fileType: customOrder.file.type,
+      status: "waiting_acceptance",
+      isCustomOrder: true
+    });
     
-    let orderText = `🔔 *НОВЫЙ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ!*\\n\\n`;
-    orderText += `🆔 *Номер заказа:* №${tempOrderNumber}\\n`;
-    orderText += `👤 *Заказчик:* ${userLink}\\n`;
-    orderText += `🎓 *Курс:* ${courseName}\\n`;
-    orderText += `📚 *Предмет:* ${subjectName}\\n`;
-    orderText += `📝 *Описание:* ${escapeMarkdown(customOrder.description)}\\n`;
-    orderText += `📎 *Файл:* ${customOrder.file.fileName}\\n`;
-    orderText += `⏰ *Создан:* ${createdAt}\\n`;
+    const orderNumber = orderData.orderNumber;
+    
+    let orderText = `🔔 *НОВЫЙ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ!*\n\n`;
+    orderText += `🆔 *Номер заказа:* №${orderNumber}\n`;
+    orderText += `👤 *Заказчик:* ${userLink}\n`;
+    orderText += `🎓 *Курс:* ${courseName}\n`;
+    orderText += `📚 *Предмет:* ${subjectName}\n`;
+    orderText += `📝 *Описание:* ${escapeMarkdown(customOrder.description)}\n`;
+    orderText += `📎 *Файл:* ${customOrder.file.fileName}\n`;
+    orderText += `⏰ *Создан:* ${createdAt}\n`;
     orderText += `🟡 *Статус:* ОЖИДАЕТ ОЦЕНКИ`;
     
     try {
-      // Отправляем в чат исполнителей
       const sentMsg = await ctx.telegram.sendMessage(chatId, orderText, {
-        parse_mode: 'Markdown',
-        reply_markup: createInlineKeyboard([
-          [{ text: '💰 Назначить цену', callback: `custom_set_price:${ctx.from.id}_${tempOrderNumber}` }],
-          [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${ctx.from.id}_${tempOrderNumber}` }]
-        ]).reply_markup
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✅ Принять заказ", callback_data: `accept_custom_order:${orderNumber}` }]
+          ]
+        }
       });
       
-      // Отправляем файл следом
-      if (customOrder.file.type === 'photo') {
+      customOrderStates.set(orderNumber, {
+        orderId: orderData.id,
+        managerMessageId: sentMsg.message_id,
+        chatId: chatId
+      });
+      
+      if (customOrder.file.type === "photo") {
         await ctx.telegram.sendPhoto(chatId, customOrder.file.fileId, { 
           caption: `📎 Файл задания: ${customOrder.file.fileName}`,
           reply_to_message_id: sentMsg.message_id 
@@ -237,67 +259,112 @@ function register(bot) {
         });
       }
       
-      // Сохраняем состояние для обработки цены и сообщений
-      customOrderStates.set(tempOrderNumber, {
-        customerId: ctx.from.id,
-        customerUsername: ctx.from.username,
-        workId: customOrder.workId,
-        subjectName: subjectName,
-        courseName: courseName,
-        description: customOrder.description,
-        fileName: customOrder.file.fileName,
-        fileId: customOrder.file.fileId,
-        fileType: customOrder.file.type,
-        createdAt: createdAt,
-        status: 'waiting_price',
-        managerMessageId: sentMsg.message_id,
-        chatId: chatId,
-        commission: work.commission || 20
-      });
-      
       await ctx.reply(
         `✅ *Ваш заказ отправлен на оценку!*\n\n` +
-        `🆔 *Номер заказа:* №${tempOrderNumber}\n` +
+        `🆔 *Номер заказа:* №${orderNumber}\n` +
         `📚 *Предмет:* ${subjectName}\n\n` +
         `Ожидайте, исполнители ознакомятся с заданием и назначат цену.\n` +
         `Как только цена будет назначена, вы получите уведомление.`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: "Markdown" }
       );
       
-      // Очищаем сессию
       ctx.session.customOrder = null;
       
-      await ctx.answerCbQuery('✅ Заказ отправлен на оценку');
+      await ctx.answerCbQuery("✅ Заказ отправлен на оценку");
     } catch (error) {
-      console.error('Ошибка отправки индивидуального заказа:', error);
-      await ctx.reply('❌ Произошла ошибка при отправке заказа.');
+      console.error("Ошибка отправки индивидуального заказа:", error);
+      await ctx.reply("❌ Произошла ошибка при отправке заказа.");
     }
   });
 
-  // Установить цену для индивидуального заказа
-  bot.action(/^custom_set_price:(\d+)_(.+)$/, async (ctx) => {
-    const executorId = parseInt(ctx.match[1]);
-    const orderNumber = ctx.match[2];
+  // Обработчик кнопки "Принять заказ"
+  bot.action(/^accept_custom_order:(\d+)$/, async (ctx) => {
+    const orderNumber = parseInt(ctx.match[1]);
     
-    if (executorId !== ctx.from.id) {
-      return ctx.answerCbQuery('❌ Это не ваш заказ');
-    }
-    
-    const orderData = customOrderStates.get(orderNumber);
-    if (!orderData) {
+    // Получаем заказ из orders.json
+    const orderRecord = orders.getOrderByNumber(orderNumber);
+    if (!orderRecord) {
       return ctx.answerCbQuery('❌ Заказ не найден');
     }
     
+    if (orderRecord.status !== 'waiting_acceptance') {
+      return ctx.answerCbQuery('❌ Заказ уже принят другим исполнителем');
+    }
+    
+    // Проверяем, не принял ли уже кто-то этот заказ
+    if (orderRecord.executorId && orderRecord.executorId !== ctx.from.id) {
+      return ctx.answerCbQuery('❌ Этот заказ уже принят другим исполнителем');
+    }
+    
+    // Обновляем заказ в orders.json
+    const updatedOrder = orders.updateOrder(orderRecord.id, {
+      executorId: ctx.from.id,
+      executorUsername: ctx.from.username || null,
+      status: 'waiting_price',
+      acceptedAt: new Date().toLocaleString('ru-RU')
+    });
+    
+    const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+    
+    // Сохраняем в кэш для быстрого доступа
+    customOrderStates.set(orderNumber, {
+      orderId: orderRecord.id,
+      managerMessageId: ctx.callbackId, // Будет обновлено ниже
+      chatId: ctx.chat.id
+    });
+    
+    // Обновляем сообщение в чате исполнителей
+    let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ ПРИНЯТ*\n\n`;
+    updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
+    updatedText += `👤 *Заказчик:* ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}\n`;
+    updatedText += `📚 *Предмет:* ${orderRecord.subjectName}\n`;
+    updatedText += `👷 *Исполнитель:* ${executorName}\n`;
+    updatedText += `🟡 *Статус:* ОЖИДАЕТ ОЦЕНКИ`;
+    
+    await ctx.editMessageText(updatedText, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '💰 Назначить цену', callback_data: `custom_set_price:${orderNumber}` }],
+          [{ text: '✉️ Написать сообщение заказчику', callback_data: `custom_write_customer:${orderNumber}` }]
+        ]
+      }
+    });
+    
+    await ctx.answerCbQuery('✅ Вы приняли заказ. Теперь можете назначить цену.');
+  });
+
+  // Установить цену для индивидуального заказа
+  bot.action(/^custom_set_price:(\d+)$/, async (ctx) => {
+    const orderNumber = parseInt(ctx.match[1]);
+    
+    // Получаем заказ из orders.json
+    const orderRecord = orders.getOrderByNumber(orderNumber);
+    if (!orderRecord) {
+      return ctx.answerCbQuery('❌ Заказ не найден');
+    }
+    
+    // Проверяем, что заказ принят исполнителем
+    if (!orderRecord.executorId) {
+      return ctx.answerCbQuery('❌ Сначала примите заказ кнопкой "✅ Принять заказ"');
+    }
+    
+    // Проверяем, что текущий пользователь - исполнитель этого заказа
+    if (orderRecord.executorId !== ctx.from.id) {
+      console.log(`[DEBUG] Отказ в доступе. Order executorId: ${orderRecord.executorId}, Current user: ${ctx.from.id}`);
+      return ctx.answerCbQuery('❌ Это не ваш заказ. Сначала нажмите "Принять заказ".');
+    }
+    
     await ctx.editMessageText(
-      `💰 *${orderData.price ? 'Изменение цены' : 'Назначение цены'}*\n\n` +
+      `💰 *${orderRecord.price && orderRecord.price > 0 ? 'Изменение цены' : 'Назначение цены'}*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${orderData.subjectName}${orderData.price ? '\n💵 *Текущая цена:* ' + orderData.price + ' ₽' : ''}\n\n` +
-      `Отправьте ${orderData.price ? 'новую' : ''}цену заказа в рублях (только число):`,
+      `📚 *Предмет:* ${orderRecord.subjectName}${orderRecord.price && orderRecord.price > 0 ? '\n💵 *Текущая цена:* ' + orderRecord.price + ' ₽' : ''}\n\n` +
+      `Отправьте ${orderRecord.price && orderRecord.price > 0 ? 'новую' : ''}цену заказа в рублях (только число):`,
       { parse_mode: 'Markdown' }
     );
     
     // Устанавливаем состояние ожидания цены
-    ctx.session.waitingCustomPrice = { orderNumber, executorId };
+    ctx.session.waitingCustomPrice = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -309,12 +376,17 @@ function register(bot) {
       return next();
     }
     
-    const { orderNumber, executorId } = ctx.session.waitingCustomPrice;
-    const orderData = customOrderStates.get(orderNumber);
+    const { orderNumber } = ctx.session.waitingCustomPrice;
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData) {
+    if (!orderRecord) {
       ctx.session.waitingCustomPrice = null;
       return ctx.reply('❌ Заказ не найден. Начните заново.');
+    }
+    
+    // Проверяем, что текущий пользователь - исполнитель этого заказа
+    if (orderRecord.executorId !== ctx.from.id) {
+      return ctx.reply('❌ Это не ваш заказ.');
     }
     
     const price = parseInt(ctx.message.text);
@@ -322,21 +394,21 @@ function register(bot) {
       return ctx.reply('❌ Пожалуйста, введите корректную цену (положительное число).');
     }
     
-    // Сохраняем цену
-    orderData.price = price;
-    orderData.executorId = executorId;
-    orderData.status = 'price_negotiating';  // Статус: идёт согласование цены
+    // Обновляем заказ в orders.json
+    const updatedOrder = orders.updateOrder(orderRecord.id, {
+      price: price,
+      status: 'price_negotiating'  // Статус: идёт согласование цены
+    });
     
-    const executorUser = ctx.from;
-    const executorName = executorUser.username ? `@${executorUser.username}` : executorUser.first_name;
+    const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
     
     // Формируем сообщение для заказчика
     const customerMessage = 
       `💰 *Назначена цена за ваш заказ*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${orderData.subjectName}\n` +
-      `🎓 *Курс:* ${orderData.courseName}\n` +
-      `📅 *Дата заказа:* ${orderData.createdAt}\n` +
+      `📚 *Предмет:* ${updatedOrder.subjectName}\n` +
+      `🎓 *Курс:* ${updatedOrder.courseName}\n` +
+      `📅 *Дата заказа:* ${updatedOrder.createdAt}\n` +
       `💵 *Назначенная цена:* ${price} ₽\n\n` +
       `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
     
@@ -348,7 +420,7 @@ function register(bot) {
     try {
       // Отправляем сообщение заказчику
       await ctx.telegram.sendMessage(
-        orderData.customerId,
+        updatedOrder.customerId,
         customerMessage,
         { 
           parse_mode: 'Markdown',
@@ -356,22 +428,26 @@ function register(bot) {
         }
       );
       
-      // Обновляем сообщение в чате исполнителей
-      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-      updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-      updatedText += `👤 *Заказчик:* ${orderData.customerUsername ? '@' + orderData.customerUsername : 'ID: ' + orderData.customerId}\n`;
-      updatedText += `📚 *Предмет:* ${orderData.subjectName}\n`;
-      updatedText += `💰 *Цена:* ${price} ₽\n`;
-      updatedText += `👷 *Исполнитель:* ${executorName}\n`;
-      updatedText += `🟡 *Статус:* СОГЛАСОВАНИЕ ЦЕНЫ`;
-      
-      await ctx.telegram.editMessageText(orderData.chatId, orderData.managerMessageId, null, updatedText, {
-        parse_mode: 'Markdown',
-        reply_markup: createInlineKeyboard([
-          [{ text: '💰 Изменить цену', callback: `custom_set_price:${executorId}_${orderNumber}` }],
-          [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${executorId}_${orderNumber}` }]
-        ]).reply_markup
-      });
+      // Получаем данные из кэша для обновления сообщения в чате исполнителей
+      const cacheData = customOrderStates.get(orderNumber);
+      if (cacheData && cacheData.managerMessageId) {
+        // Обновляем сообщение в чате исполнителей
+        let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
+        updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
+        updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@' + updatedOrder.customerUsername : 'ID: ' + updatedOrder.customerId}\n`;
+        updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
+        updatedText += `💰 *Цена:* ${price} ₽\n`;
+        updatedText += `👷 *Исполнитель:* ${executorName}\n`;
+        updatedText += `🟡 *Статус:* СОГЛАСОВАНИЕ ЦЕНЫ`;
+        
+        await ctx.telegram.editMessageText(cacheData.chatId, cacheData.managerMessageId, null, updatedText, {
+          parse_mode: 'Markdown',
+          reply_markup: createInlineKeyboard([
+            [{ text: '💰 Изменить цену', callback_data: `custom_set_price:${orderNumber}` }],
+            [{ text: '✉️ Написать сообщение заказчику', callback_data: `custom_write_customer:${orderNumber}` }]
+          ]).reply_markup
+        });
+      }
       
       await ctx.reply(`✅ Цена ${price} ₽ назначена. Теперь заказчик может обсудить цену или перейти к оплате.`);
       
@@ -384,17 +460,24 @@ function register(bot) {
   });
 
   // Написать сообщение заказчику (из чата исполнителей)
-  bot.action(/^custom_write_customer:(\d+)_(.+)$/, async (ctx) => {
-    const executorId = parseInt(ctx.match[1]);
-    const orderNumber = ctx.match[2];
+  bot.action(/^custom_write_customer:(\d+)$/, async (ctx) => {
+    const orderNumber = parseInt(ctx.match[1]);
     
-    if (executorId !== ctx.from.id) {
-      return ctx.answerCbQuery('❌ Это не ваш заказ');
+    // Получаем заказ из orders.json
+    const orderRecord = orders.getOrderByNumber(orderNumber);
+    if (!orderRecord) {
+      return ctx.answerCbQuery('❌ Заказ не найден');
     }
     
-    const orderData = customOrderStates.get(orderNumber);
-    if (!orderData) {
-      return ctx.answerCbQuery('❌ Заказ не найден');
+    // Проверяем, что заказ принят исполнителем
+    if (!orderRecord.executorId) {
+      return ctx.answerCbQuery('❌ Сначала примите заказ кнопкой "✅ Принять заказ"');
+    }
+    
+    // Проверяем, что текущий пользователь - исполнитель этого заказа
+    if (orderRecord.executorId !== ctx.from.id) {
+      console.log(`[DEBUG] Отказ в доступе. Order executorId: ${orderRecord.executorId}, Current user: ${ctx.from.id}`);
+      return ctx.answerCbQuery('❌ Это не ваш заказ. Сначала нажмите "Принять заказ".');
     }
     
     await ctx.editMessageText(
@@ -404,7 +487,7 @@ function register(bot) {
       { parse_mode: 'Markdown' }
     );
     
-    ctx.session.waitingCustomMessageToCustomer = { orderNumber, executorId };
+    ctx.session.waitingCustomMessageToCustomer = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -416,23 +499,27 @@ function register(bot) {
       return next();
     }
     
-    const { orderNumber, executorId } = ctx.session.waitingCustomMessageToCustomer;
-    const orderData = customOrderStates.get(orderNumber);
+    const { orderNumber } = ctx.session.waitingCustomMessageToCustomer;
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData) {
+    if (!orderRecord) {
       ctx.session.waitingCustomMessageToCustomer = null;
       return ctx.reply('❌ Заказ не найден.');
     }
     
+    // Проверяем, что текущий пользователь - исполнитель этого заказа
+    if (orderRecord.executorId !== ctx.from.id) {
+      return ctx.reply('❌ Это не ваш заказ.');
+    }
+    
     const messageText = ctx.message.text;
-    const executorUser = ctx.from;
-    const executorName = executorUser.username ? `@${executorUser.username}` : executorUser.first_name;
+    const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
     
     // Пересылаем сообщение заказчику
     const customerMessage = 
       `💬 *Вам сообщение от исполнителя*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${orderData.subjectName}\n` +
+      `📚 *Предмет:* ${orderRecord.subjectName}\n` +
       `👷 *Исполнитель:* ${executorName}\n\n` +
       `${messageText}\n\n` +
       `✏️ Для ответа используйте кнопку ниже:`;
@@ -442,7 +529,7 @@ function register(bot) {
     ]);
     
     try {
-      await ctx.telegram.sendMessage(orderData.customerId, customerMessage, {
+      await ctx.telegram.sendMessage(orderRecord.customerId, customerMessage, {
         parse_mode: 'Markdown',
         reply_markup: replyKeyboard
       });
@@ -457,11 +544,11 @@ function register(bot) {
   });
 
   // Ответить исполнителю (от заказчика)
-  bot.action(/^custom_reply_executor:(.+)$/, async (ctx) => {
-    const orderNumber = ctx.match[1];
-    const orderData = customOrderStates.get(orderNumber);
+  bot.action(/^custom_reply_executor:(\d+)$/, async (ctx) => {
+    const orderNumber = parseInt(ctx.match[1]);
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData) {
+    if (!orderRecord) {
       return ctx.answerCbQuery('❌ Заказ не найден');
     }
     
@@ -485,16 +572,18 @@ function register(bot) {
     }
     
     const { orderNumber } = ctx.session.waitingCustomReplyToExecutor;
-    const orderData = customOrderStates.get(orderNumber);
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData) {
+    if (!orderRecord) {
       ctx.session.waitingCustomReplyToExecutor = null;
       return ctx.reply('❌ Заказ не найден.');
     }
     
     const messageText = ctx.message.text;
-    const customerUser = ctx.from;
-    const customerName = customerUser.username ? `@${customerUser.username}` : customerUser.first_name;
+    const customerName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+    
+    // Получаем данные из кэша
+    const cacheData = customOrderStates.get(orderNumber);
     
     // Отправляем сообщение в чат исполнителей
     const executorMessage = 
@@ -505,15 +594,17 @@ function register(bot) {
       `✏️ Для ответа используйте кнопки:`;
     
     const executorKeyboard = createInlineKeyboard([
-      [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderData.executorId}_${orderNumber}` }],
-      [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderData.executorId}_${orderNumber}` }]
+      [{ text: '💰 Изменить цену', callback_data: `custom_set_price:${orderNumber}` }],
+      [{ text: '✉️ Написать сообщение заказчику', callback_data: `custom_write_customer:${orderNumber}` }]
     ]);
     
     try {
-      await ctx.telegram.sendMessage(orderData.chatId, executorMessage, {
-        parse_mode: 'Markdown',
-        reply_markup: executorKeyboard.reply_markup
-      });
+      if (cacheData && cacheData.chatId) {
+        await ctx.telegram.sendMessage(cacheData.chatId, executorMessage, {
+          parse_mode: 'Markdown',
+          reply_markup: executorKeyboard.reply_markup
+        });
+      }
       
       await ctx.reply('✅ Сообщение отправлено исполнителю.');
       
@@ -525,15 +616,20 @@ function register(bot) {
   });
 
   // Перейти к оплате
-  bot.action(/^custom_pay:(.+)$/, async (ctx) => {
-    const orderNumber = ctx.match[1];
-    const orderData = customOrderStates.get(orderNumber);
+  bot.action(/^custom_pay:(\d+)$/, async (ctx) => {
+    const orderNumber = parseInt(ctx.match[1]);
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData || orderData.customerId !== ctx.from.id) {
+    if (!orderRecord || orderRecord.customerId !== ctx.from.id) {
       return ctx.answerCbQuery('❌ Это не ваш заказ');
     }
     
-    const work = catalog.getWork(orderData.workId);
+    // Проверяем, что цена назначена
+    if (!orderRecord.price || orderRecord.price <= 0) {
+      return ctx.answerCbQuery('❌ Цена ещё не назначена исполнителем');
+    }
+    
+    const work = catalog.getWork(orderRecord.workId);
     const { paymentValue } = getWorkConfig(work);
     
     if (!paymentValue) {
@@ -543,7 +639,7 @@ function register(bot) {
     await ctx.editMessageText(
       `💳 *Оплата заказа*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `💵 *Сумма к оплате:* ${orderData.price} ₽\n\n` +
+      `💵 *Сумма к оплате:* ${orderRecord.price} ₽\n\n` +
       `Переведите сумму на карту:\n` +
       `\`${paymentValue}\`\n\n` +
       `📸 *После оплаты отправьте скриншот чека в этот чат.*`,
@@ -563,9 +659,9 @@ function register(bot) {
     }
     
     const { orderNumber } = ctx.session.waitingCustomPayment;
-    const orderData = customOrderStates.get(orderNumber);
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData || orderData.customerId !== ctx.from.id) {
+    if (!orderRecord || orderRecord.customerId !== ctx.from.id) {
       return next();
     }
     
@@ -580,58 +676,49 @@ function register(bot) {
     }
     
     try {
-      // Отправляем скриншот в чат исполнителей
-      const paymentMsg = `💳 *ПОДТВЕРЖДЕНИЕ ОПЛАТЫ*\n\n🆔 *Номер заказа:* №${orderNumber}\n👤 *Заказчик:* ${orderData.customerUsername ? '@' + orderData.customerUsername : 'ID: ' + orderData.customerId}`;
+      // Получаем данные из кэша
+      const cacheData = customOrderStates.get(orderNumber);
       
-      if (fileType === 'photo') {
-        await ctx.telegram.sendPhoto(orderData.chatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
-      } else {
-        await ctx.telegram.sendDocument(orderData.chatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+      // Отправляем скриншот в чат исполнителей
+      const paymentMsg = `💳 *ПОДТВЕРЖДЕНИЕ ОПЛАТЫ*\n\n🆔 *Номер заказа:* №${orderNumber}\n👤 *Заказчик:* ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}`;
+      
+      if (cacheData && cacheData.chatId) {
+        if (fileType === 'photo') {
+          await ctx.telegram.sendPhoto(cacheData.chatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+        } else {
+          await ctx.telegram.sendDocument(cacheData.chatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+        }
       }
       
-      // Обновляем статус заказа
-      orderData.status = 'paid';
-      orderData.paidAt = new Date().toLocaleString('ru-RU');
+      // Обновляем статус заказа в orders.json
+      const updatedOrder = orders.updateOrder(orderRecord.id, {
+        status: 'paid',
+        paidAt: new Date().toLocaleString('ru-RU')
+      });
       
       // Обновляем сообщение в чате исполнителей
-      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-      updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-      updatedText += `👤 *Заказчик:* ${orderData.customerUsername ? '@' + orderData.customerUsername : 'ID: ' + orderData.customerId}\n`;
-      updatedText += `📚 *Предмет:* ${orderData.subjectName}\n`;
-      updatedText += `💰 *Цена:* ${orderData.price} ₽\n`;
-      updatedText += `👷 *Исполнитель:* ${orderData.executorId ? '@' + (await ctx.telegram.getChat(orderData.executorId)).username : 'Не назначен'}\n`;
-      updatedText += `✅ *Оплачен:* ${orderData.paidAt}\n`;
-      updatedText += `🟢 *Статус:* ОПЛАЧЕН - В РАБОТЕ`;
-      
-      await ctx.telegram.editMessageText(orderData.chatId, orderData.managerMessageId, null, updatedText, {
-        parse_mode: 'Markdown'
-      });
+      if (cacheData && cacheData.managerMessageId && cacheData.chatId) {
+        let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
+        updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
+        updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@' + updatedOrder.customerUsername : 'ID: ' + updatedOrder.customerId}\n`;
+        updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
+        updatedText += `💰 *Цена:* ${updatedOrder.price} ₽\n`;
+        updatedText += `👷 *Исполнитель:* ${updatedOrder.executorId ? '@' + (await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
+        updatedText += `✅ *Оплачен:* ${updatedOrder.paidAt}\n`;
+        updatedText += `🟢 *Статус:* ОПЛАЧЕН - В РАБОТЕ`;
+        
+        await ctx.telegram.editMessageText(cacheData.chatId, cacheData.managerMessageId, null, updatedText, {
+          parse_mode: 'Markdown'
+        });
+      }
       
       await ctx.reply(
         `✅ *Оплата подтверждена!*\n\n` +
         `🆔 *Номер заказа:* №${orderNumber}\n` +
-        `💵 *Сумма:* ${orderData.price} ₽\n\n` +
+        `💵 *Сумма:* ${updatedOrder.price} ₽\n\n` +
         `Ваш заказ передан исполнителю. Ожидайте выполнения работы.`,
         { parse_mode: 'Markdown' }
       );
-      
-      // Создаём запись в базе заказов
-      const work = catalog.getWork(orderData.workId);
-      const newOrder = orders.createOrder({
-        workId: orderData.workId,
-        workTitle: `${orderData.subjectName}`,
-        subjectName: orderData.subjectName,
-        courseName: orderData.courseName,
-        customerId: orderData.customerId,
-        customerUsername: orderData.customerUsername,
-        executorId: orderData.executorId,
-        price: orderData.price,
-        commission: orderData.commission,
-        createdAt: orderData.createdAt,
-        paidAt: orderData.paidAt,
-        status: 'paid',
-        orderNumber: orderNumber
-      });
       
       ctx.session.waitingCustomPayment = null;
     } catch (error) {
@@ -641,11 +728,11 @@ function register(bot) {
   });
 
   // Написать исполнителю (от заказчика, когда цена ещё не оплачена)
-  bot.action(/^custom_write_executor:(.+)$/, async (ctx) => {
-    const orderNumber = ctx.match[1];
-    const orderData = customOrderStates.get(orderNumber);
+  bot.action(/^custom_write_executor:(\d+)$/, async (ctx) => {
+    const orderNumber = parseInt(ctx.match[1]);
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData || orderData.customerId !== ctx.from.id) {
+    if (!orderRecord || orderRecord.customerId !== ctx.from.id) {
       return ctx.answerCbQuery('❌ Это не ваш заказ');
     }
     
@@ -669,16 +756,18 @@ function register(bot) {
     }
     
     const { orderNumber } = ctx.session.waitingCustomWriteToExecutor;
-    const orderData = customOrderStates.get(orderNumber);
+    const orderRecord = orders.getOrderByNumber(orderNumber);
     
-    if (!orderData) {
+    if (!orderRecord) {
       ctx.session.waitingCustomWriteToExecutor = null;
       return ctx.reply('❌ Заказ не найден.');
     }
     
     const messageText = ctx.message.text;
-    const customerUser = ctx.from;
-    const customerName = customerUser.username ? `@${customerUser.username}` : customerUser.first_name;
+    const customerName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+    
+    // Получаем данные из кэша
+    const cacheData = customOrderStates.get(orderNumber);
     
     // Отправляем в чат исполнителей
     const executorMessage = 
@@ -689,15 +778,17 @@ function register(bot) {
       `✏️ Действия:`;
     
     const executorKeyboard = createInlineKeyboard([
-      [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderData.executorId}_${orderNumber}` }],
-      [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderData.executorId}_${orderNumber}` }]
+      [{ text: '💰 Изменить цену', callback_data: `custom_set_price:${orderNumber}` }],
+      [{ text: '✉️ Написать сообщение заказчику', callback_data: `custom_write_customer:${orderNumber}` }]
     ]);
     
     try {
-      await ctx.telegram.sendMessage(orderData.chatId, executorMessage, {
-        parse_mode: 'Markdown',
-        reply_markup: executorKeyboard.reply_markup
-      });
+      if (cacheData && cacheData.chatId) {
+        await ctx.telegram.sendMessage(cacheData.chatId, executorMessage, {
+          parse_mode: 'Markdown',
+          reply_markup: executorKeyboard.reply_markup
+        });
+      }
       
       await ctx.reply('✅ Сообщение отправлено исполнителю. Ожидайте ответа.');
       
