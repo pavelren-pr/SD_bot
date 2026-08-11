@@ -3,6 +3,12 @@ const loyalty = require('../data/loyalty');
 const ordersDb = require('../data/orders');
 const { findChatByOrderId } = require('./order');
 
+// 🌟 Статусы для категорий (включая custom orders)
+const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
+const ACTIVE_STATUSES = ['active', 'paid'];
+const COMPLETED_STATUSES = ['completed'];
+const EXECUTOR_ACTIVE_STATUSES = ['active', 'paid', 'waiting_price', 'price_negotiating'];
+
 const ORDERS_PER_PAGE = 5;
 
 function getMainMenuKeyboard() {
@@ -158,9 +164,9 @@ function register(bot) {
     let allOrders = ordersDb.getAllOrders();
     let title = '📦 Все заказы';
     
-    if (filter === 'pending') { allOrders = allOrders.filter(o => o.status === 'pending'); title = '⏳ Ожидают принятия'; }
-    else if (filter === 'active') { allOrders = allOrders.filter(o => o.status === 'active'); title = '🔨 В работе'; }
-    else if (filter === 'completed') { allOrders = allOrders.filter(o => o.status === 'completed'); title = '✅ Выполнены'; }
+    if (filter === 'pending') { allOrders = allOrders.filter(o => PENDING_STATUSES.includes(o.status)); title = '⏳ Ожидают принятия'; }
+    else if (filter === 'active') { allOrders = allOrders.filter(o => ACTIVE_STATUSES.includes(o.status)); title = '🔨 В работе'; }
+    else if (filter === 'completed') { allOrders = allOrders.filter(o => COMPLETED_STATUSES.includes(o.status)); title = '✅ Выполнены'; }
     
     const totalPages = Math.max(1, Math.ceil(allOrders.length / ORDERS_PER_PAGE));
     const currentPage = Math.min(page, totalPages - 1);
@@ -325,34 +331,6 @@ function register(bot) {
     await ctx.answerCbQuery();
   });
 
-  // 🌟 Обновлённая карточка заказа для заказчика (с кнопкой "Написать исполнителю")
-  bot.action(/^orders:customer:view:(.+)$/, async (ctx) => {
-    const orderId = ctx.match[1];
-    const order = ordersDb.getOrder(orderId);
-    
-    if (!order || String(order.customerId) !== String(ctx.from.id)) {
-      await ctx.answerCbQuery('❌ Заказ не найден');
-      return;
-    }
-    
-    const text = formatOrderCard(order, 'customer');
-    
-    const buttons = [];
-    
-    // 🌟 Кнопка "Написать исполнителю" — если исполнитель назначен
-    if (order.executorId) {
-      buttons.push([Markup.button.callback('💬 Написать исполнителю', `orders:customer:contact:${orderId}`)]);
-    }
-    
-    buttons.push([Markup.button.callback('⬅️ Назад', `orders:customer:back:${order.status}`)]);
-    
-    await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard(buttons)
-    });
-    await ctx.answerCbQuery();
-  });
-
   // 🌟 Обновлённый обработчик "Написать исполнителю" для заказчика
 bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
@@ -405,9 +383,9 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
   bot.action('profile:history', async (ctx) => {
     const userOrders = ordersDb.getUserOrders(ctx.from.id);
     
-    const pending = userOrders.filter(o => o.status === 'pending').length;
-    const active = userOrders.filter(o => o.status === 'active').length;
-    const completed = userOrders.filter(o => o.status === 'completed').length;
+const pending = userOrders.filter(o => PENDING_STATUSES.includes(o.status)).length;
+const active = userOrders.filter(o => ACTIVE_STATUSES.includes(o.status)).length;
+const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
     
     const text = 
       `📜 *История заказов*\n\n` +
@@ -434,7 +412,9 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const status = ctx.match[1];
     const page = parseInt(ctx.match[2]);
     
-    const userOrders = ordersDb.getUserOrders(ctx.from.id).filter(o => o.status === status);
+    const statusMap = { pending: PENDING_STATUSES, active: ACTIVE_STATUSES, completed: COMPLETED_STATUSES };
+    const allowedStatuses = statusMap[status] || [status];
+    const userOrders = ordersDb.getUserOrders(ctx.from.id).filter(o => allowedStatuses.includes(o.status));
     const totalPages = Math.max(1, Math.ceil(userOrders.length / ORDERS_PER_PAGE));
     const currentPage = Math.min(page, totalPages - 1);
     
@@ -497,15 +477,18 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const text = formatOrderCard(order, 'customer');
     
     const buttons = [];
-    
-    const chatInfo = findChatByOrderId(orderId);
-    if (chatInfo && chatInfo.chatData.status !== 'closed') {
-      buttons.push([Markup.button.callback('💬 Связаться с исполнителем', `orders:customer:contact:${orderId}`)]);
-    } else if (order.executorUsername) {
-      buttons.push([Markup.button.url('💬 Написать исполнителю', `https://t.me/${order.executorUsername}`)]);
+    // 🌟 Для custom orders используем отдельную кнопку
+    if (order.isCustomOrder) {
+      buttons.push([Markup.button.callback('💬 Написать исполнителю', `custom_write_executor:${order.orderNumber}`)]);
+    } else {
+      // 🌟 Для обычных заказов — всегда показываем кнопку
+      buttons.push([Markup.button.callback('💬 Написать исполнителю', `orders:customer:contact:${orderId}`)]);
     }
     
-    buttons.push([Markup.button.callback('⬅️ Назад', `orders:customer:back:${order.status}`)]);
+     // 🌟 Нормализуем статус для кнопки "Назад"
+    const backStatus = PENDING_STATUSES.includes(order.status) ? 'pending' :
+                        ACTIVE_STATUSES.includes(order.status) ? 'active' : 'completed';
+    buttons.push([Markup.button.callback('⬅️ Назад', `orders:customer:back:${backStatus}`)]);
     
     await ctx.editMessageText(text, {
       parse_mode: 'Markdown',
@@ -516,7 +499,9 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
 
   bot.action(/^orders:customer:back:(\w+)$/, async (ctx) => {
     const status = ctx.match[1];
-    const userOrders = ordersDb.getUserOrders(ctx.from.id).filter(o => o.status === status);
+    const statusMap = { pending: PENDING_STATUSES, active: ACTIVE_STATUSES, completed: COMPLETED_STATUSES };
+    const allowedStatuses = statusMap[status] || [status];
+    const userOrders = ordersDb.getUserOrders(ctx.from.id).filter(o => allowedStatuses.includes(o.status));
     const totalPages = Math.max(1, Math.ceil(userOrders.length / ORDERS_PER_PAGE));
     
     const statusTitles = {
@@ -596,8 +581,8 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
   bot.action('profile:my_orders', async (ctx) => {
     const executorOrders = ordersDb.getExecutorOrders(ctx.from.id);
     
-    const active = executorOrders.filter(o => o.status === 'active').length;
-    const completed = executorOrders.filter(o => o.status === 'completed').length;
+    const active = executorOrders.filter(o => EXECUTOR_ACTIVE_STATUSES.includes(o.status)).length;
+    const completed = executorOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
     
     // Рассчитываем общий заработок (цена - комиссия) для выполненных заказов
     let totalEarnings = 0;
@@ -631,7 +616,9 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const status = ctx.match[1];
     const page = parseInt(ctx.match[2]);
     
-    const executorOrders = ordersDb.getExecutorOrders(ctx.from.id).filter(o => o.status === status);
+    const statusMap = { active: EXECUTOR_ACTIVE_STATUSES, completed: COMPLETED_STATUSES };
+    const allowedStatuses = statusMap[status] || [status];
+    const executorOrders = ordersDb.getExecutorOrders(ctx.from.id).filter(o => allowedStatuses.includes(o.status));
     const totalPages = Math.max(1, Math.ceil(executorOrders.length / ORDERS_PER_PAGE));
     const currentPage = Math.min(page, totalPages - 1);
     
@@ -652,10 +639,10 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
       let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
-      buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${dateStr}`,
-        `orders:customer:view:${order.id}`
-      )]);
+        buttons.push([Markup.button.callback(
+          `№${order.orderNumber} | ${title} | ${dateStr}`,
+          `orders:executor:view:${order.id}`
+        )]);
     });
     
     if (pageOrders.length === 0) {
@@ -693,15 +680,20 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const text = formatOrderCard(order, 'executor');
     
     const buttons = [];
-    
-    const chatInfo = findChatByOrderId(orderId);
-    if (chatInfo && chatInfo.chatData.status !== 'closed') {
+    // 🌟 Для custom orders используем отдельную кнопку
+    if (order.isCustomOrder) {
+      buttons.push([Markup.button.callback('💬 Написать заказчику', `custom_write_customer:${order.orderNumber}`)]);
+    } else {
+      // 🌟 Для обычных заказов — всегда показываем кнопку
       buttons.push([Markup.button.callback('💬 Написать заказчику', `orders:executor:contact:${orderId}`)]);
-    } else if (order.customerUsername) {
-      buttons.push([Markup.button.url('💬 Написать заказчику', `https://t.me/${order.customerUsername}`)]);
     }
-    
-    buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${order.status}`)]);
+    // 🌟 Кнопка "Отметить выполненным" — только если заказ ещё не выполнен
+    if (order.status !== 'completed') {
+      buttons.push([Markup.button.callback('✅ Отметить выполненным', `orders:executor:complete:${orderId}`)]);
+    }
+     // 🌟 Нормализуем статус для кнопки "Назад"
+    const backStatus = EXECUTOR_ACTIVE_STATUSES.includes(order.status) ? 'active' : 'completed';
+    buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${backStatus}`)]);
     
     await ctx.editMessageText(text, {
       parse_mode: 'Markdown',
@@ -712,7 +704,9 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
 
   bot.action(/^orders:executor:back:(\w+)$/, async (ctx) => {
     const status = ctx.match[1];
-    const executorOrders = ordersDb.getExecutorOrders(ctx.from.id).filter(o => o.status === status);
+    const statusMap = { active: EXECUTOR_ACTIVE_STATUSES, completed: COMPLETED_STATUSES };
+    const allowedStatuses = statusMap[status] || [status];
+    const executorOrders = ordersDb.getExecutorOrders(ctx.from.id).filter(o => allowedStatuses.includes(o.status));
     const totalPages = Math.max(1, Math.ceil(executorOrders.length / ORDERS_PER_PAGE));
     
     const statusTitles = {
@@ -728,10 +722,10 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     pageOrders.forEach(order => {
       const title = order.workTitle.substring(0, 25);
       let dateStr = "N/A"; if (order.createdAt) { try { const d = new Date(order.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split("T")[0]; } } catch(e) { dateStr = "N/A"; } };
-      buttons.push([Markup.button.callback(
-        `№${order.orderNumber} | ${title} | ${dateStr}`,
-        `orders:customer:view:${order.id}`
-      )]);
+        buttons.push([Markup.button.callback(
+          `№${order.orderNumber} | ${title} | ${dateStr}`,
+          `orders:executor:view:${order.id}`
+        )]);
     });
     
     if (pageOrders.length === 0) {
@@ -755,34 +749,100 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
   });
 
   bot.action(/^orders:executor:contact:(.+)$/, async (ctx) => {
-    const orderId = ctx.match[1];
-    const chatInfo = findChatByOrderId(orderId);
-    
-    if (!chatInfo || chatInfo.chatData.status === 'closed') {
-      await ctx.answerCbQuery('❌ Чат по этому заказу завершён');
-      return;
+  const orderId = ctx.match[1];
+  const order = ordersDb.getOrder(orderId);
+  if (!order || String(order.executorId) !== String(ctx.from.id)) {
+    await ctx.answerCbQuery('❌ Заказ не найден');
+    return;
+  }
+  
+  ctx.session = ctx.session || {};
+  ctx.session.executorReplyToCustomerId = order.customerId;
+  ctx.session.executorReplyOrderId = orderId;
+  ctx.session.executorReplyOrderTitle = order.workTitle;
+  ctx.session.executorReplyOrderDate = order.createdAt;
+  ctx.session.executorReplyOrderNumber = order.orderNumber || '—';
+  
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('❌ Отмена', `orders:executor:view:${orderId}`)]
+  ]);
+  await ctx.editMessageText(
+    `💬 *Режим ответа заказчику*\n\n` +
+    `📚 *Заказ:* ${order.workTitle}\n` +
+    `📅 *Дата:* ${order.createdAt}\n\n` +
+    `Напишите сообщение или прикрепите файл.\n\n` +
+    `_(Для отмены нажмите "Отмена")_`,
+    { parse_mode: 'Markdown', ...keyboard }
+  );
+  await ctx.answerCbQuery();
+  });
+
+  // 🌟 Отметить заказ выполненным (исполнитель)
+  bot.action(/^orders:executor:complete:(.+)$/, async (ctx) => {
+  const orderId = ctx.match[1];
+  const order = ordersDb.getOrder(orderId);
+  if (!order || String(order.executorId) !== String(ctx.from.id)) {
+    await ctx.answerCbQuery('❌ Заказ не найден');
+    return;
+  }
+  if (order.status === 'completed') {
+    await ctx.answerCbQuery('⚠️ Заказ уже отмечен как выполненный');
+    return;
+  }
+  // Меняем статус на completed
+  ordersDb.updateOrder(orderId, {
+    status: 'completed',
+    completedAt: new Date().toLocaleString('ru-RU')
+  });
+  // Для custom orders — уведомляем заказчика
+  if (order.isCustomOrder && order.customerId) {
+    try {
+      await ctx.telegram.sendMessage(
+        order.customerId,
+        `✅ *Ваш заказ выполнен!*\n\n` +
+        `🆔 *Номер заказа:* №${order.orderNumber}\n` +
+        `📚 *Работа:* ${order.workTitle}\n\n` +
+        `Спасибо за использование нашего сервиса! 🌊`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (e) {
+      console.log('Не удалось уведомить заказчика:', e.message);
     }
-    
-    const chatId = chatInfo.chatId;
-    const chatData = chatInfo.chatData;
-    
-    const text = 
-      `💬 *Чат с заказчиком*\n\n` +
-      `📚 *Заказ:* ${chatData.workTitle}\n\n` +
-      `Выберите действие:`;
-    
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✏️ Ответить заказчику', `executor_reply:${chatId}`)],
-      [Markup.button.callback('📎 Отправить файл/фото', `executor_send_file:${chatId}`)],
-      [Markup.button.callback('❌ Завершить чат', `executor_close_chat:${chatId}`)],
-      [Markup.button.callback('⬅️ Назад к заказу', `orders:executor:view:${orderId}`)]
-    ]);
-    
-    await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
-      ...keyboard
-    });
-    await ctx.answerCbQuery();
+  }
+  // Для обычных заказов — если есть активный чат, тоже уведомляем
+  if (!order.isCustomOrder) {
+    const { findChatByOrderId } = require('./order');
+    const chatInfo = findChatByOrderId(orderId);
+    if (chatInfo && chatInfo.chatData.customerUserId) {
+      try {
+        await ctx.telegram.sendMessage(
+          chatInfo.chatData.customerUserId,
+          `✅ *Ваш заказ выполнен!*\n\n` +
+          `🆔 *Номер заказа:* №${order.orderNumber}\n` +
+          `📚 *Работа:* ${order.workTitle}\n\n` +
+          `Спасибо за использование нашего сервиса! 🌊`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (e) {
+        console.log('Не удалось уведомить заказчика:', e.message);
+      }
+    }
+  }
+  await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
+  // Перерисовываем карточку заказа
+  const updatedOrder = ordersDb.getOrder(orderId);
+  const text = formatOrderCard(updatedOrder, 'executor');
+  const buttons = [];
+  if (updatedOrder.isCustomOrder) {
+    buttons.push([Markup.button.callback('💬 Написать заказчику', `custom_write_customer:${updatedOrder.orderNumber}`)]);
+  } else {
+    buttons.push([Markup.button.callback('💬 Написать заказчику', `orders:executor:contact:${orderId}`)]);
+  }
+  buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${updatedOrder.status}`)]);
+  await ctx.editMessageText(text, {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard(buttons)
+  });
   });
 
   bot.action('noop', async (ctx) => {
@@ -796,8 +856,13 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
 function formatOrderCard(order, role) {
   let statusEmoji = '⏳';
   let statusText = 'Ожидает принятия';
-  if (order.status === 'active') { statusEmoji = '🔨'; statusText = 'В работе'; }
-  if (order.status === 'completed') { statusEmoji = '✅'; statusText = 'Выполнен'; }
+  if (ACTIVE_STATUSES.includes(order.status)) { statusEmoji = '🔨'; statusText = 'В работе'; }
+  if (COMPLETED_STATUSES.includes(order.status)) { statusEmoji = '✅'; statusText = 'Выполнен'; }
+  // 🌟 Детализация для custom orders
+  if (order.status === 'waiting_acceptance') statusText = 'Ожидает оценки';
+  if (order.status === 'waiting_price') statusText = 'Ожидает цену';
+  if (order.status === 'price_negotiating') statusText = 'Согласование цены';
+  if (order.status === 'paid' && order.isCustomOrder) statusText = 'Оплачен — в работе';
   
   let text = `📦 *Заказ №${order.orderNumber}*\n\n`;
   text += `${statusEmoji} *Статус:* ${statusText}\n\n`;

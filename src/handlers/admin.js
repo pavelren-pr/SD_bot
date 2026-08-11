@@ -6,6 +6,11 @@ const { Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
+// 🌟 Статусы для категорий (включая custom orders)
+const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
+const ACTIVE_STATUSES = ['active', 'paid'];
+const COMPLETED_STATUSES = ['completed'];
+
 const ORDERS_PER_PAGE = 5;
 
 // ==========================================
@@ -533,9 +538,9 @@ function register(bot) {
     else if (action === 'orders') {
       ctx.session.adminState = null;
       const all = ordersDb.getAllOrders();
-      const p = all.filter(o => o.status === 'pending').length;
-      const a = all.filter(o => o.status === 'active').length;
-      const c = all.filter(o => o.status === 'completed').length;
+      const p = all.filter(o => PENDING_STATUSES.includes(o.status)).length;
+      const a = all.filter(o => ACTIVE_STATUSES.includes(o.status)).length;
+      const c = all.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
       
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback(`⏳ Ожидают (${p})`, 'admin:orders_list:pending:0')],
@@ -563,9 +568,9 @@ function register(bot) {
       const all = ordersDb.getAllOrders();
       let filtered = all;
       let title = '📦 Все заказы';
-      if (filter === 'pending') { filtered = all.filter(o => o.status === 'pending'); title = '⏳ Ожидают принятия'; }
-      else if (filter === 'active') { filtered = all.filter(o => o.status === 'active'); title = '🔨 В работе'; }
-      else if (filter === 'completed') { filtered = all.filter(o => o.status === 'completed'); title = '✅ Выполнены'; }
+      if (filter === 'pending') { filtered = all.filter(o => PENDING_STATUSES.includes(o.status)); title = '⏳ Ожидают принятия'; }
+      else if (filter === 'active') { filtered = all.filter(o => ACTIVE_STATUSES.includes(o.status)); title = '🔨 В работе'; }
+      else if (filter === 'completed') { filtered = all.filter(o => COMPLETED_STATUSES.includes(o.status)); title = '✅ Выполнены'; }
       
       const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
       const currentPage = Math.min(page, totalPages - 1);
@@ -696,9 +701,9 @@ function register(bot) {
       await ctx.answerCbQuery('✅ Заказ удалён');
       
       const all = ordersDb.getAllOrders();
-      const p = all.filter(o => o.status === 'pending').length;
-      const a = all.filter(o => o.status === 'active').length;
-      const c = all.filter(o => o.status === 'completed').length;
+      const p = all.filter(o => PENDING_STATUSES.includes(o.status)).length;
+      const a = all.filter(o => ACTIVE_STATUSES.includes(o.status)).length;
+      const c = all.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback(`⏳ Ожидают (${p})`, 'admin:orders_list:pending:0')],
         [Markup.button.callback(`🔨 В работе (${a})`, 'admin:orders_list:active:0')],

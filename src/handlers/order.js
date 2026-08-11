@@ -1,6 +1,7 @@
 const catalog = require('../data/catalog');
 const loyalty = require('../data/loyalty');
 const orders = require('../data/orders');
+const ordersDb = require('../data/orders');
 const { createInlineKeyboard } = require('../utils/keyboard');
 const { Markup } = require('telegraf');
 
@@ -70,15 +71,51 @@ function register(bot) {
       return;
     }
 
+
+    // 🌟 0.15 ИСПОЛНИТЕЛЬ ПИШЕТ ЗАКАЗЧИКУ
+    if (ctx.session.executorReplyToCustomerId) {
+      const targetUserId = ctx.session.executorReplyToCustomerId;
+      const orderTitle = ctx.session.executorReplyOrderTitle;
+      const orderDate = ctx.session.executorReplyOrderDate;
+      const orderNumber = ctx.session.executorReplyOrderNumber || '—';
+      const messageText = ctx.message.text || '[Фото/Файл]';
+      
+      // 🌟 Клавиатура для ответа заказчику (session-based, не зависит от activeChats)
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✏️ Ответить исполнителю', `customer_reply_msg:${ctx.from.id}_${orderNumber}`)],
+        [Markup.button.callback('📎 Отправить файл исполнителю', `customer_reply_file:${ctx.from.id}_${orderNumber}`)]
+      ]);
+      
+      await ctx.telegram.sendMessage(
+        targetUserId,
+        `💬 *Вам сообщение от исполнителя*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
+        { parse_mode: 'Markdown', ...keyboard }
+      );
+      if (ctx.message.photo) {
+        await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
+      } else if (ctx.message.document) {
+        await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
+      }
+      await ctx.reply(`✅ Сообщение отправлено заказчику`);
+      
+      // Очищаем session
+      ctx.session.executorReplyToCustomerId = null;
+      ctx.session.executorReplyOrderId = null;
+      ctx.session.executorReplyOrderTitle = null;
+      ctx.session.executorReplyOrderDate = null;
+      ctx.session.executorReplyOrderNumber = null;
+      return;
+    }
+
     // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ
-if (ctx.session.customerReplyToExecutorId) {
-  const targetUserId = ctx.session.customerReplyToExecutorId;
-  const orderTitle = ctx.session.customerReplyOrderTitle;
-  const orderDate = ctx.session.customerReplyOrderDate;
-  const orderNumber = ctx.session.customerReplyOrderNumber || '—';
-  const orderId = ctx.session.customerReplyOrderId;
-  const chatId = ctx.session.customerReplyChatId; // 🌟 Используем сохранённый chatId
-  const messageText = ctx.message.text || '[Фото/Файл]';
+    if (ctx.session.customerReplyToExecutorId) {
+      const targetUserId = ctx.session.customerReplyToExecutorId;
+      const orderTitle = ctx.session.customerReplyOrderTitle;
+      const orderDate = ctx.session.customerReplyOrderDate;
+      const orderNumber = ctx.session.customerReplyOrderNumber || '—';
+      const orderId = ctx.session.customerReplyOrderId;
+      const chatId = ctx.session.customerReplyChatId; // 🌟 Используем сохранённый chatId
+      const messageText = ctx.message.text || '[Фото/Файл]';
 
   // 🌟 Проверяем, существует ли чат в activeChats
   let chatData = activeChats.get(chatId);
@@ -116,11 +153,12 @@ if (ctx.session.customerReplyToExecutorId) {
     activeChats.set(chatId, chatData);
   }
 
-  // 🌟 Создаём клавиатуру с двумя кнопками
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('✏️ Ответить заказчику', `executor_reply_msg:${chatId}`)],
-    [Markup.button.callback('📎 Отправить файл заказчику', `executor_reply_file:${chatId}`)]
-  ]);
+
+    // 🌟 Session-based клавиатура (не зависит от activeChats)
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('✏️ Ответить заказчику', `executor_reply_msg2:${ctx.from.id}_${orderNumber}`)],
+      [Markup.button.callback('📎 Отправить файл заказчику', `executor_reply_file2:${ctx.from.id}_${orderNumber}`)]
+    ]);
 
   await ctx.telegram.sendMessage(
     targetUserId,
@@ -702,6 +740,80 @@ bot.action(/^executor_reply_file:(.+)$/, async (ctx) => {
     await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery('Чат завершён');
   });
+
+    // 🌟 Заказчик отвечает исполнителю (текст) — session-based
+    bot.action(/^customer_reply_msg:(\d+)_(.+)$/, async (ctx) => {
+    const executorId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    ctx.session = ctx.session || {};
+    const order = orders.getOrderByNumber(orderNumber);
+    ctx.session.customerReplyToExecutorId = executorId;
+    ctx.session.customerReplyOrderNumber = orderNumber;
+    ctx.session.customerReplyOrderTitle = order ? order.workTitle : 'Заказ';
+    ctx.session.customerReplyOrderDate = order ? order.createdAt : '—';
+    ctx.session.customerReplyOrderId = order ? order.id : null;
+    ctx.session.customerReplyChatId = order ? `order_${ctx.from.id}_${order.workId}` : null;
+    await ctx.editMessageText(
+    `✏️ *Напишите ответ исполнителю:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
+    { parse_mode: 'Markdown' }
+    );
+    await ctx.answerCbQuery();
+    });
+
+    // 🌟 Заказчик отправляет файл исполнителю — session-based
+    bot.action(/^customer_reply_file:(\d+)_(.+)$/, async (ctx) => {
+    const executorId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    ctx.session = ctx.session || {};
+    const order = orders.getOrderByNumber(orderNumber);
+    ctx.session.customerReplyToExecutorId = executorId;
+    ctx.session.customerReplyOrderNumber = orderNumber;
+    ctx.session.customerReplyOrderTitle = order ? order.workTitle : 'Заказ';
+    ctx.session.customerReplyOrderDate = order ? order.createdAt : '—';
+    ctx.session.customerReplyOrderId = order ? order.id : null;
+    ctx.session.customerReplyChatId = order ? `order_${ctx.from.id}_${order.workId}` : null;
+    await ctx.editMessageText(
+    `📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
+    { parse_mode: 'Markdown' }
+    );
+    await ctx.answerCbQuery();
+    });
+
+    // 🌟 Исполнитель отвечает заказчику (текст) — session-based
+    bot.action(/^executor_reply_msg2:(\d+)_(.+)$/, async (ctx) => {
+    const customerId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    ctx.session = ctx.session || {};
+    const order = orders.getOrderByNumber(orderNumber);
+    ctx.session.executorReplyToCustomerId = customerId;
+    ctx.session.executorReplyOrderNumber = orderNumber;
+    ctx.session.executorReplyOrderTitle = order ? order.workTitle : 'Заказ';
+    ctx.session.executorReplyOrderDate = order ? order.createdAt : '—';
+    ctx.session.executorReplyOrderId = order ? order.id : null;
+    await ctx.editMessageText(
+    `✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
+    { parse_mode: 'Markdown' }
+    );
+    await ctx.answerCbQuery();
+    });
+
+    // 🌟 Исполнитель отправляет файл заказчику — session-based
+    bot.action(/^executor_reply_file2:(\d+)_(.+)$/, async (ctx) => {
+    const customerId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    ctx.session = ctx.session || {};
+    const order = orders.getOrderByNumber(orderNumber);
+    ctx.session.executorReplyToCustomerId = customerId;
+    ctx.session.executorReplyOrderNumber = orderNumber;
+    ctx.session.executorReplyOrderTitle = order ? order.workTitle : 'Заказ';
+    ctx.session.executorReplyOrderDate = order ? order.createdAt : '—';
+    ctx.session.executorReplyOrderId = order ? order.id : null;
+    await ctx.editMessageText(
+    `📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
+    { parse_mode: 'Markdown' }
+    );
+    await ctx.answerCbQuery();
+    });
 
   bot.action(/^admin_reply:(\d+)_(.+)$/, async (ctx) => {
     const parts = ctx.match[0].split(':');

@@ -173,31 +173,7 @@ migrateOrders();
 // 🌟 Создать новый заказ
 function createOrder(orderData) {
   const orders = loadData();
-  
-  // Получаем или создаём _meta (без повторных загрузок!)
-  let meta = null;
-  let metaIndex = -1;
-  if (orders.length > 0 && orders[0]._meta && Object.keys(orders[0]).length === 1) {
-    meta = orders[0]._meta;
-    metaIndex = 0;
-  } else if (orders._meta) {
-    meta = orders._meta;
-  }
-  
-  if (!meta || !meta.nextOrderNumber) {
-    meta = { nextOrderNumber: 10001 };
-    if (orders.length === 0) {
-      orders.unshift({ _meta: meta });
-      metaIndex = 0;
-    } else if (metaIndex === 0) {
-      orders[0]._meta = meta;
-    } else {
-      orders._meta = meta;
-    }
-  }
-  
-  const orderNumber = meta.nextOrderNumber;
-  
+  const orderNumber = getNextOrderNumber();
   const newOrder = {
     orderNumber: orderNumber,
     id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -211,24 +187,19 @@ function createOrder(orderData) {
     executorUsername: null,
     price: orderData.price,
     commission: orderData.commission || 0,
-    status: orderData.status || 'pending',
+    status: orderData.status || 'pending', // 🌟 Используем переданный статус
     createdAt: orderData.createdAt || new Date().toLocaleString('ru-RU'),
     acceptedAt: null,
     completedAt: null,
-    // 🌟 Поддержка полей для индивидуальных заказов
+    // 🌟 Сохраняем дополнительные поля для custom orders
     description: orderData.description || null,
     fileName: orderData.fileName || null,
     fileId: orderData.fileId || null,
     fileType: orderData.fileType || null,
     isCustomOrder: orderData.isCustomOrder || false
   };
-  
   orders.push(newOrder);
-  
-  // 🌟 Увеличиваем счётчик в ТОМ ЖЕ объекте (без повторной загрузки!)
-  meta.nextOrderNumber += 1;
-  
-  // 🌟 Сохраняем ОДИН раз
+  incrementOrderNumber();
   saveData(orders);
   return newOrder;
 }
