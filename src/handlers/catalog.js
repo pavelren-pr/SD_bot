@@ -53,12 +53,14 @@ function register(bot) {
     const pricing = require('../data/loyalty').calculatePrice(work.price, ctx.from.id);
 
     let text = `🎯 *${work.title}*\n\n`;
-    
     // 🌟 Безопасно показываем описание, если оно есть и не пустое
     if (work.description && work.description.trim() !== '') {
       text += `${work.description}\n\n`;
     }
-    
+    // 🌟 Ссылка на примеры работ (если есть в каталоге)
+    if (work.exampleUrl && work.exampleUrl.trim() !== '') {
+      text += `🔍 *Пример работы и методички* [доступны по ссылке](${work.exampleUrl})\n\n`;
+    }
     text += `💰 *Стоимость:* ${work.price} ₽\n`;
     if (pricing.discountPercent > 0) {
       text += `🎉 *Ваша скидка:* ${pricing.discountPercent}%\n`;

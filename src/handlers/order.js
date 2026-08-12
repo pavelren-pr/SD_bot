@@ -34,14 +34,16 @@ function register(bot) {
     ctx.session = ctx.session || {};
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
-    
-    // Пропускаем если работа требует индивидуальной логики заказа
     if (work && work.isCustomOrder) {
-      return; // Передаём управление обработчику custom_order.js
+      return;
     }
-    
     ctx.session.order = { workId, step: 'waiting_details', details: { text: null, files: [] } };
-    await ctx.editMessageText(`📎 Отлично!\n\n${work.prompt}`);
+    let message = `📎 Отлично!\n\n${escapeMarkdown(work.prompt)}`;
+    // 🌟 Добавляем ссылку на примеры работ, если она есть в каталоге
+    if (work.exampleUrl) {
+      message += `\n\n📚 Пример работы и методические указания доступны по [ссылке](${work.exampleUrl})`;
+    }
+    await ctx.editMessageText(message, { parse_mode: 'Markdown' });
   });
 
   bot.on(['text', 'photo', 'document'], async (ctx, next) => {

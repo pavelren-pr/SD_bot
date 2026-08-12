@@ -90,9 +90,10 @@ function getWorkCard(workId) {
     text += `📊 *Комиссия:* ${work.commission}%\n`;
     text += `💳 *Оплата:* \`${work.paymentEnv}\`\n`;
     text += `💬 *Чат:* \`${work.chatEnv}\`\n`;
-    text += `📋 *Требования:* ${Array.isArray(work.needs) && work.needs.length > 0 ? work.needs.join(', ') : 'нет'}\n\n`;
-    text += `🌟 *Индивидуальный заказ:* ${work.isCustomOrder ? 'Да' : 'Нет'}\n\n`;
-    text += `📌 *Подсказка:*\n${escapeMarkdown(work.prompt)}`;
+    text += `📋 *Требования:* ${Array.isArray(work.needs) && work.needs.length > 0 ? work.needs.join(', ') : 'нет'}\n`;
+    text += `🌟 *Индивидуальный заказ:* ${work.isCustomOrder ? 'Да' : 'Нет'}\n`;
+    if (work.exampleUrl && work.exampleUrl.trim() !== '') text += `🔗 *Примеры:* ${escapeMarkdown(work.exampleUrl)}\n`;
+    text += `\n📌 *Подсказка:*\n${escapeMarkdown(work.prompt)}`;
   
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('✏️ Изменить информацию', `admin:edit_work:${workId}`)],
@@ -223,47 +224,54 @@ function register(bot) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData = { subjectId, title: text };
       ctx.session.adminState = `add_work_description:${subjectId}`;
-      await ctx.reply('📄 *Шаг 2/8: Введите описание работы (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 *Шаг 2/9: Введите описание работы (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
      if (state.startsWith('add_work_description:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_work_price:${subjectId}`;
-      await ctx.reply('💵 *Шаг 3/8: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💵 *Шаг 3/9: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_title:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData = { subjectId, title: text, isCustomOrder: true };
       ctx.session.adminState = `add_custom_work_description:${subjectId}`;
-      await ctx.reply('📄 *Шаг 2/6: Введите описание индивидуального заказа (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 *Шаг 2/7: Введите описание индивидуального заказа (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
      if (state.startsWith('add_custom_work_description:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_custom_work_commission:${subjectId}`;
-      await ctx.reply('📊 *Шаг 3/6: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 *Шаг 3/7: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_commission:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_custom_work_chatEnv:${state.split(':')[1]}`;
-      await ctx.reply('💬 *Шаг 4/6: Имя переменной окружения для чата исполнителей:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💬 *Шаг 4/7: Имя переменной окружения для чата исполнителей:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_chatEnv:')) {
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_custom_work_paymentEnv:${state.split(':')[1]}`;
-      await ctx.reply('💳 *Шаг 5/6: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💳 *Шаг 5/7: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_custom_work_prompt:${state.split(':')[1]}`;
-      await ctx.reply('📌 *Шаг 6/6: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 *Шаг 6/7: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_prompt:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
+      ctx.session.adminState = `add_custom_work_exampleUrl:${subjectId}`;
+      await ctx.reply('🔗 *Шаг 7/7: Ссылка на примеры работ (или "нет", если нет):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    // 🌟 НОВЫЙ ШАГ: exampleUrl для индивидуального заказа
+    if (state.startsWith('add_custom_work_exampleUrl:')) {
+      const subjectId = state.split(':')[1];
+      ctx.session.tempWorkData.exampleUrl = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.tempWorkData.id = `work_${Date.now()}`;
-      ctx.session.tempWorkData.price = 0; // Цена назначается исполнителем
+      ctx.session.tempWorkData.price = 0;
       ctx.session.tempWorkData.needs = [];
       const works = catalog.getData().works;
       works.push(ctx.session.tempWorkData);
@@ -275,33 +283,40 @@ function register(bot) {
       if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
       ctx.session.tempWorkData.price = parseInt(text);
       ctx.session.adminState = `add_work_commission:${state.split(':')[1]}`;
-      await ctx.reply('📊 *Шаг 4/8: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 *Шаг 4/9: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_commission:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_work_chatEnv:${state.split(':')[1]}`;
-      await ctx.reply('💬 *Шаг 5/8: Имя переменной окружения для чата:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💬 *Шаг 5/9: Имя переменной окружения для чата:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_chatEnv:')) {
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_work_paymentEnv:${state.split(':')[1]}`;
-      await ctx.reply('💳 *Шаг 6/8: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💳 *Шаг 6/9: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_work_needs:${state.split(':')[1]}`;
-      await ctx.reply('📎 *Шаг 7/8: Требования через запятую (photo, details, variant) или "нет":*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📎 *Шаг 7/9: Требования через запятую (photo, details, variant) или "нет":*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_needs:')) {
       ctx.session.tempWorkData.needs = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
       ctx.session.tempWorkData.id = `work_${Date.now()}`;
       ctx.session.adminState = `add_work_prompt:${state.split(':')[1]}`;
-      await ctx.reply('📌 *Шаг 8/8: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 *Шаг 8/9: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_prompt:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
+      ctx.session.adminState = `add_work_exampleUrl:${subjectId}`;
+      await ctx.reply('🔗 *Шаг 9/9: Ссылка на примеры работ (или "нет", если нет):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    // 🌟 НОВЫЙ ШАГ: exampleUrl для обычной работы
+    if (state.startsWith('add_work_exampleUrl:')) {
+      const subjectId = state.split(':')[1];
+      ctx.session.tempWorkData.exampleUrl = text.toLowerCase() === 'нет' ? '' : text;
       const works = catalog.getData().works;
       works.push(ctx.session.tempWorkData);
       catalog.saveData({ ...catalog.getData(), works });
@@ -322,6 +337,8 @@ function register(bot) {
       if (field === 'price' || field === 'commission') value = parseInt(text);
       // 🌟 Преобразуем строку в массив для поля needs
       if (field === 'needs') value = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
+      // 🌟 exampleUrl: "нет" = очистить поле
+      if (field === 'exampleUrl') value = text.toLowerCase() === 'нет' ? '' : text;
       data.works[workIndex][field] = value;
       catalog.saveData(data);
       await ctx.reply(`✅ Поле "${field}" обновлено!`, { ...getWorkCard(workId).keyboard });
@@ -643,7 +660,7 @@ function register(bot) {
     }
     else if (action.startsWith('add_work:')) {
       ctx.session.adminState = `add_work_title:${action.split(':')[1]}`;
-      await ctx.editMessageText('✍️ *Шаг 1/8: Введите название работы:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ *Шаг 1/9: Введите название работы:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('add_custom_work:')) {
       const subjectId = action.split(':')[1];
@@ -681,6 +698,7 @@ function register(bot) {
         [Markup.button.callback('💳 Оплата (env)', 'admin:edit_field:paymentEnv:' + workId)],
         [Markup.button.callback('📋 Требования', 'admin:edit_field:needs:' + workId)],
         [Markup.button.callback('📌 Подсказка', 'admin:edit_field:prompt:' + workId)],
+        [Markup.button.callback('🔗 Ссылка на примеры', 'admin:edit_field:exampleUrl:' + workId)],
         [Markup.button.callback('⬅️ Назад', `admin:catalog_work:${workId}`)]
       ]);
       await ctx.editMessageText('✏️ *Выберите поле для изменения:*', { parse_mode: 'Markdown', ...keyboard });
