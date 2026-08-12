@@ -5,6 +5,7 @@ const { formatOrderCard } = require('./menu'); // Импортируем фун�
 const { Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
+const { generateExcelExport } = require('../utils/export');
 
 // 🌟 Экранирование спецсимволов Markdown
 function escapeMarkdown(text) {
@@ -36,6 +37,7 @@ function getAdminMainMenu() {
     [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
     [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
     [Markup.button.callback('🏅 Назначить исполнителя/админа', 'admin:set_user_rank')],
+    [Markup.button.callback('📊 Экспорт в Excel', 'admin:export_excel')],
     [Markup.button.callback('🔙 Назад', 'profile:back')]
   ]);
 }
@@ -1012,18 +1014,18 @@ function register(bot) {
       await ctx.answerCbQuery();
     }
 
- // --- ДОБАВЛЕНИЕ ЗАКАЗА: выбор типа ---
- else if (action.startsWith('add_order_type:')) {
-   const type = action.split(':')[1];
-   ctx.session.newOrder = ctx.session.newOrder || {};
-   ctx.session.newOrder.isCustomOrder = type === 'custom';
-   const typeLabel = type === 'custom' ? '🌟 Индивидуальный' : '📦 Обычный';
-   ctx.session.adminState = 'add_order:title';
-   await ctx.editMessageText(
-     `${typeLabel} заказ выбран\n\n📝 *Шаг 3: Введите название работы:*`,
-     { parse_mode: 'Markdown', ...getBackToAdminMenu() }
-   );
- }
+    // --- ДОБАВЛЕНИЕ ЗАКАЗА: выбор типа ---
+    else if (action.startsWith('add_order_type:')) {
+      const type = action.split(':')[1];
+      ctx.session.newOrder = ctx.session.newOrder || {};
+      ctx.session.newOrder.isCustomOrder = type === 'custom';
+      const typeLabel = type === 'custom' ? '🌟 Индивидуальный' : '📦 Обычный';
+      ctx.session.adminState = 'add_order:title';
+      await ctx.editMessageText(
+        `${typeLabel} заказ выбран\n\n📝 *Шаг 3: Введите название работы:*`,
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+    }
     // --- ДОБАВЛЕНИЕ ЗАКАЗА: подтверждение ---
     else if (action === 'add_order_confirm') {
       const newOrder = ctx.session.newOrder;
@@ -1073,6 +1075,38 @@ function register(bot) {
         `🔄 *Смена статуса заказа №${order.orderNumber}*\n\nТекущий статус: *${order.status}*`,
         { parse_mode: 'Markdown', ...statusKeyboard }
       );
+    }
+
+    // ==========================================
+    // 📊 ЭКСПОРТ ДАННЫХ В EXCEL
+    // ==========================================
+    else if (action === 'export_excel') {
+      try {
+        // Показываем пользователю, что бот "думает"
+        await ctx.answerCbQuery('⏳ Формирую таблицу, это может занять пару секунд...');
+        await ctx.replyWithChatAction('upload_document'); 
+        
+        // Генерируем файл в оперативной памяти (Buffer)
+        const excelBuffer = await generateExcelExport();
+        
+        // Формируем красивое имя файла с датой
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Отправляем документ в чат
+        await ctx.replyWithDocument(
+          {
+            source: excelBuffer,
+            filename: `SD_Bot_Export_${today}.xlsx`
+          },
+          {
+            caption: '📊 *Экспорт базы данных*\n\n• Лист 1: Все заказы\n• Лист 2: Программа лояльности',
+            parse_mode: 'Markdown'
+          }
+        );
+      } catch (error) {
+        console.error('Ошибка при экспорте в Excel:', error);
+        await ctx.reply('❌ Произошла ошибка при формировании файла. Проверьте логи сервера.');
+      }
     }
 
     // --- РАНГИ ---
