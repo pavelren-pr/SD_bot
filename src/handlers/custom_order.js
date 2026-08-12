@@ -96,27 +96,31 @@ function register(bot) {
   });
 
   // Приём текстового описания для индивидуального заказа
-bot.on('text', async (ctx, next) => {
+  bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
-  if (!ctx.session.customOrder || ctx.session.customOrder.step !== 'waiting_description') {
-    return next();
-  }
-  const customOrder = ctx.session.customOrder;
-  customOrder.description = ctx.message.text;
-  customOrder.step = 'waiting_file';
-  await ctx.reply(
-    `✅ *Описание получено!*\n\n` +
-    `📎 *Шаг 2: Файл задания*\n\n` +
-    `Теперь прикрепите файл с вашим заданием (фото, PDF, DOCX и т.д.)\n\n` +
-    `📁 Вы можете отправить один файл или несколько файлов.`,
-    { 
-      parse_mode: 'Markdown',
-      reply_markup: Markup.inlineKeyboard([
-        [Markup.button.callback('🚀 Продолжить без отправки файла', 'custom_order:skip_file')]
-      ]).reply_markup
+  // 🌟 Если админ в режиме добавления заказа — пропускаем
+    if (ctx.session.adminState) {
+      return next();
     }
-  );
-});
+    if (!ctx.session.customOrder || ctx.session.customOrder.step !== 'waiting_description') {
+      return next();
+    }
+    const customOrder = ctx.session.customOrder;
+    customOrder.description = ctx.message.text;
+    customOrder.step = 'waiting_file';
+    await ctx.reply(
+      `✅ *Описание получено!*\n\n` +
+      `📎 *Шаг 2: Файл задания*\n\n` +
+      `Теперь прикрепите файл с вашим заданием (фото, PDF, DOCX и т.д.)\n\n` +
+      `📁 Вы можете отправить один файл или несколько файлов.`,
+      { 
+        parse_mode: 'Markdown',
+        reply_markup: Markup.inlineKeyboard([
+          [Markup.button.callback('🚀 Продолжить без отправки файла', 'custom_order:skip_file')]
+        ]).reply_markup
+      }
+    );
+  });
 
   // Приём файла для индивидуального заказа
   bot.on(['photo', 'document'], async (ctx, next) => {

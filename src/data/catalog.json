@@ -936,6 +936,34 @@
         "details"
       ],
       "prompt": "Отправьте одним сообщением:\n1. Номер вашего варианта\n2. Номер группы\n3. Вашу фамилию и инициалы"
+    },
+    {
+      "subjectId": "math1",
+      "title": "тест",
+      "description": "работа для енота",
+      "price": 2000,
+      "commission": 25,
+      "chatEnv": "SUPPORT_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "needs": [
+        "details",
+        "photo"
+      ],
+      "id": "work_1786521939954",
+      "prompt": "ТЕСТОВЫЙ ПРОМТ"
+    },
+    {
+      "subjectId": "math1",
+      "title": "Индивидуальный заказ по ХУЬ",
+      "isCustomOrder": true,
+      "description": "Полезно - ВСЕМ",
+      "commission": 100,
+      "chatEnv": "SUPPORT_CHAT_ID",
+      "paymentEnv": "MY_CARD_NUMBER",
+      "prompt": "бери, а?",
+      "id": "work_1786522025839",
+      "price": 0,
+      "needs": []
     }
   ]
 }

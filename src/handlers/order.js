@@ -46,7 +46,11 @@ function register(bot) {
 
   bot.on(['text', 'photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
-    
+    // 🌟 ПЕРВАЯ ПРОВЕРКА: Если пользователь в админ-панели — передаём управление admin.js
+    if (ctx.session.adminState) {
+      await next();
+      return;
+    }
     // 🌟 0.1 АДМИН ПИШЕТ ЗАКАЗЧИКУ
     if (ctx.session.adminReplyToCustomerId) {
       const targetUserId = ctx.session.adminReplyToCustomerId;
@@ -229,39 +233,56 @@ function register(bot) {
       return;
     }
 
-    if (order && order.step === 'waiting_details') {
-      if (ctx.message.text) {
-        order.details.text = ctx.message.text;
-        await showConfirmation(ctx);
+  if (order && order.step === 'waiting_details') {
+    const work = catalog.getWork(order.workId);
+    const needsText = work.needs.includes('details') || work.needs.includes('variant');
+    const needsFile = work.needs.includes('photo');
+    
+    if (ctx.message.text) {
+      order.details.text = ctx.message.text;
+      // 🌟 Если нужен файл и его ещё нет — ждём файл
+      if (needsFile && order.details.files.length === 0) {
+        await ctx.reply('✅ Текст принят! Теперь прикрепите файл(ы) с заданием 📎');
         return;
       }
-      let fileInfo = null;
-      if (ctx.message.photo) fileInfo = { type: 'photo', fileId: ctx.message.photo[ctx.message.photo.length - 1].file_id };
-      else if (ctx.message.document) fileInfo = { type: 'document', fileId: ctx.message.document.file_id, fileName: ctx.message.document.file_name || 'Документ' };
-      
-      if (!fileInfo) return;
-      
-      if (ctx.message.media_group_id) {
-        const groupId = ctx.message.media_group_id;
-        if (!mediaBuffer[groupId]) mediaBuffer[groupId] = { files: [], ctx, timer: null };
-        const buffer = mediaBuffer[groupId];
-        buffer.files.push(fileInfo);
-        if (buffer.timer) clearTimeout(buffer.timer);
-        buffer.timer = setTimeout(async () => {
-          for (const file of buffer.files) {
-            if (file.type === 'photo') file.fileName = `Фото ${order.details.files.length + 1}.jpg`;
-            order.details.files.push(file);
-          }
-          delete mediaBuffer[groupId];
-          await showConfirmation(ctx);
-        }, 1000);
-        return;
-      }
-      if (fileInfo.type === 'photo') fileInfo.fileName = `Фото ${order.details.files.length + 1}.jpg`;
-      order.details.files.push(fileInfo);
       await showConfirmation(ctx);
       return;
     }
+    let fileInfo = null;
+    if (ctx.message.photo) fileInfo = { type: 'photo', fileId: ctx.message.photo[ctx.message.photo.length - 1].file_id };
+    else if (ctx.message.document) fileInfo = { type: 'document', fileId: ctx.message.document.file_id, fileName: ctx.message.document.file_name || 'Документ' };
+    if (!fileInfo) return;
+    if (ctx.message.media_group_id) {
+      const groupId = ctx.message.media_group_id;
+      if (!mediaBuffer[groupId]) mediaBuffer[groupId] = { files: [], ctx, timer: null };
+      const buffer = mediaBuffer[groupId];
+      buffer.files.push(fileInfo);
+      if (buffer.timer) clearTimeout(buffer.timer);
+      buffer.timer = setTimeout(async () => {
+        for (const file of buffer.files) {
+          if (file.type === 'photo') file.fileName = `Фото ${order.details.files.length + 1}.jpg`;
+          order.details.files.push(file);
+        }
+        delete mediaBuffer[groupId];
+        // 🌟 После получения файлов проверяем, нужен ли текст
+        if (needsText && !order.details.text) {
+          await ctx.reply('✅ Файлы приняты! Теперь отправьте текстовые данные ✍️');
+        } else {
+          await showConfirmation(ctx);
+        }
+      }, 1000);
+      return;
+    }
+    if (fileInfo.type === 'photo') fileInfo.fileName = `Фото ${order.details.files.length + 1}.jpg`;
+    order.details.files.push(fileInfo);
+    // 🌟 Если нужен текст и его ещё нет — ждём текст
+    if (needsText && !order.details.text) {
+      await ctx.reply('✅ Файл принят! Теперь отправьте текстовые данные ✍️');
+      return;
+    }
+    await showConfirmation(ctx);
+    return;
+  }
 
     if (order && order.step === 'awaiting_payment') {
       const work = catalog.getWork(order.workId);

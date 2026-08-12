@@ -6,6 +6,12 @@ const { Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 
+// 🌟 Экранирование спецсимволов Markdown
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return String(text).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+}
+
 // 🌟 Статусы для категорий (включая custom orders)
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
 const ACTIVE_STATUSES = ['active', 'paid'];
@@ -63,6 +69,7 @@ function getSubjectWorks(subjectId) {
   const works = catalog.getWorksBySubject(subjectId);
   const buttons = works.map(w => [Markup.button.callback(`№${w.orderNumber || 'N/A'} | ${w.title.substring(0, 35)}`, `admin:catalog_work:${w.id}`)]);
   buttons.push([Markup.button.callback('➕ Добавить работу', `admin:add_work:${subjectId}`)]);
+  buttons.push([Markup.button.callback('🌟 Добавить индив. заказ', `admin:add_custom_work:${subjectId}`)]);
   buttons.push([Markup.button.callback('🗑 Удалить работу', `admin:delete_work:${subjectId}`)]);
   
   const subject = catalog.getSubject(subjectId);
@@ -74,18 +81,18 @@ function getWorkCard(workId) {
   const work = catalog.getWork(workId);
   const subject = catalog.getSubject(work.subjectId);
   const course = catalog.getCourse(subject.courseId);
-  
   let text = `✏️ *Редактирование работы*\n\n`;
-  text += `📚 *Курс:* ${course.name}\n`;
-  text += `📖 *Предмет:* ${subject.name}\n\n`;
-  text += `📝 *Название:* ${work.title}\n`;
-  if (work.description && work.description.trim() !== '') text += `📄 *Описание:* ${work.description}\n`;
-  text += `💰 *Цена:* ${work.price} ₽\n`;
-  text += `📊 *Комиссия:* ${work.commission}%\n`;
-  text += `💳 *Оплата:* \`${work.paymentEnv}\`\n`;
-  text += `💬 *Чат:* \`${work.chatEnv}\`\n`;
-  text += `📋 *Требования:* ${work.needs.join(', ') || 'нет'}\n\n`;
-  text += `📌 *Подсказка:*\n${work.prompt}`;
+  text += `📚 *Курс:* ${escapeMarkdown(course.name)}\n`;
+  text += `📖 *Предмет:* ${escapeMarkdown(subject.name)}\n\n`;
+  text += `📝 *Название:* ${escapeMarkdown(work.title)}\n`;
+  if (work.description && work.description.trim() !== '') text += `📄 *Описание:* ${escapeMarkdown(work.description)}\n`;
+    text += `💰 *Цена:* ${work.price} ₽\n`;
+    text += `📊 *Комиссия:* ${work.commission}%\n`;
+    text += `💳 *Оплата:* \`${work.paymentEnv}\`\n`;
+    text += `💬 *Чат:* \`${work.chatEnv}\`\n`;
+    text += `📋 *Требования:* ${Array.isArray(work.needs) && work.needs.length > 0 ? work.needs.join(', ') : 'нет'}\n\n`;
+    text += `🌟 *Индивидуальный заказ:* ${work.isCustomOrder ? 'Да' : 'Нет'}\n\n`;
+    text += `📌 *Подсказка:*\n${escapeMarkdown(work.prompt)}`;
   
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('✏️ Изменить информацию', `admin:edit_work:${workId}`)],
@@ -215,36 +222,82 @@ function register(bot) {
     if (state.startsWith('add_work_title:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData = { subjectId, title: text };
+      ctx.session.adminState = `add_work_description:${subjectId}`;
+      await ctx.reply('📄 *Шаг 2/8: Введите описание работы (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+     if (state.startsWith('add_work_description:')) {
+      const subjectId = state.split(':')[1];
+      ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_work_price:${subjectId}`;
-      await ctx.reply('📝 *Шаг 2/6: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💵 *Шаг 3/8: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_custom_work_title:')) {
+      const subjectId = state.split(':')[1];
+      ctx.session.tempWorkData = { subjectId, title: text, isCustomOrder: true };
+      ctx.session.adminState = `add_custom_work_description:${subjectId}`;
+      await ctx.reply('📄 *Шаг 2/6: Введите описание индивидуального заказа (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+     if (state.startsWith('add_custom_work_description:')) {
+      const subjectId = state.split(':')[1];
+      ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
+      ctx.session.adminState = `add_custom_work_commission:${subjectId}`;
+      await ctx.reply('📊 *Шаг 3/6: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_custom_work_commission:')) {
+      if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
+      ctx.session.tempWorkData.commission = parseInt(text);
+      ctx.session.adminState = `add_custom_work_chatEnv:${state.split(':')[1]}`;
+      await ctx.reply('💬 *Шаг 4/6: Имя переменной окружения для чата исполнителей:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_custom_work_chatEnv:')) {
+      ctx.session.tempWorkData.chatEnv = text;
+      ctx.session.adminState = `add_custom_work_paymentEnv:${state.split(':')[1]}`;
+      await ctx.reply('💳 *Шаг 5/6: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_custom_work_paymentEnv:')) {
+      ctx.session.tempWorkData.paymentEnv = text;
+      ctx.session.adminState = `add_custom_work_prompt:${state.split(':')[1]}`;
+      await ctx.reply('📌 *Шаг 6/6: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_custom_work_prompt:')) {
+      const subjectId = state.split(':')[1];
+      ctx.session.tempWorkData.prompt = text;
+      ctx.session.tempWorkData.id = `work_${Date.now()}`;
+      ctx.session.tempWorkData.price = 0; // Цена назначается исполнителем
+      ctx.session.tempWorkData.needs = [];
+      const works = catalog.getData().works;
+      works.push(ctx.session.tempWorkData);
+      catalog.saveData({ ...catalog.getData(), works });
+      await ctx.reply(`✅ *Индивидуальный заказ добавлен!*\n\n🌟 *${escapeMarkdown(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`, { parse_mode: 'Markdown', ...getSubjectWorks(subjectId) });
+      ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
     if (state.startsWith('add_work_price:')) {
       if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
       ctx.session.tempWorkData.price = parseInt(text);
       ctx.session.adminState = `add_work_commission:${state.split(':')[1]}`;
-      await ctx.reply('📝 *Шаг 3/6: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 *Шаг 4/8: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_commission:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_work_chatEnv:${state.split(':')[1]}`;
-      await ctx.reply('📝 *Шаг 4/6: Имя переменной окружения для чата:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💬 *Шаг 5/8: Имя переменной окружения для чата:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_chatEnv:')) {
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_work_paymentEnv:${state.split(':')[1]}`;
-      await ctx.reply('📝 *Шаг 5/6: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💳 *Шаг 6/8: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_work_needs:${state.split(':')[1]}`;
-      await ctx.reply('📝 *Шаг 6/6: Требования через запятую (photo, details, variant) или "нет":*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📎 *Шаг 7/8: Требования через запятую (photo, details, variant) или "нет":*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_needs:')) {
       ctx.session.tempWorkData.needs = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
       ctx.session.tempWorkData.id = `work_${Date.now()}`;
       ctx.session.adminState = `add_work_prompt:${state.split(':')[1]}`;
-      await ctx.reply('📝 *Финальный шаг: Введите текст подсказки (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 *Шаг 8/8: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_prompt:')) {
       const subjectId = state.split(':')[1];
@@ -267,7 +320,8 @@ function register(bot) {
       let value = text;
       if ((field === 'price' || field === 'commission') && isNaN(text)) return ctx.reply('❌ Значение должно быть числом.');
       if (field === 'price' || field === 'commission') value = parseInt(text);
-      
+      // 🌟 Преобразуем строку в массив для поля needs
+      if (field === 'needs') value = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
       data.works[workIndex][field] = value;
       catalog.saveData(data);
       await ctx.reply(`✅ Поле "${field}" обновлено!`, { ...getWorkCard(workId).keyboard });
@@ -281,7 +335,9 @@ function register(bot) {
       let value = text;
       if ((field === 'price' || field === 'commission') && isNaN(text)) return ctx.reply('❌ Значение должно быть числом.');
       if (field === 'price' || field === 'commission') value = parseInt(text);
-      
+      // 🌟 Преобразуем строку в массив для поля needs
+      if (field === 'needs') value = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
+
       ordersDb.updateOrder(orderId, { [field]: value });
       const order = ordersDb.getOrder(orderId);
       
@@ -318,6 +374,99 @@ function register(bot) {
 
       await ctx.reply(`✅ Ранг пользователя \`${userId}\` изменён на "${rankName}"`, { parse_mode: 'Markdown', ...getAdminMainMenu() });
       ctx.session.adminState = null; ctx.session.tempRankUserId = null; return;
+    }
+
+    // --- ДОБАВЛЕНИЕ ЗАКАЗА ---
+    if (state === 'add_order:customer_id') {
+      if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
+      ctx.session.newOrder = { customerId: parseInt(text) };
+      const typeKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📦 Обычный заказ', 'admin:add_order_type:regular')],
+        [Markup.button.callback('🌟 Индивидуальный заказ', 'admin:add_order_type:custom')],
+        [Markup.button.callback('❌ Отмена', 'admin:orders')]
+      ]);
+      await ctx.reply('📋 *Шаг 2: Выберите тип заказа:*', { parse_mode: 'Markdown', ...typeKeyboard });
+      ctx.session.adminState = null; return;
+    }
+    if (state === 'add_order:title') {
+      ctx.session.newOrder.workTitle = text;
+      ctx.session.adminState = 'add_order:subject';
+      await ctx.reply('📖 *Шаг 4: Введите название предмета:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state === 'add_order:subject') {
+      ctx.session.newOrder.subjectName = text;
+      ctx.session.adminState = 'add_order:course';
+      await ctx.reply('🎓 *Шаг 5: Введите название курса:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state === 'add_order:course') {
+      ctx.session.newOrder.courseName = text;
+      // 🌟 Для обоих типов запрашиваем описание
+      ctx.session.adminState = 'add_order:description';
+      await ctx.reply('📝 *Шаг 6: Введите описание задания (или "нет", если не требуется):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      return;
+    }
+    if (state === 'add_order:price') {
+      if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
+      ctx.session.newOrder.price = parseInt(text);
+      ctx.session.adminState = 'add_order:commission';
+       await ctx.reply('📊 *Шаг 8: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state === 'add_order:description') {
+      // 🌟 Если пользователь ввёл "нет", сохраняем null
+      ctx.session.newOrder.description = text.toLowerCase() === 'нет' ? null : text;
+      if (ctx.session.newOrder.isCustomOrder) {
+        ctx.session.adminState = 'add_order:price_custom';
+        await ctx.reply('💰 *Шаг 7: Введите цену заказа (0 если ещё не назначена):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      } else {
+        ctx.session.adminState = 'add_order:price';
+        await ctx.reply('💰 *Шаг 7: Введите цену заказа (число в рублях):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      }
+      return;
+    }
+    if (state === 'add_order:price_custom') {
+      if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
+      ctx.session.newOrder.price = parseInt(text);
+      ctx.session.adminState = 'add_order:commission';
+      await ctx.reply('📊 *Шаг 8: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state === 'add_order:commission') {
+      if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
+      ctx.session.newOrder.commission = parseInt(text);
+      const newOrder = ctx.session.newOrder;
+      let confirmText = `📋 *Подтверждение нового заказа*\n\n`;
+      confirmText += `👤 *Заказчик ID:* ${newOrder.customerId}\n`;
+      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} *Тип:* ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
+      confirmText += `📚 *Работа:* ${newOrder.workTitle}\n`;
+      confirmText += `📖 *Предмет:* ${newOrder.subjectName}\n`;
+      confirmText += `🎓 *Курс:* ${newOrder.courseName}\n`;
+      confirmText += `💰 *Цена:* ${newOrder.price} ₽\n`;
+      confirmText += `📊 *Комиссия:* ${newOrder.commission}%\n`;
+      if (newOrder.description) confirmText += `📝 *Описание:* ${newOrder.description.substring(0, 100)}...\n`;
+      confirmText += `\nСоздать заказ?`;
+      const confirmKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Создать заказ', 'admin:add_order_confirm')],
+        [Markup.button.callback('❌ Отмена', 'admin:orders')]
+      ]);
+      await ctx.reply(confirmText, { parse_mode: 'Markdown', ...confirmKeyboard });
+      ctx.session.adminState = null; return;
+    }
+    // --- ПОИСК ЗАКАЗА ПО НОМЕРУ ---
+    if (state === 'search_order_prompt') {
+      const orderNumber = parseInt(text);
+      if (isNaN(orderNumber)) return ctx.reply('❌ Введите числовой номер заказа.');
+      const order = ordersDb.getOrderByNumber(orderNumber);
+      if (!order) {
+        await ctx.reply(`❌ Заказ с номером ${orderNumber} не найден`, { ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:orders')]]) });
+      } else {
+        const cardText = formatOrderCard(order, 'admin');
+        const buttons = [
+          [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${order.id}`)],
+          [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${order.id}`)],
+          [Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]
+        ];
+        await ctx.reply(cardText, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      }
+      ctx.session.adminState = null; return;
     }
 
     // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из карточки заказа)
@@ -368,6 +517,7 @@ function register(bot) {
   // Обработчик inline-кнопок
   // ==========================================
   bot.action(/^admin:(.+)$/, async (ctx) => {
+    ctx.session = ctx.session || {};
     if (!isAdmin(ctx.from.id)) {
       await ctx.answerCbQuery('❌ У вас нет прав');
       return;
@@ -411,7 +561,12 @@ function register(bot) {
     }
     else if (action.startsWith('add_work:')) {
       ctx.session.adminState = `add_work_title:${action.split(':')[1]}`;
-      await ctx.editMessageText('📝 *Шаг 1/6: Введите название работы:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ *Шаг 1/8: Введите название работы:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+    }
+    else if (action.startsWith('add_custom_work:')) {
+      const subjectId = action.split(':')[1];
+      ctx.session.adminState = `add_custom_work_title:${subjectId}`;
+      await ctx.editMessageText('✍️ *Шаг 1/6: Введите название индивидуального заказа:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
     }
 
     // --- КАТАЛОГ: Изменение ---
@@ -554,7 +709,10 @@ function register(bot) {
     }
     else if (action === 'add_order_start') {
       ctx.session.adminState = 'add_order:customer_id';
-      await ctx.editMessageText('✏️ *Добавление нового заказа*\n\nВведите Telegram ID заказчика:', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText(
+        '✏️ *Добавление нового заказа*\n\n📝 *Шаг 1: Введите Telegram ID заказчика:*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
     }
     else if (action === 'search_order_prompt') {
       ctx.session.adminState = 'search_order_prompt';
@@ -581,7 +739,8 @@ function register(bot) {
         let dateStr = 'N/A'; if (o.createdAt) { try { const d = new Date(o.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split('T')[0]; } } catch(e) { dateStr = 'N/A'; } }
         const workTitle = o.workTitle || 'Без названия';
         const orderNum = o.orderNumber || 'N/A';
-        return [Markup.button.callback(`№${orderNum} | ${workTitle.substring(0, 15)} | ${dateStr}`, `admin:order_view:${o.id}`)];
+        const typeEmoji = o.isCustomOrder ? '🌟' : '📦';
+        return [Markup.button.callback(`${typeEmoji} №${orderNum} | ${workTitle.substring(0, 15)} | ${dateStr}`, `admin:order_view:${o.id}`)];
       });
       if (buttons.length === 0) buttons.push([Markup.button.callback('— пусто —', 'noop')]);
       
@@ -598,45 +757,55 @@ function register(bot) {
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
       if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
-      
       const text = formatOrderCard(order, 'admin');
       const buttons = [
         [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
         [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]
       ];
       if (order.customerUsername) buttons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${order.customerUsername}`)]);
-      
-      if (order.status === 'pending') {
-        buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
-        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
-      } else if (order.status === 'active') {
-        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
-        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+      // 🌟 Разные кнопки статусов для разных типов заказов
+      if (order.isCustomOrder) {
+        buttons.push([Markup.button.callback('🔄 Сменить статус', `admin:order_status_menu:${orderId}`)]);
       } else {
-        buttons.push([Markup.button.callback('🔨 Вернуть в работу', `admin:order_status:${orderId}:active`)]);
-        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+        if (order.status === 'pending') {
+          buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
+          buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+        } else if (order.status === 'active') {
+          buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+          buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+        } else {
+          buttons.push([Markup.button.callback('🔨 Вернуть в работу', `admin:order_status:${orderId}:active`)]);
+          buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+        }
       }
       buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
-      
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('order_edit:')) {
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
       if (!order) return;
-      
-      const keyboard = Markup.inlineKeyboard([
+      const keyboardButtons = [
         [Markup.button.callback('📝 Название работы', `admin:order_field:${orderId}:workTitle`)],
         [Markup.button.callback('📖 Предмет', `admin:order_field:${orderId}:subjectName`)],
         [Markup.button.callback('🎓 Курс', `admin:order_field:${orderId}:courseName`)],
         [Markup.button.callback('💰 Цена', `admin:order_field:${orderId}:price`)],
         [Markup.button.callback('📊 Комиссия', `admin:order_field:${orderId}:commission`)],
         [Markup.button.callback('👤 Username заказчика', `admin:order_field:${orderId}:customerUsername`)],
-        [Markup.button.callback('👷 Username исполнителя', `admin:order_field:${orderId}:executorUsername`)],
-        [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
-      ]);
-      await ctx.editMessageText(`✏️ *Редактирование заказа №${order.orderNumber}*\n\nВыберите поле для изменения:`, { parse_mode: 'Markdown', ...keyboard });
+        [Markup.button.callback('👷 Username исполнителя', `admin:order_field:${orderId}:executorUsername`)]
+      ];
+      // 🌟 Дополнительные поля для custom orders
+      if (order.isCustomOrder) {
+        keyboardButtons.push([Markup.button.callback('📝 Описание задания', `admin:order_field:${orderId}:description`)]);
+        keyboardButtons.push([Markup.button.callback('🏷 Статус заказа', `admin:order_status_menu:${orderId}`)]);
+      }
+      keyboardButtons.push([Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]);
+      const typeLabel = order.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
+      await ctx.editMessageText(
+        `✏️ *Редактирование заказа №${order.orderNumber}*\n${typeLabel}\n\nВыберите поле для изменения:`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard(keyboardButtons) }
+      );
     }
     else if (action.startsWith('order_field:')) {
       const parts = action.split(':');
@@ -741,6 +910,69 @@ function register(bot) {
         { parse_mode: 'Markdown', ...keyboard }
       );
       await ctx.answerCbQuery();
+    }
+
+ // --- ДОБАВЛЕНИЕ ЗАКАЗА: выбор типа ---
+ else if (action.startsWith('add_order_type:')) {
+   const type = action.split(':')[1];
+   ctx.session.newOrder = ctx.session.newOrder || {};
+   ctx.session.newOrder.isCustomOrder = type === 'custom';
+   const typeLabel = type === 'custom' ? '🌟 Индивидуальный' : '📦 Обычный';
+   ctx.session.adminState = 'add_order:title';
+   await ctx.editMessageText(
+     `${typeLabel} заказ выбран\n\n📝 *Шаг 3: Введите название работы:*`,
+     { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+   );
+ }
+    // --- ДОБАВЛЕНИЕ ЗАКАЗА: подтверждение ---
+    else if (action === 'add_order_confirm') {
+      const newOrder = ctx.session.newOrder;
+      if (!newOrder) { await ctx.answerCbQuery('❌ Данные заказа потеряны'); return; }
+      // Определяем статус в зависимости от типа
+      const status = newOrder.isCustomOrder
+        ? (newOrder.price > 0 ? 'price_negotiating' : 'waiting_acceptance')
+        : (newOrder.price > 0 ? 'pending' : 'pending');
+      const createdOrder = ordersDb.createOrder({
+        customerId: newOrder.customerId,
+        customerUsername: null,
+        workId: newOrder.isCustomOrder ? `custom_admin_${Date.now()}` : null,
+        workTitle: newOrder.workTitle,
+        subjectName: newOrder.subjectName,
+        courseName: newOrder.courseName,
+        price: newOrder.price,
+        commission: newOrder.commission || 20,
+        description: newOrder.description || null,
+        isCustomOrder: newOrder.isCustomOrder || false,
+        status: status
+      });
+      ctx.session.newOrder = null;
+      await ctx.answerCbQuery('✅ Заказ создан');
+      // Показываем карточку созданного заказа
+      const cardText = formatOrderCard(createdOrder, 'admin');
+      const buttons = [
+        [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${createdOrder.id}`)],
+        [Markup.button.callback('📦 Все заказы', 'admin:orders')]
+      ];
+      await ctx.editMessageText(`✅ *Заказ №${createdOrder.orderNumber} создан!*\n\n${cardText}`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // --- МЕНЮ СТАТУСОВ ДЛЯ CUSTOM ORDERS ---
+    else if (action.startsWith('order_status_menu:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) return;
+      const statusKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🟡 Ожидает оценки', `admin:order_status:${orderId}:waiting_acceptance`)],
+        [Markup.button.callback('🟠 Ожидает цену', `admin:order_status:${orderId}:waiting_price`)],
+        [Markup.button.callback('🔵 Согласование цены', `admin:order_status:${orderId}:price_negotiating`)],
+        [Markup.button.callback('🟢 Оплачен', `admin:order_status:${orderId}:paid`)],
+        [Markup.button.callback('✅ Выполнен', `admin:order_status:${orderId}:completed`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ]);
+      await ctx.editMessageText(
+        `🔄 *Смена статуса заказа №${order.orderNumber}*\n\nТекущий статус: *${order.status}*`,
+        { parse_mode: 'Markdown', ...statusKeyboard }
+      );
     }
 
     // --- РАНГИ ---
