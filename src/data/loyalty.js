@@ -108,4 +108,4 @@ function getRanksDescription(loyaltyDocLink) {
   return msg;
 }
 
-module.exports = { getLoyaltyInfo, calculatePrice, addToTotal, getRanksDescription, RANKS };
+module.exports = { getLoyaltyInfo, calculatePrice, addToTotal, getRanksDescription, RANKS, loadData, saveData };

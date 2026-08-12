@@ -35,7 +35,7 @@ function getAdminMainMenu() {
     [Markup.button.callback('🗂 Управление каталогом', 'admin:catalog')],
     [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
     [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
-    [Markup.button.callback('Назначить исполнителя/администратора', 'admin:set_user_rank')],
+    [Markup.button.callback('🏅 Назначить исполнителя/админа', 'admin:set_user_rank')],
     [Markup.button.callback('🔙 Назад', 'profile:back')]
   ]);
 }
@@ -353,6 +353,24 @@ function register(bot) {
       ctx.session.adminState = null; return;
     }
 
+     // --- ИЗМЕНЕНИЕ СУММЫ ВЫКУПА ---
+    if (state.startsWith('edit_customer_spent:')) {
+      const customerId = state.split(':')[1];
+      if (isNaN(text)) return ctx.reply('❌ Сумма должна быть числом.');
+      const newAmount = parseInt(text);
+      const loyaltyData = loyalty.loadData();
+      if (!loyaltyData[customerId]) {
+        loyaltyData[customerId] = { username: '', totalSpent: 0 };
+      }
+      loyaltyData[customerId].totalSpent = newAmount;
+      loyalty.saveData(loyaltyData);
+      await ctx.reply(
+        `✅ Сумма выкупа для заказчика ${customerId} изменена на ${newAmount} ₽`,
+        { parse_mode: 'Markdown', ...getAdminMainMenu() }
+      );
+      ctx.session.adminState = null; return;
+    }
+
     // --- РАНГИ ---
     if (state === 'awaiting_user_id_for_rank') {
       if (isNaN(text)) return ctx.reply('❌ ID пользователя должен быть числом.');
@@ -365,14 +383,12 @@ function register(bot) {
       const rankName = text.trim();
       const validRank = loyalty.RANKS.find(r => r.name === rankName);
       if (!validRank) return ctx.reply(`❌ Ранг не найден.\n\nДоступные:\n${loyalty.RANKS.map(r => `• ${r.name}`).join('\n')}`, { ...getBackToAdminMenu() });
-
-      const loyaltyPath = path.join(__dirname, '../data/loyalty.json');
-      const loyaltyData = JSON.parse(fs.readFileSync(loyaltyPath, 'utf8'));
+      const loyaltyData = loyalty.loadData();
       if (!loyaltyData[userId]) loyaltyData[userId] = { username: '', totalSpent: 0 };
       loyaltyData[userId].rank = rankName;
-      fs.writeFileSync(loyaltyPath, JSON.stringify(loyaltyData, null, 2));
-
-      await ctx.reply(`✅ Ранг пользователя \`${userId}\` изменён на "${rankName}"`, { parse_mode: 'Markdown', ...getAdminMainMenu() });
+      loyalty.saveData(loyaltyData);
+      const rankEmoji = rankName === 'Посейдон' ? '👑' : '🔥';
+      await ctx.reply(`${rankEmoji} Ранг пользователя \`${userId}\` изменён на "${rankName}"`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) });
       ctx.session.adminState = null; ctx.session.tempRankUserId = null; return;
     }
 
@@ -469,30 +485,96 @@ function register(bot) {
       ctx.session.adminState = null; return;
     }
 
+        // --- ПОИСК ЗАКАЗЧИКА ПО ID/USERNAME ---
+    if (state === 'search_customer_prompt') {
+      const searchQuery = text.replace('@', '').trim().toLowerCase();
+      if (!searchQuery) return ctx.reply('❌ Введите ID или username.');
+      
+      // Формируем список заказчиков из заказов
+      const allOrders = ordersDb.getAllOrders();
+      const customerMap = new Map();
+      allOrders.forEach(order => {
+        if (!customerMap.has(order.customerId)) {
+          customerMap.set(order.customerId, {
+            id: order.customerId,
+            username: order.customerUsername || 'N/A',
+            orderCount: 0
+          });
+        }
+        customerMap.get(order.customerId).orderCount++;
+      });
+      
+      // Ищем по ID или username
+      let foundCustomer = null;
+      for (const customer of customerMap.values()) {
+        if (String(customer.id) === searchQuery || 
+            (customer.username && customer.username.toLowerCase() === searchQuery)) {
+          foundCustomer = customer;
+          break;
+        }
+      }
+      
+      if (!foundCustomer) {
+        await ctx.reply(
+          `❌ Заказчик "${text}" не найден в базе заказов.`,
+          { ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]]) }
+        );
+        ctx.session.adminState = null;
+        return;
+      }
+      
+      // Показываем карточку найденного заказчика
+      const customerOrders = allOrders.filter(o => String(o.customerId) === String(foundCustomer.id));
+      const loyaltyInfo = loyalty.getLoyaltyInfo(foundCustomer.id);
+      
+      let textMsg = `👤 *Информация о заказчике*\n\n`;
+      textMsg += `ID: \`${foundCustomer.id}\`\n`;
+      textMsg += `Username: ${foundCustomer.username !== 'N/A' ? '@' + foundCustomer.username : 'не указан'}\n`;
+      textMsg += `Сумма выкупа: ${loyaltyInfo.totalSpent} ₽\n`;
+      textMsg += `Количество заказов: ${foundCustomer.orderCount}\n\n`;
+      
+      if (customerOrders.length > 0) {
+        textMsg += `📦 *Последние заказы:*\n`;
+        customerOrders.slice(0, 5).forEach((o, i) => {
+          textMsg += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}\n`;
+        });
+      }
+      
+      const buttons = [
+        [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${foundCustomer.id}`)],
+        [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${foundCustomer.id}`)],
+        [Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]
+      ];
+      
+      await ctx.reply(textMsg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      ctx.session.adminState = null;
+      return;
+    }
+
     // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из карточки заказа)
- if (state.startsWith('send_message_to_customer:')) {
-   const orderId = state.split(':')[1];
-   const order = ordersDb.getOrder(orderId);
-   if (!order) {
-     await ctx.reply('❌ Заказ не найден');
-     ctx.session.adminState = null;
-     return;
-   }
-   const messageText = ctx.message.text;
-   const customerId = order.customerId;
-   try {
-     await ctx.telegram.sendMessage(
-       customerId,
-       `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`,
-       { parse_mode: 'Markdown' }
-     );
-     await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
-   } catch (err) {
-     await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
-   }
-   ctx.session.adminState = null;
-   return;
- }
+    if (state.startsWith('send_message_to_customer:')) {
+      const orderId = state.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) {
+        await ctx.reply('❌ Заказ не найден');
+        ctx.session.adminState = null;
+        return;
+      }
+      const messageText = ctx.message.text;
+      const customerId = order.customerId;
+      try {
+        await ctx.telegram.sendMessage(
+          customerId,
+          `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`,
+          { parse_mode: 'Markdown' }
+        );
+        await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
+      } catch (err) {
+        await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+      }
+      ctx.session.adminState = null;
+      return;
+    }
 
  // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из базы заказчиков по ID)
  if (state.startsWith('send_message_to_customer_by_id:')) {
@@ -977,32 +1059,177 @@ function register(bot) {
 
     // --- РАНГИ ---
     else if (action === 'set_user_rank') {
+      const loyaltyData = loyalty.loadData();
+      
+      // Собираем пользователей по рангам
+      const admins = [];
+      const executors = [];
+      
+      for (const [userId, userData] of Object.entries(loyaltyData)) {
+        if (userData.rank === 'Посейдон') {
+          admins.push({ id: userId, username: userData.username || 'N/A' });
+        } else if (userData.rank === 'Прометей') {
+          executors.push({ id: userId, username: userData.username || 'N/A' });
+        }
+      }
+      
+      let text = `🛠 *Управление рангами*\n\n`;
+      text += `👑 *Админы (Посейдон):* ${admins.length}\n`;
+      if (admins.length === 0) text += `  • нет\n`;
+      admins.forEach(a => {
+        text += `  • ${a.id} (${a.username !== 'N/A' ? '@' + a.username : 'без username'})\n`;
+      });
+      text += `\n🔥 *Исполнители (Прометей):* ${executors.length}\n`;
+      if (executors.length === 0) text += `  • нет\n`;
+      executors.forEach(e => {
+        text += `  • ${e.id} (${e.username !== 'N/A' ? '@' + e.username : 'без username'})\n`;
+      });
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('➕ Назначить ранг', 'admin:set_user_rank:new')],
+        [Markup.button.callback('📋 Управление пользователями', 'admin:set_user_rank:manage')],
+        [Markup.button.callback('⬅️ Назад', 'admin:main')]
+      ]);
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+    // Назначить новый ранг
+    else if (action === 'set_user_rank:new') {
       ctx.session.adminState = 'awaiting_user_id_for_rank';
-      await ctx.editMessageText('👤 *Введите ID пользователя:*\n\n(Например: 1012758149)', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('👤 *Введите ID пользователя:*\n\n(Например: 1012758149)', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:set_user_rank')]]) });
+    }
+    // Управление пользователями с рангами
+    else if (action === 'set_user_rank:manage') {
+      const loyaltyData = loyalty.loadData();
+      
+      const rankedUsers = [];
+      for (const [userId, userData] of Object.entries(loyaltyData)) {
+        if (userData.rank === 'Посейдон' || userData.rank === 'Прометей') {
+          rankedUsers.push({ id: userId, username: userData.username || 'N/A', rank: userData.rank });
+        }
+      }
+      
+      let text = `📋 *Управление пользователями с рангами*\n\nВыберите пользователя:\n`;
+      
+      const buttons = rankedUsers.map(u => {
+        const rankEmoji = u.rank === 'Посейдон' ? '👑' : '🔥';
+        const display = u.username !== 'N/A' ? `${u.id} (@${u.username})` : u.id;
+        return [Markup.button.callback(`${rankEmoji} ${display}`, `admin:set_user_rank:user:${u.id}`)];
+      });
+      
+      if (rankedUsers.length === 0) {
+        text += `_Пользователей с рангами не найдено_\n`;
+      }
+      
+      buttons.push([Markup.button.callback('⬅️ Назад', 'admin:set_user_rank')]);
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    // Действия над конкретным пользователем
+    else if (action.startsWith('set_user_rank:user:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+      const userData = loyaltyData[userId];
+      
+      if (!userData || !userData.rank) {
+        await ctx.answerCbQuery('❌ Пользователь не найден или не имеет ранга');
+        return;
+      }
+      
+      const rankEmoji = userData.rank === 'Посейдон' ? '👑' : '🔥';
+      let text = `👤 *Пользователь:* \`${userId}\`\n`;
+      text += `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
+      text += `${rankEmoji} *Текущий ранг:* ${userData.rank}\n\n`;
+      text += `Выберите действие:`;
+      
+      const buttons = [];
+      
+      // Если админ — можно понизить до исполнителя
+      if (userData.rank === 'Посейдон') {
+        buttons.push([Markup.button.callback('⬇️ Понизить до Прометей', `admin:set_user_rank:lower:${userId}`)]);
+      }
+      
+      // Разжаловать (снять ранг)
+      buttons.push([Markup.button.callback('🗑 Разжаловать (снять ранг)', `admin:set_user_rank:demote:${userId}`)]);
+      buttons.push([Markup.button.callback('⬅️ Назад', 'admin:set_user_rank:manage')]);
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    // Понизить админа до исполнителя
+    else if (action.startsWith('set_user_rank:lower:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+      
+      if (!loyaltyData[userId]) {
+        await ctx.answerCbQuery('❌ Пользователь не найден');
+        return;
+      }
+      
+      loyaltyData[userId].rank = 'Прометей';
+      loyalty.saveData(loyaltyData);
+      
+      await ctx.answerCbQuery('✅ Ранг понижен до Прометей');
+      
+      let text = `👤 *Пользователь:* \`${userId}\`\n`;
+      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
+      text += `🔥 *Текущий ранг:* Прометей\n\n`;
+      text += `✅ Ранг успешно понижен до Прометей`;
+      
+      const buttons = [
+        [Markup.button.callback('🗑 Разжаловать (снять ранг)', `admin:set_user_rank:demote:${userId}`)],
+        [Markup.button.callback('⬅️ Назад', 'admin:set_user_rank:manage')]
+      ];
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    // Разжаловать (снять ранг полностью)
+    else if (action.startsWith('set_user_rank:demote:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+      
+      if (!loyaltyData[userId]) {
+        await ctx.answerCbQuery('❌ Пользователь не найден');
+        return;
+      }
+      
+      const oldRank = loyaltyData[userId].rank;
+      delete loyaltyData[userId].rank;
+      loyalty.saveData(loyaltyData);
+      
+      await ctx.answerCbQuery('✅ Ранг снят');
+      
+      let text = `👤 *Пользователь:* \`${userId}\`\n`;
+      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n\n`;
+      text += `✅ Ранг "${oldRank}" успешно снят. Пользователь разжалован.`;
+      
+      const buttons = [
+        [Markup.button.callback('⬅️ Назад к списку', 'admin:set_user_rank:manage')]
+      ];
+      
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
     // --- БАЗА ЗАКАЗЧИКОВ ---
     else if (action === 'customers') {
       ctx.session.adminState = null;
       const allOrders = ordersDb.getAllOrders();
       const customerMap = new Map();
-      
       allOrders.forEach(order => {
         if (!customerMap.has(order.customerId)) {
+          // 🌟 Берём сумму выкупа из loyalty.json, а не считаем по заказам
+          const loyaltyInfo = loyalty.getLoyaltyInfo(order.customerId);
           customerMap.set(order.customerId, {
             id: order.customerId,
             username: order.customerUsername || 'N/A',
-            totalSpent: 0,
+            totalSpent: loyaltyInfo.totalSpent || 0,
             orderCount: 0,
             orders: []
           });
         }
         const customer = customerMap.get(order.customerId);
-        if (order.price) customer.totalSpent += parseFloat(order.price);
         customer.orderCount++;
         customer.orders.push(order);
       });
-      
-      const customers = Array.from(customerMap.values());
+   const customers = Array.from(customerMap.values());
       ctx.session.customersList = customers;
       ctx.session.customersPage = 0;
       
