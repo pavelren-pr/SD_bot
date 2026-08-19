@@ -47,72 +47,6 @@ function getOrder(orderId) {
   return loadData().find(o => o.id === orderId);
 }
 
-// 🌟 Получить следующий номер заказа
-function getNextOrderNumber() {
-  const data = loadData();
-  
-  // Проверяем, является ли первый элемент метаданными
-  let meta = null;
-  let metaIndex = -1;
-  
-  if (data.length > 0 && data[0]._meta && Object.keys(data[0]).length === 1) {
-    // _meta находится в первом элементе как отдельный объект
-    meta = data[0]._meta;
-    metaIndex = 0;
-  } else if (data._meta) {
-    // _meta как свойство массива
-    meta = data._meta;
-  }
-  
-  // Если счётчика ещё нет — инициализируем с 10001
-  if (!meta || !meta.nextOrderNumber) {
-    const newMeta = { nextOrderNumber: 10001 };
-    if (data.length === 0) {
-      data.unshift({ _meta: newMeta });
-    } else if (metaIndex === 0) {
-      data[0]._meta = newMeta;
-    } else {
-      data._meta = newMeta;
-    }
-    saveData(data);
-    return 10001;
-  }
-  
-  return meta.nextOrderNumber;
-}
-
-// 🌟 Функция увеличения счётчика после создания заказа
-function incrementOrderNumber() {
-  const data = loadData();
-  
-  // Проверяем, является ли первый элемент метаданными
-  let meta = null;
-  let metaIndex = -1;
-  
-  if (data.length > 0 && data[0]._meta && Object.keys(data[0]).length === 1) {
-    // _meta находится в первом элементе как отдельный объект
-    meta = data[0]._meta;
-    metaIndex = 0;
-  } else if (data._meta) {
-    // _meta как свойство массива
-    meta = data._meta;
-  }
-  
-  if (!meta) {
-    meta = { nextOrderNumber: 10001 };
-    if (data.length === 0) {
-      data.unshift({ _meta: meta });
-    } else if (metaIndex === 0) {
-      data[0]._meta = meta;
-    } else {
-      data._meta = meta;
-    }
-  }
-  
-  meta.nextOrderNumber += 1;
-  saveData(data);
-}
-
 // 🌟 Миграция: присваиваем номера старым заказам, у которых их нет
 function migrateOrders() {
   const data = loadData();
@@ -172,36 +106,63 @@ migrateOrders();
 
 // 🌟 Создать новый заказ
 function createOrder(orderData) {
-  const orders = loadData();
-  const orderNumber = getNextOrderNumber();
-  const newOrder = {
-    orderNumber: orderNumber,
-    id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    workId: orderData.workId || null,
-    workTitle: orderData.workTitle || 'Не указано',
-    subjectName: orderData.subjectName || 'Не указано',
-    courseName: orderData.courseName || 'Не указано',
-    customerId: orderData.customerId,
-    customerUsername: orderData.customerUsername || null,
-    executorId: null,
-    executorUsername: null,
-    price: orderData.price,
-    commission: orderData.commission || 0,
-    status: orderData.status || 'pending', // 🌟 Используем переданный статус
-    createdAt: orderData.createdAt || new Date().toLocaleString('ru-RU'),
-    acceptedAt: null,
-    completedAt: null,
-    // 🌟 Сохраняем дополнительные поля для custom orders
-    description: orderData.description || null,
-    fileName: orderData.fileName || null,
-    fileId: orderData.fileId || null,
-    fileType: orderData.fileType || null,
-    isCustomOrder: orderData.isCustomOrder || false
-  };
-  orders.push(newOrder);
-  incrementOrderNumber();
-  saveData(orders);
-  return newOrder;
+    const orders = loadData();
+    
+    // 🌟 Находим или инициализируем объект _meta в текущем массиве orders
+    let meta = null;
+    if (orders.length > 0 && orders[0] && orders[0]._meta && Object.keys(orders[0]).length === 1) {
+        meta = orders[0]._meta;
+    } else if (orders._meta) {
+        meta = orders._meta;
+    }
+    
+    // Если счётчика ещё нет — инициализируем с 10001
+    if (!meta || !meta.nextOrderNumber) {
+        meta = { nextOrderNumber: 10001 };
+        if (orders.length === 0) {
+            orders.unshift({ _meta: meta });
+        } else if (orders[0] && orders[0]._meta) {
+            orders[0]._meta = meta;
+        } else {
+            orders._meta = meta;
+        }
+    }
+    
+    // 🌟 Получаем текущий номер заказа
+    const orderNumber = meta.nextOrderNumber;
+    
+    const newOrder = {
+        orderNumber: orderNumber,
+        id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        workId: orderData.workId || null,
+        workTitle: orderData.workTitle || 'Не указано',
+        subjectName: orderData.subjectName || 'Не указано',
+        courseName: orderData.courseName || 'Не указано',
+        customerId: orderData.customerId,
+        customerUsername: orderData.customerUsername || null,
+        executorId: null,
+        executorUsername: null,
+        price: orderData.price,
+        commission: orderData.commission || 0,
+        status: orderData.status || 'pending',
+        createdAt: orderData.createdAt || new Date().toLocaleString('ru-RU'),
+        acceptedAt: null,
+        completedAt: null,
+        description: orderData.description || null,
+        fileName: orderData.fileName || null,
+        fileId: orderData.fileId || null,
+        fileType: orderData.fileType || null,
+        isCustomOrder: orderData.isCustomOrder || false
+    };
+    
+    orders.push(newOrder);
+    
+    // 🌟 Увеличиваем счётчик в том же объекте meta перед сохранением
+    meta.nextOrderNumber += 1;
+    
+    // 🌟 Сохраняем обновлённый массив orders (с новым заказом и увеличенным счётчиком) ОДНИМ вызовом
+    saveData(orders);
+    return newOrder;
 }
 
 // 🌟 Получить заказ по номеру (удобно для поиска)

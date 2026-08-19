@@ -56,27 +56,113 @@ function register(bot) {
     // 🌟 0.1 АДМИН ПИШЕТ ЗАКАЗЧИКУ
     if (ctx.session.adminReplyToCustomerId) {
       const targetUserId = ctx.session.adminReplyToCustomerId;
-      const orderTitle = ctx.session.adminReplyOrderTitle;
-      const orderDate = ctx.session.adminReplyOrderDate;
       const orderId = ctx.session.adminReplyOrderId;
-      const messageText = ctx.message.text || '[Фото/Файл]';
+
+      const dbOrder = ordersDb.getOrder(orderId);
+
+      const orderTitle =
+        ctx.session.adminReplyOrderTitle ||
+        (dbOrder ? dbOrder.workTitle : 'Заказ');
+
+      const orderDate =
+        ctx.session.adminReplyOrderDate ||
+        (dbOrder ? dbOrder.createdAt : '—');
+
+      const orderNumber =
+        ctx.session.adminReplyOrderNumber ||
+        (dbOrder && dbOrder.orderNumber ? dbOrder.orderNumber : orderId);
+
+      const adminId =
+        ctx.session.adminReplyAdminId || ctx.from.id;
+
+      const rawMessageText =
+        ctx.message.text ||
+        ctx.message.caption ||
+        '[Фото/Файл]';
+
+      const messageText = escapeMarkdown(rawMessageText);
+      const safeOrderTitle = escapeMarkdown(orderTitle);
+
+      const adminReplyKeyboard = Markup.inlineKeyboard([
+        [
+          Markup.button.callback(
+            '✏️ Ответить администратору',
+            `admin_reply:${targetUserId}_${orderId}_${adminId}`
+          )
+        ]
+      ]);
 
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 *Вам сообщение от администратора*\n\n🆔 *Номер заказа:* №${orderId}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
-        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Ответить администратору', `admin_reply:${targetUserId}_${orderId}`)]]) }
+        `💬 *Вам сообщение от администратора*\n\n` +
+        `🆔 *Номер заказа:* №${orderNumber}\n` +
+        `📚 *Заказ:* ${safeOrderTitle}\n` +
+        `📅 *Дата заказа:* ${orderDate}\n\n` +
+        `${messageText}`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: adminReplyKeyboard.reply_markup
+        }
       );
-      if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
-      else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
+
+      if (ctx.message.photo) {
+        await ctx.telegram.sendPhoto(
+          targetUserId,
+          ctx.message.photo[ctx.message.photo.length - 1].file_id
+        );
+      } else if (ctx.message.document) {
+        await ctx.telegram.sendDocument(
+          targetUserId,
+          ctx.message.document.file_id
+        );
+      }
 
       await ctx.reply(`✅ Сообщение отправлено заказчику (ID: ${targetUserId})`);
+
       ctx.session.adminReplyToCustomerId = null;
       ctx.session.adminReplyOrderId = null;
+      ctx.session.adminReplyOrderNumber = null;
       ctx.session.adminReplyOrderTitle = null;
       ctx.session.adminReplyOrderDate = null;
+      ctx.session.adminReplyAdminId = null;
+
       return;
     }
 
+      // 🌟 0.12 ЗАКАЗЧИК ПИШЕТ АДМИНУ (ответ на сообщение от администрации)
+      if (ctx.session.customerReplyToAdminId) {
+        const adminId = ctx.session.customerReplyToAdminId;
+        const orderId = ctx.session.customerReplyToAdminOrderId;
+        const orderNumber = ctx.session.customerReplyToAdminOrderNumber || '—';
+        const orderTitle = ctx.session.customerReplyToAdminOrderTitle || 'Заказ';
+        const messageText = ctx.message.text || '[Фото/Файл]';
+        const customerUsername = ctx.from.username ? `@${ctx.from.username}` : `ID: ${ctx.from.id}`;
+        // 🌟 Клавиатура с кнопкой ответа заказчику
+        const replyKeyboard = Markup.inlineKeyboard([[
+          Markup.button.callback('✏️ Ответить заказчику', `admin_reply_to_customer:${ctx.from.id}_${orderId}`)
+        ]]);
+        try {
+          await ctx.telegram.sendMessage(
+            adminId,
+            `💬 *Ответ заказчика по заказу №${orderNumber}*\n\n👤 *Заказчик:* ${customerUsername}\n📚 *Заказ:* ${orderTitle}\n\n${messageText}`,
+            { parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup }
+          );
+          if (ctx.message.photo) {
+            await ctx.telegram.sendPhoto(adminId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
+          } else if (ctx.message.document) {
+            await ctx.telegram.sendDocument(adminId, ctx.message.document.file_id);
+          }
+          await ctx.reply(`✅ Ваш ответ отправлен администратору`);
+        } catch (err) {
+          await ctx.reply(`❌ Не удалось отправить сообщение администратору: ${err.message}`);
+        }
+        // Очищаем session
+        ctx.session.customerReplyToAdminId = null;
+        ctx.session.customerReplyToAdminOrderId = null;
+        ctx.session.customerReplyToAdminOrderNumber = null;
+        ctx.session.customerReplyToAdminOrderTitle = null;
+        return;
+      }
 
     // 🌟 0.15 ИСПОЛНИТЕЛЬ ПИШЕТ ЗАКАЗЧИКУ
     if (ctx.session.executorReplyToCustomerId) {
@@ -304,7 +390,8 @@ function register(bot) {
         }
         updatedText += `\n⏰ *Создан:* ${order.createdAt}\n✅ *Оплачен:* ${paidTime}\n🟢 *Статус:* ОПЛАЧЕН`;
         
-        const chatId = `order_${ctx.from.id}_${order.workId}`;
+        // 🌟 Используем уникальный chatId из сессии, или генерируем новый, если его нет
+        const chatId = ctx.session.order.chatId || `order_${ctx.from.id}_${order.workId}_${Date.now()}`;
         const executorKeyboard = createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `accept_order:${chatId}` }]]);
         
         try {
@@ -502,9 +589,14 @@ function register(bot) {
     orderText += `\n⏰ *Создан:* ${createdAt}\n🟡 *Статус:* ОЖИДАЕТ ОПЛАТЫ`;
 
     const chatId = `order_${ctx.from.id}_${order.workId}`;
+    // 🌟 Делаем chatId уникальным, добавляя timestamp, чтобы избежать коллизий при повторных заказах
+    const uniqueChatId = `order_${ctx.from.id}_${order.workId}_${Date.now()}`;
+    ctx.session.order.chatId = uniqueChatId; // 🌟 Сохраняем в сессии для этапа оплаты
+
     try {
-      const sentMsg = await ctx.telegram.sendMessage(targetChatId, orderText, { 
-        parse_mode: 'Markdown', reply_markup: createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `accept_order:${chatId}` }]]).reply_markup 
+      const sentMsg = await ctx.telegram.sendMessage(targetChatId, orderText, {
+        parse_mode: 'Markdown',
+        reply_markup: createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `accept_order:${uniqueChatId}` }]]).reply_markup
       });
       order.managerMessageId = sentMsg.message_id;
       for (const file of order.details.files) {
@@ -549,27 +641,42 @@ function register(bot) {
     const executorUserId = ctx.from.id;
     const parts = chatId.split('_');
     const customerUserId = parseInt(parts[1]);
-    const workId = parts.slice(2).join('_');
-    const work = catalog.getWork(workId);
     
-    if (!work) return ctx.answerCbQuery('❌ Работа не найдена');
-    if (activeChats.has(chatId)) return ctx.answerCbQuery('⚠️ Этот заказ уже принят другим исполнителем');
-
-    const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
-    
-    let customerUsername = null;
-    try {
-      const customerUser = await ctx.telegram.getChat(customerUserId);
-      customerUsername = customerUser.username ? `@${customerUser.username}` : null;
-    } catch (e) {
-      console.log('Не удалось получить username заказчика:', e.message);
+    // 🌟 Поддержка старого и нового формата chatId (с timestamp и без)
+    const lastPart = parts[parts.length - 1];
+    let workId;
+    if (!isNaN(lastPart) && lastPart.length >= 10) {
+      // Новый формат: order_customerId_workId_with_underscores_timestamp
+      workId = parts.slice(2, -1).join('_');
+    } else {
+      // Старый формат: order_customerId_workId_with_underscores
+      workId = parts.slice(2).join('_');
     }
     
-    const groupChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
-    
-    // 🌟 Получаем номер заказа (один раз!)
-    const activeOrder = orders.findActiveOrder(customerUserId, workId);
-    const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
+    const work = catalog.getWork(workId);
+    if (!work) return ctx.answerCbQuery('❌ Работа не найдена');
+
+// 🌟 ПРОВЕРКА: Используем данные из БД, а не in-memory Map
+const activeOrder = orders.findActiveOrder(customerUserId, workId);
+
+// 🌟 Если заказ существует и у него уже есть исполнитель, блокируем повторное принятие
+if (activeOrder && activeOrder.executorId) {
+  return ctx.answerCbQuery('⚠️ Этот заказ уже принят другим исполнителем');
+}
+
+const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+let customerUsername = null;
+try {
+  const customerUser = await ctx.telegram.getChat(customerUserId);
+  customerUsername = customerUser.username ? `@${customerUser.username}` : null;
+} catch (e) {
+  console.log('Не удалось получить username заказчика:', e.message);
+}
+
+const groupChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
+
+// 🌟 Получаем номер заказа из уже найденного activeOrder
+const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
     
     await ctx.telegram.sendMessage(
       groupChatId, 
@@ -838,26 +945,27 @@ bot.action(/^executor_reply_file:(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
     });
 
-  bot.action(/^admin_reply:(\d+)_(.+)$/, async (ctx) => {
-    const parts = ctx.match[0].split(':');
-    const data = parts[1]; // "userId_orderId"
-    const underscoreIndex = data.lastIndexOf('_');
-    const targetUserId = data.substring(0, underscoreIndex);
-    const orderId = data.substring(underscoreIndex + 1);
-    
-    // Получить информацию о заказе
-    const order = require('../data/orders').getOrder(orderId);
-    const orderNumber = order ? order.orderNumber : orderId;
-    const orderTitle = order ? order.workTitle : 'Заказ';
-    
-    ctx.session.adminReplyToCustomerId = targetUserId;
-    ctx.session.adminReplyOrderId = orderId;
-    ctx.session.adminReplyOrderTitle = orderTitle;
-    ctx.session.adminReplyOrderDate = order ? order.createdAt : new Date().toLocaleString('ru-RU');
-    
-    await ctx.editMessageText(`✏️ *Режим ответа заказчику*\n\n🆔 *Номер заказа:* №${orderNumber}\n👤 *Заказчик ID:* ${targetUserId}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено заказчику.`, { parse_mode: 'Markdown' });
-    await ctx.answerCbQuery('✅ Готов к отправке ответа');
-  });
+    // 🌟 Заказчик нажимает "Ответить администратору"
+    bot.action(/^admin_reply:(\d+)_(.+)_(\d+)$/, async (ctx) => {
+      ctx.session = ctx.session || {}; // 🌟 Инициализируем сессию, если она не создана
+      const customerId = parseInt(ctx.match[1]);
+      const orderId = ctx.match[2];
+      const adminId = parseInt(ctx.match[3]);
+      // Получить информацию о заказе
+      const order = ordersDb.getOrder(orderId);
+      const orderNumber = order ? order.orderNumber : orderId;
+      const orderTitle = order ? order.workTitle : 'Заказ';
+      // 🌟 Используем ОТДЕЛЬНЫЕ переменные сессии для ответа заказчика админу
+      ctx.session.customerReplyToAdminId = adminId;
+      ctx.session.customerReplyToAdminOrderId = orderId;
+      ctx.session.customerReplyToAdminOrderNumber = orderNumber;
+      ctx.session.customerReplyToAdminOrderTitle = orderTitle;
+      await ctx.editMessageText(
+        `✏️ *Режим ответа администратору*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено администратору.`,
+        { parse_mode: 'Markdown' }
+      );
+      await ctx.answerCbQuery('✅ Готов к отправке ответа');
+    });
 
 
   function findExecutorChat(userId) {

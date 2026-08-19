@@ -570,49 +570,90 @@ function register(bot) {
       return;
     }
 
-    // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из карточки заказа)
-    if (state.startsWith('send_message_to_customer:')) {
-      const orderId = state.split(':')[1];
-      const order = ordersDb.getOrder(orderId);
-      if (!order) {
-        await ctx.reply('❌ Заказ не найден');
+      // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из карточки заказа)
+      if (state.startsWith('send_message_to_customer:')) {
+        const orderId = state.split(':')[1];
+        const order = ordersDb.getOrder(orderId);
+        if (!order) {
+          await ctx.reply('❌ Заказ не найден');
+          ctx.session.adminState = null;
+          return;
+        }
+        const messageText = ctx.message.text;
+        const customerId = order.customerId;
+        // 🌟 Клавиатура с кнопкой ответа администратору (передаём ID админа, чтобы заказчик знал, кому отвечать)
+        const replyKeyboard = Markup.inlineKeyboard([[
+          Markup.button.callback('✏️ Ответить администратору', `admin_reply:${customerId}_${orderId}_${ctx.from.id}`)
+        ]]);
+        try {
+          await ctx.telegram.sendMessage(
+            customerId,
+            `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`,
+            { parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup }
+          );
+          await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
+        } catch (err) {
+          await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+        }
         ctx.session.adminState = null;
         return;
       }
-      const messageText = ctx.message.text;
-      const customerId = order.customerId;
-      try {
-        await ctx.telegram.sendMessage(
-          customerId,
-          `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`,
-          { parse_mode: 'Markdown' }
-        );
-        await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
-      } catch (err) {
-        await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
-      }
-      ctx.session.adminState = null;
-      return;
-    }
 
- // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из базы заказчиков по ID)
- if (state.startsWith('send_message_to_customer_by_id:')) {
-   const customerId = state.split(':')[1];
-   const messageText = ctx.message.text;
-   try {
-     await ctx.telegram.sendMessage(
-       customerId,
-       `📬 *Сообщение от администрации*\n\n${messageText}`,
-       { parse_mode: 'Markdown' }
-     );
-     await ctx.reply(`✅ Сообщение отправлено заказчику ID: ${customerId}`);
-   } catch (err) {
-     await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
-   }
-   ctx.session.adminState = null;
-   return;
- }
-  });
+          // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из базы заказчиков по ID)
+          if (state.startsWith('send_message_to_customer_by_id:')) {
+            const customerId = state.split(':')[1];
+            const messageText = ctx.message.text;
+            try {
+              await ctx.telegram.sendMessage(
+                customerId,
+                `📬 *Сообщение от администрации*\n\n${messageText}`,
+                { parse_mode: 'Markdown' }
+              );
+              await ctx.reply(`✅ Сообщение отправлено заказчику ID: ${customerId}`);
+            } catch (err) {
+              await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+            }
+            ctx.session.adminState = null;
+            return;
+          }
+        });
+
+    // ==========================================
+    // 🌟 Админ нажимает "Ответить заказчику" после получения ответа от заказчика
+    // ==========================================
+    bot.action(/^admin_reply_to_customer:(\d+)_(.+)$/, async (ctx) => {
+      ctx.session = ctx.session || {};
+
+      if (!isAdmin(ctx.from.id)) {
+        await ctx.answerCbQuery('❌ У вас нет прав');
+        return;
+      }
+
+      const customerId = parseInt(ctx.match[1]);
+      const orderId = ctx.match[2];
+
+      const order = ordersDb.getOrder(orderId);
+
+      const orderNumber = order && order.orderNumber ? order.orderNumber : orderId;
+      const orderTitle = order ? order.workTitle : 'Заказ';
+
+      ctx.session.adminReplyToCustomerId = customerId;
+      ctx.session.adminReplyOrderId = orderId;
+      ctx.session.adminReplyOrderNumber = orderNumber;
+      ctx.session.adminReplyOrderTitle = orderTitle;
+      ctx.session.adminReplyOrderDate = order ? order.createdAt : new Date().toLocaleString('ru-RU');
+      ctx.session.adminReplyAdminId = ctx.from.id;
+
+      await ctx.reply(
+        `💬 *Режим ответа заказчику*\n\n` +
+        `🆔 *Номер заказа:* №${orderNumber}\n` +
+        `📚 *Заказ:* ${escapeMarkdown(orderTitle)}\n\n` +
+        `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.`,
+        { parse_mode: 'Markdown' }
+      );
+
+      await ctx.answerCbQuery('✅ Готов к отправке ответа');
+    });
 
   // ==========================================
   // Обработчик inline-кнопок
@@ -838,11 +879,24 @@ function register(bot) {
       
       let text = `${title}\n\nСтраница ${currentPage + 1} из ${totalPages}\nВсего: ${filtered.length}`;
       const buttons = displayOrders.map(o => {
-        let dateStr = 'N/A'; if (o.createdAt) { try { const d = new Date(o.createdAt); if (!isNaN(d.getTime())) { dateStr = d.toISOString().split('T')[0]; } } catch(e) { dateStr = 'N/A'; } }
+        let dateStr = 'N/A'; 
+        if (o.createdAt) { 
+          try { 
+            const d = new Date(o.createdAt); 
+            if (!isNaN(d.getTime())) { 
+              dateStr = d.toISOString().split('T')[0]; 
+            } 
+          } catch(e) { 
+            dateStr = 'N/A'; 
+          } 
+        }
         const workTitle = o.workTitle || 'Без названия';
         const orderNum = o.orderNumber || 'N/A';
         const typeEmoji = o.isCustomOrder ? '🌟' : '📦';
-        return [Markup.button.callback(`${typeEmoji} №${orderNum} | ${workTitle.substring(0, 15)} | ${dateStr}`, `admin:order_view:${o.id}`)];
+        return [Markup.button.callback(
+          `${typeEmoji} №${orderNum} | ${workTitle.substring(0, 15)} | ${dateStr}`, 
+          `admin:order_view:${o.id}`
+        )];
       });
       if (buttons.length === 0) buttons.push([Markup.button.callback('— пусто —', 'noop')]);
       
@@ -996,8 +1050,10 @@ function register(bot) {
       ctx.session = ctx.session || {};
       ctx.session.adminReplyToCustomerId = order.customerId;
       ctx.session.adminReplyOrderId = orderId;
+      ctx.session.adminReplyOrderNumber = order.orderNumber;
       ctx.session.adminReplyOrderTitle = order.workTitle;
       ctx.session.adminReplyOrderDate = order.createdAt;
+      ctx.session.adminReplyAdminId = ctx.from.id;
       
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('❌ Отмена', `admin:order_view:${orderId}`)]
