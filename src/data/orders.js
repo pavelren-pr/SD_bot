@@ -189,13 +189,22 @@ function deleteOrder(orderId) {
   return filtered.length < orders.length;
 }
 
-// 🌟 Найти заказ по связке заказчик + работа (чтобы не дублировать)
+// 🌟 Найти заказ по связке заказчик + работа
 function findActiveOrder(customerId, workId) {
-  return loadData().find(o => 
-    (o.customerId === customerId || String(o.customerId) === String(customerId)) &&
-    o.workId === workId &&
-    o.status !== 'completed'
-  );
+  const all = loadData();
+  // Ищем с конца (новый заказ = последний в массиве), пропускаем уже назначенные
+  for (let i = all.length - 1; i >= 0; i--) {
+    const o = all[i];
+    if (
+      (o.customerId === customerId || String(o.customerId) === String(customerId)) &&
+      o.workId === workId &&
+      o.status !== 'completed' &&
+      !o.executorId  // ← пропускаем заказы, у которых уже есть исполнитель
+    ) {
+      return o;
+    }
+  }
+  return null;
 }
 
 module.exports = {
