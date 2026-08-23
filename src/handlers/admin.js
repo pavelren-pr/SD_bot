@@ -6,6 +6,7 @@ const { Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 const { generateExcelExport } = require('../utils/export');
+const { assignExecutorToOrder, unassignExecutorFromOrder } = require('./order');
 
 // 🌟 Экранирование спецсимволов Markdown
 function escapeMarkdown(text) {
@@ -616,6 +617,55 @@ function register(bot) {
             ctx.session.adminState = null;
             return;
           }
+          // ==========================================
+          // 🌟 ПОЛУЧЕНИЕ ID ИСПОЛНИТЕЛЯ И ЕГО НАЗНАЧЕНИЕ
+          // ==========================================
+          if (state.startsWith('awaiting_executor_id_for_order:')) {
+            const orderId = state.split(':')[1];
+            const executorId = parseInt(text);
+            
+            if (isNaN(executorId)) {
+              await ctx.reply('❌ ID должен быть числом. Попробуйте ещё раз или нажмите Отмену.');
+              return;
+            }
+            
+            try {
+              const result = await assignExecutorToOrder(orderId, executorId, bot);
+              await ctx.reply(
+                `✅ *Исполнитель успешно назначен!*\n\n` +
+                `👷 *Исполнитель:* ${result.executorUsername}\n` +
+                `📦 *Заказ:* №${ordersDb.getOrder(orderId).orderNumber}\n\n` +
+                `Уведомления отправлены и заказчику, и исполнителю.`,
+                { parse_mode: 'Markdown' }
+              );
+              
+              // Перерисовываем карточку заказа с новыми кнопками
+              const updatedOrder = ordersDb.getOrder(orderId);
+              const cardText = formatOrderCard(updatedOrder, 'admin');
+              const newButtons = [
+                [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
+                [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]
+              ];
+              if (updatedOrder.customerUsername) newButtons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${updatedOrder.customerUsername}`)]);
+              newButtons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+              newButtons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+              newButtons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
+              newButtons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
+              
+              await ctx.reply(cardText, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(newButtons) });
+            } catch (err) {
+              await ctx.reply(
+                `❌ *Ошибка назначения:*\n\n${err.message}`,
+                { 
+                  parse_mode: 'Markdown',
+                  ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `admin:order_view:${orderId}`)]])
+                }
+              );
+            }
+            
+            ctx.session.adminState = null;
+            return;
+          }
         });
 
     // ==========================================
@@ -924,7 +974,12 @@ function register(bot) {
         buttons.push([Markup.button.callback('🔄 Сменить статус', `admin:order_status_menu:${orderId}`)]);
       } else {
         if (order.status === 'pending') {
-          buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
+          // Если исполнителя нет — показываем кнопку назначения, если есть — просто перевод в active
+          if (!order.executorId) {
+            buttons.push([Markup.button.callback('🔨 Назначить исполнителя', `admin:assign_executor:${orderId}`)]);
+          } else {
+            buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
+          }
           buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
         } else if (order.status === 'active') {
           buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
@@ -977,15 +1032,42 @@ function register(bot) {
       ctx.session.adminState = `edit_order_input:${orderId}:${field}`;
       await ctx.editMessageText(`✏️ *Введите новое значение для поля "${field}":*\n\n📌 *Текущее:* \`${oldValue}\``, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]]) });
     }
+    // ==========================================
+    // 🌟 НАЗНАЧЕНИЕ ИСПОЛНИТЕЛЯ ВРУЧНУЮ
+    // ==========================================
+    else if (action.startsWith('assign_executor:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+      
+      ctx.session.adminState = `awaiting_executor_id_for_order:${orderId}`;
+      await ctx.editMessageText(
+        `👷 *Назначение исполнителя*\n\n` +
+        `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n` +
+        `Введите Telegram ID исполнителя (число):\n\n` +
+        `_Подсказка: ID можно посмотреть в списке "Исполнители" в разделе управления рангами_`,
+        { 
+          parse_mode: 'Markdown', 
+          ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:order_view:${orderId}`)]]) 
+        }
+      );
+    }
     else if (action.startsWith('order_status:')) {
       const parts = action.split(':');
-      const orderId = parts[1]; const newStatus = parts[2];
+      const orderId = parts[1]; 
+      const newStatus = parts[2];
       const order = ordersDb.getOrder(orderId);
-      const updates = { status: newStatus };
-      if (newStatus === 'active' && !order.acceptedAt) updates.acceptedAt = new Date().toLocaleString('ru-RU');
-      if (newStatus === 'completed' && !order.completedAt) updates.completedAt = new Date().toLocaleString('ru-RU');
       
-      ordersDb.updateOrder(orderId, updates);
+      // 🌟 Если переводим из active обратно в pending — снимаем исполнителя и уведомляем
+      if (newStatus === 'pending' && order.status === 'active' && order.executorId) {
+        await unassignExecutorFromOrder(orderId, bot);
+      } else {
+        const updates = { status: newStatus };
+        if (newStatus === 'active' && !order.acceptedAt) updates.acceptedAt = new Date().toLocaleString('ru-RU');
+        if (newStatus === 'completed' && !order.completedAt) updates.completedAt = new Date().toLocaleString('ru-RU');
+        ordersDb.updateOrder(orderId, updates);
+      }
+      
       await ctx.answerCbQuery('✅ Статус изменён');
       
       // Перерисовываем экран просмотра заказа
@@ -996,19 +1078,26 @@ function register(bot) {
       ];
       if (updatedOrder.customerUsername) buttons.push([Markup.button.url('💬 Профиль заказчика', `https://t.me/${updatedOrder.customerUsername}`)]);
       
-      if (updatedOrder.status === 'pending') {
-        buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
-        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
-      } else if (updatedOrder.status === 'active') {
-        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
-        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+      if (updatedOrder.isCustomOrder) {
+        buttons.push([Markup.button.callback('🔄 Сменить статус', `admin:order_status_menu:${orderId}`)]);
       } else {
-        buttons.push([Markup.button.callback('🔨 Вернуть в работу', `admin:order_status:${orderId}:active`)]);
-        buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+        if (updatedOrder.status === 'pending') {
+          if (!updatedOrder.executorId) {
+            buttons.push([Markup.button.callback('🔨 Назначить исполнителя', `admin:assign_executor:${orderId}`)]);
+          } else {
+            buttons.push([Markup.button.callback('🔨 Перевести в работу', `admin:order_status:${orderId}:active`)]);
+          }
+          buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+        } else if (updatedOrder.status === 'active') {
+          buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+          buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+        } else {
+          buttons.push([Markup.button.callback('🔨 Вернуть в работу', `admin:order_status:${orderId}:active`)]);
+          buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+        }
       }
       buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
-      
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('order_delete:')) {
