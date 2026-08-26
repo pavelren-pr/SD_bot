@@ -1,7 +1,7 @@
 [
   {
     "_meta": {
-      "nextOrderNumber": 10005
+      "nextOrderNumber": 10006
     }
   },
   {
@@ -63,9 +63,32 @@
     "executorUsername": "SmartDealsManager",
     "price": 1032,
     "commission": 20,
-    "status": "active",
+    "status": "completed",
     "createdAt": "23.08.2026, 22:40:11",
     "acceptedAt": "23.08.2026, 22:40:23",
+    "completedAt": "26.08.2026, 16:27:03",
+    "description": null,
+    "fileName": null,
+    "fileId": null,
+    "fileType": null,
+    "isCustomOrder": false
+  },
+  {
+    "orderNumber": 10005,
+    "id": "order_1787751342552_rf1y6",
+    "workId": "TiOMPG_kurs",
+    "workTitle": "Курсовая работа 🧮",
+    "subjectName": "ТиОМПГ 🏗",
+    "courseName": "4 курс 🗺",
+    "customerId": 1012758149,
+    "customerUsername": "pavelren",
+    "executorId": 7195122925,
+    "executorUsername": "SmartDealsManager",
+    "price": 1912,
+    "commission": 20,
+    "status": "active",
+    "createdAt": "26.08.2026, 16:35:40",
+    "acceptedAt": "26.08.2026, 16:38:40",
     "completedAt": null,
     "description": null,
     "fileName": null,
