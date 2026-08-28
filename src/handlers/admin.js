@@ -528,30 +528,51 @@ function register(bot) {
       ctx.session.adminState = null; return;
     }
 
-        // --- ПОИСК ЗАКАЗЧИКА ПО ID/USERNAME ---
-    if (state === 'search_customer_prompt') {
+    // --- ПОИСК ЗАКАЗЧИКА ПО ID/USERNAME ---
+      if (state === 'search_customer_prompt') {
       const searchQuery = text.replace('@', '').trim().toLowerCase();
       if (!searchQuery) return ctx.reply('❌ Введите ID или username.');
       
-      // Формируем список заказчиков из заказов
       const allOrders = ordersDb.getAllOrders();
+      const loyaltyData = loyalty.loadData();
       const customerMap = new Map();
+
+      // 🌟 1. Из loyalty.json
+      for (const [userId, userData] of Object.entries(loyaltyData)) {
+        customerMap.set(String(userId), {
+          id: userId,
+          username: userData.username || 'N/A',
+          totalSpent: userData.totalSpent || 0,
+          orderCount: 0,
+          orders: []
+        });
+      }
+
+      // 🌟 2. Из orders.json
       allOrders.forEach(order => {
-        if (!customerMap.has(order.customerId)) {
-          customerMap.set(order.customerId, {
+        const custId = String(order.customerId);
+        if (!customerMap.has(custId)) {
+          customerMap.set(custId, {
             id: order.customerId,
             username: order.customerUsername || 'N/A',
-            orderCount: 0
+            totalSpent: 0,
+            orderCount: 0,
+            orders: []
           });
         }
-        customerMap.get(order.customerId).orderCount++;
+        const customer = customerMap.get(custId);
+        customer.orderCount++;
+        customer.orders.push(order);
+        if (customer.username === 'N/A' && order.customerUsername) {
+          customer.username = order.customerUsername;
+        }
       });
-      
+
       // Ищем по ID или username
       let foundCustomer = null;
       for (const customer of customerMap.values()) {
         if (String(customer.id) === searchQuery || 
-            (customer.username && customer.username.toLowerCase() === searchQuery)) {
+            (customer.username !== 'N/A' && customer.username.toLowerCase() === searchQuery)) {
           foundCustomer = customer;
           break;
         }
@@ -559,7 +580,7 @@ function register(bot) {
       
       if (!foundCustomer) {
         await ctx.reply(
-          `❌ Заказчик "${text}" не найден в базе заказов.`,
+          `❌ Пользователь "${text}" не найден в базе.`,
           { ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]]) }
         );
         ctx.session.adminState = null;
@@ -1504,24 +1525,43 @@ function register(bot) {
     else if (action === 'customers') {
       ctx.session.adminState = null;
       const allOrders = ordersDb.getAllOrders();
+      const loyaltyData = loyalty.loadData();
       const customerMap = new Map();
+
+      // 🌟 1. Сначала добавляем ВСЕХ пользователей из loyalty.json (даже если у них 0 заказов)
+      for (const [userId, userData] of Object.entries(loyaltyData)) {
+        customerMap.set(String(userId), {
+          id: userId,
+          username: userData.username || 'N/A',
+          totalSpent: userData.totalSpent || 0,
+          orderCount: 0,
+          orders: []
+        });
+      }
+
+      // 🌟 2. Затем обогащаем данными из orders.json
       allOrders.forEach(order => {
-        if (!customerMap.has(order.customerId)) {
-          // 🌟 Берём сумму выкупа из loyalty.json, а не считаем по заказам
-          const loyaltyInfo = loyalty.getLoyaltyInfo(order.customerId);
-          customerMap.set(order.customerId, {
+        const custId = String(order.customerId);
+        if (!customerMap.has(custId)) {
+          // На всякий случай, если заказ есть, а в loyalty.json пользователя нет
+          customerMap.set(custId, {
             id: order.customerId,
             username: order.customerUsername || 'N/A',
-            totalSpent: loyaltyInfo.totalSpent || 0,
+            totalSpent: 0,
             orderCount: 0,
             orders: []
           });
         }
-        const customer = customerMap.get(order.customerId);
+        const customer = customerMap.get(custId);
         customer.orderCount++;
         customer.orders.push(order);
+        // Обновляем username, если в заказе он есть, а в loyalty его не было
+        if (customer.username === 'N/A' && order.customerUsername) {
+          customer.username = order.customerUsername;
+        }
       });
-   const customers = Array.from(customerMap.values());
+
+      const customers = Array.from(customerMap.values());
       ctx.session.customersList = customers;
       ctx.session.customersPage = 0;
       
