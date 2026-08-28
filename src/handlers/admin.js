@@ -936,11 +936,11 @@ function register(bot) {
     // ==========================================
     else if (action === 'orders') {
       ctx.session.adminState = null;
-      const all = ordersDb.getAllOrders();
+      // 🌟 Фильтруем метаданные _meta из массива заказов
+      const all = ordersDb.getAllOrders().filter(o => !o._meta);
       const p = all.filter(o => PENDING_STATUSES.includes(o.status)).length;
       const a = all.filter(o => ACTIVE_STATUSES.includes(o.status)).length;
       const c = all.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
-      
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback(`⏳ Ожидают (${p})`, 'admin:orders_list:pending:0')],
         [Markup.button.callback(`🔨 В работе (${a})`, 'admin:orders_list:active:0')],
@@ -967,7 +967,7 @@ function register(bot) {
       const filter = parts[1];
       const page = parseInt(parts[2]) || 0;
       
-      const all = ordersDb.getAllOrders();
+      const all = ordersDb.getAllOrders().filter(o => !o._meta);
       let filtered = all;
       let title = '📦 Все заказы';
       if (filter === 'pending') { filtered = all.filter(o => PENDING_STATUSES.includes(o.status)); title = '⏳ Ожидают принятия'; }
@@ -1169,20 +1169,18 @@ function register(bot) {
       ]);
       await ctx.editMessageText(`⚠️ *Подтверждение удаления*\n\nЗаказ: *${order.workTitle}*\nЗаказчик: ${order.customerUsername ? `@${order.customerUsername}` : order.customerId}`, { parse_mode: 'Markdown', ...keyboard });
     }
+    
     else if (action.startsWith('order_delete_confirm:')) {
       const orderId = action.split(':')[1];
       ordersDb.deleteOrder(orderId);
-
-      // 🌟 Логируем удаление заказа
       logger.logAdminAction('order_deleted', {
         orderId: orderId,
-        orderNumber: order.orderNumber,
-        workTitle: order.workTitle
+        orderNumber: order ? order.orderNumber : null,
+        workTitle: order ? order.workTitle : null
       }, ctx);
-
       await ctx.answerCbQuery('✅ Заказ удалён');
-      
-      const all = ordersDb.getAllOrders();
+      // 🌟 Фильтруем метаданные _meta
+      const all = ordersDb.getAllOrders().filter(o => !o._meta);
       const p = all.filter(o => PENDING_STATUSES.includes(o.status)).length;
       const a = all.filter(o => ACTIVE_STATUSES.includes(o.status)).length;
       const c = all.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
@@ -1524,7 +1522,7 @@ function register(bot) {
     // --- БАЗА ЗАКАЗЧИКОВ ---
     else if (action === 'customers') {
       ctx.session.adminState = null;
-      const allOrders = ordersDb.getAllOrders();
+      const allOrders = ordersDb.getAllOrders().filter(o => !o._meta);
       const loyaltyData = loyalty.loadData();
       const customerMap = new Map();
 
