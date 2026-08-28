@@ -1,7 +1,7 @@
 [
   {
     "_meta": {
-      "nextOrderNumber": 10007
+      "nextOrderNumber": 10008
     }
   },
   {
@@ -112,6 +112,29 @@
     "status": "active",
     "createdAt": "28.08.2026, 08:55:35",
     "acceptedAt": "28.08.2026, 08:55:51",
+    "completedAt": null,
+    "description": null,
+    "fileName": null,
+    "fileId": null,
+    "fileType": null,
+    "isCustomOrder": false
+  },
+  {
+    "orderNumber": 10007,
+    "id": "order_1787914363588_nnme7",
+    "workId": "MiUS_tasks_break",
+    "workTitle": "Задачи на торможение 🐌",
+    "subjectName": "МиУС 🚢",
+    "courseName": "4 курс 🗺",
+    "customerId": 1012758149,
+    "customerUsername": "pavelren",
+    "executorId": 7195122925,
+    "executorUsername": "SmartDealsManager",
+    "price": 1272,
+    "commission": 20,
+    "status": "active",
+    "createdAt": "28.08.2026, 13:52:42",
+    "acceptedAt": "28.08.2026, 13:53:21",
     "completedAt": null,
     "description": null,
     "fileName": null,

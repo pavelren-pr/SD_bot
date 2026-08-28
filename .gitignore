@@ -1,2 +1,6 @@
 .env
 logs/
+src/data/orders.json
+src/data/loyalty.json
+src/data/catalog.json
+node_modules/

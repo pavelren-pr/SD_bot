@@ -1273,34 +1273,79 @@ function register(bot) {
     // 📊 ЭКСПОРТ ДАННЫХ В EXCEL
     // ==========================================
     else if (action === 'export_excel') {
+      // Показываем меню выбора типа экспорта
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📊 Только заказы и лояльность', 'admin:export_orders_only')],
+        [Markup.button.callback('📋 С логами (все события)', 'admin:export_with_logs')],
+        [Markup.button.callback('🗑 Очистить логи', 'admin:clear_logs_confirm')],
+        [Markup.button.callback('⬅️ Назад', 'admin:main')]
+      ]);
+      await ctx.editMessageText(
+        '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
+        '• **Только заказы** — базовый экспорт (2 листа)\n' +
+        '• **С логами** — + взаимодействия, системные события, ошибки (до 5 листов)',
+        { parse_mode: 'Markdown', ...keyboard }
+      );
+    }
+    else if (action === 'export_orders_only') {
       try {
-        // Показываем пользователю, что бот "думает"
-        await ctx.answerCbQuery('⏳ Формирую таблицу, это может занять пару секунд...');
-        await ctx.replyWithChatAction('upload_document'); 
-        
-        // 🌟 Логируем экспорт
-        logger.logAdminAction('export_excel', {}, ctx);
-
-        // Генерируем файл в оперативной памяти (Buffer)
-        const excelBuffer = await generateExcelExport();
-        
-        // Формируем красивое имя файла с датой
+        await ctx.answerCbQuery('⏳ Формирую таблицу...');
+        await ctx.replyWithChatAction('upload_document');
+        const excelBuffer = await generateExcelExport(false);
+        logger.logAdminAction('export_excel_orders_only', {}, ctx);
         const today = new Date().toISOString().split('T')[0];
-        
-        // Отправляем документ в чат
         await ctx.replyWithDocument(
-          {
-            source: excelBuffer,
-            filename: `SD_Bot_Export_${today}.xlsx`
-          },
-          {
-            caption: '📊 *Экспорт базы данных*\n\n• Лист 1: Все заказы\n• Лист 2: Программа лояльности',
-            parse_mode: 'Markdown'
+          { source: excelBuffer, filename: `SD_Bot_Export_${today}.xlsx` },
+          { caption: '📊 *Экспорт базы данных*\n\n• Лист 1: Все заказы\n• Лист 2: Программа лояльности', parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('Ошибка при экспорте:', error);
+        await ctx.reply('❌ Произошла ошибка при формировании файла.');
+      }
+    }
+    else if (action === 'export_with_logs') {
+      try {
+        await ctx.answerCbQuery('⏳ Формирую таблицу с логами...');
+        await ctx.replyWithChatAction('upload_document');
+        const excelBuffer = await generateExcelExport(true);
+        logger.logAdminAction('export_excel_with_logs', {}, ctx);
+        const today = new Date().toISOString().split('T')[0];
+        await ctx.replyWithDocument(
+          { source: excelBuffer, filename: `SD_Bot_Full_Export_${today}.xlsx` },
+          { 
+            caption: '📊 *Полный экспорт с логами*\n\n' +
+                    '• Лист 1: Заказы\n' +
+                    '• Лист 2: Лояльность\n' +
+                    '• Лист 3: Взаимодействия пользователей\n' +
+                    '• Лист 4: Системные события\n' +
+                    '• Лист 5: Ошибки',
+            parse_mode: 'Markdown' 
           }
         );
       } catch (error) {
-        console.error('Ошибка при экспорте в Excel:', error);
-        await ctx.reply('❌ Произошла ошибка при формировании файла. Проверьте логи сервера.');
+        console.error('Ошибка при экспорте с логами:', error);
+        await ctx.reply('❌ Произошла ошибка при формировании файла.');
+      }
+    }
+    else if (action === 'clear_logs_confirm') {
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Да, очистить логи', 'admin:clear_logs_execute')],
+        [Markup.button.callback('❌ Отмена', 'admin:export_excel')]
+      ]);
+      await ctx.editMessageText(
+        '⚠️ *Подтверждение*\n\nВы уверены, что хотите очистить все логи?\n\nЭто действие необратимо!',
+        { parse_mode: 'Markdown', ...keyboard }
+      );
+    }
+    else if (action === 'clear_logs_execute') {
+      const success = logger.clearLogs();
+      logger.logAdminAction('clear_logs', { success }, ctx);
+      if (success) {
+        await ctx.answerCbQuery('✅ Логи очищены');
+        await ctx.editMessageText('✅ *Логи успешно очищены!*\n\nФайл логов теперь пуст.', { parse_mode: 'Markdown', ...getAdminMainMenu() });
+      } else {
+        await ctx.answerCbQuery('❌ Ошибка очистки');
+        await ctx.editMessageText('❌ Не удалось очистить логи.', { parse_mode: 'Markdown', ...getAdminMainMenu() });
       }
     }
 

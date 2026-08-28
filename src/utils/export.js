@@ -1,8 +1,16 @@
 const ExcelJS = require('exceljs');
 const ordersDb = require('../data/orders');
 const loyalty = require('../data/loyalty');
+const logger = require('./logger');
 
-async function generateExcelExport() {
+// 🌟 Функция удаления эмодзи из строк
+function removeEmojis(str) {
+  if (!str) return str;
+  // Удаляем эмодзи из Unicode диапазонов, оставляя текст и спецсимволы
+  return str.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{20E3}\u{FE0F}\u{231A}-\u{231B}\u{2328}\u{23CF}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}\u{25AA}-\u{25AB}\u{25B6}\u{25C0}\u{25FB}-\u{25FE}]/gu, '').trim();
+}
+
+async function generateExcelExport(includeLogs = false) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'SD Bot Admin';
   workbook.created = new Date();
@@ -12,7 +20,6 @@ async function generateExcelExport() {
   // ==========================================
   const ordersSheet = workbook.addWorksheet('Заказы');
   
-  // Настраиваем колонки
   ordersSheet.columns = [
     { header: '№ Заказа', key: 'orderNumber', width: 12 },
     { header: 'ID Клиента', key: 'customerId', width: 15 },
@@ -25,13 +32,17 @@ async function generateExcelExport() {
     { header: 'Комментарий', key: 'description', width: 40 },
   ];
 
-  // Стилизуем заголовки
   ordersSheet.getRow(1).font = { bold: true };
   ordersSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
 
-  // Получаем заказы (фильтруем метаданные _meta, если они есть)
   const allOrders = ordersDb.getAllOrders().filter(o => !o._meta);
-  ordersSheet.addRows(allOrders);
+  // 🌟 Очищаем эмодзи из названий работ и предметов
+  const cleanedOrders = allOrders.map(order => ({
+    ...order,
+    workTitle: removeEmojis(order.workTitle),
+    subjectName: removeEmojis(order.subjectName)
+  }));
+  ordersSheet.addRows(cleanedOrders);
 
   // ==========================================
   // ЛИСТ 2: ПРОГРАММА ЛОЯЛЬНОСТИ
@@ -50,26 +61,156 @@ async function generateExcelExport() {
   loyaltySheet.getRow(1).font = { bold: true };
   loyaltySheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
 
-  // Читаем "сырые" данные из loyalty.json (там объект, где ключи - это ID)
   const rawLoyaltyData = loyalty.loadData();
   
   const loyaltyRows = [];
   for (const userId in rawLoyaltyData) {
-    // Используем ваш же метод getLoyaltyInfo, чтобы правильно вычислить ранг и скидки
     const info = loyalty.getLoyaltyInfo(userId);
     loyaltyRows.push({
       id: userId,
       username: rawLoyaltyData[userId].username || 'не указан',
       totalSpent: info.totalSpent,
-      rankName: info.rank.emoji + ' ' + info.rank.name,
+      rankName: removeEmojis(info.rank.emoji + ' ' + info.rank.name),
       discount: info.discountPercent,
-      access: info.hasFullAccess ? '🔱 Посейдон (Админ)' : (info.hasExecutorAccess ? '🔥 Прометей (Исполнитель)' : 'Клиент')
+      access: info.hasFullAccess ? 'Посейдон (Админ)' : (info.hasExecutorAccess ? 'Прометей (Исполнитель)' : 'Клиент')
     });
   }
   
   loyaltySheet.addRows(loyaltyRows);
 
-  // Возвращаем файл в виде Buffer (без сохранения на диск!)
+  // ==========================================
+  // ЛИСТ 3-5: ЛОГИ (только если includeLogs = true)
+  // ==========================================
+  if (includeLogs) {
+    const logs = logger.readAllLogs();
+    
+    // Разделяем логи по типам
+    const userInteractions = [];
+    const systemEvents = [];
+    const errors = [];
+
+    logs.forEach(log => {
+      if (log.type === 'error') {
+        errors.push(log);
+        // Если есть userId — добавляем также в userInteractions
+        if (log.userId) {
+          userInteractions.push(log);
+        } else {
+          systemEvents.push(log);
+        }
+      } else if (log.userId) {
+        userInteractions.push(log);
+      } else {
+        systemEvents.push(log);
+      }
+    });
+
+    // ЛИСТ 3: ВЗАИМОДЕЙСТВИЯ ПОЛЬЗОВАТЕЛЕЙ
+    if (userInteractions.length > 0) {
+      const userSheet = workbook.addWorksheet('Взаимодействия');
+      userSheet.columns = [
+        { header: 'Дата/Время', key: 'timestamp', width: 25 },
+        { header: 'Тип', key: 'type', width: 18 },
+        { header: 'Действие', key: 'action', width: 20 },
+        { header: 'User ID', key: 'userId', width: 15 },
+        { header: 'Username', key: 'username', width: 20 },
+        { header: 'Имя', key: 'firstName', width: 20 },
+        { header: 'Chat ID', key: 'chatId', width: 15 },
+        { header: 'Тип чата', key: 'chatType', width: 12 },
+        { header: 'Тип контента', key: 'contentType', width: 15 },
+        { header: 'Контент', key: 'content', width: 50 },
+        { header: 'Файл', key: 'fileName', width: 30 },
+        { header: 'Callback', key: 'callbackData', width: 40 },
+        { header: '№ Заказа', key: 'orderNumber', width: 12 },
+        { header: 'Работа', key: 'workTitle', width: 30 },
+        { header: 'Цена (₽)', key: 'price', width: 10 },
+        { header: 'Статус', key: 'status', width: 15 },
+        { header: 'Детали', key: 'details', width: 50 },
+      ];
+
+      userSheet.getRow(1).font = { bold: true };
+      userSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
+
+      userInteractions.forEach(log => {
+        userSheet.addRow({
+          timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
+          type: log.type || '',
+          action: log.action || '',
+          userId: log.userId || '',
+          username: log.username || '',
+          firstName: log.firstName || '',
+          chatId: log.chatId || '',
+          chatType: log.chatType || '',
+          contentType: log.contentType || '',
+          content: log.content || '',
+          fileName: log.fileName || '',
+          callbackData: log.callbackData || '',
+          orderNumber: log.orderNumber || '',
+          workTitle: removeEmojis(log.workTitle || ''), // 🌟 Очищаем только название работы
+          price: log.price || '',
+          status: log.status || '',
+          details: log.details ? JSON.stringify(log.details).substring(0, 100) : '',
+        });
+      });
+    }
+
+    // ЛИСТ 4: СИСТЕМНЫЕ СОБЫТИЯ
+    if (systemEvents.length > 0) {
+      const systemSheet = workbook.addWorksheet('Системные события');
+      systemSheet.columns = [
+        { header: 'Дата/Время', key: 'timestamp', width: 25 },
+        { header: 'Тип', key: 'type', width: 15 },
+        { header: 'Действие', key: 'action', width: 25 },
+        { header: 'Детали', key: 'details', width: 60 },
+      ];
+
+      systemSheet.getRow(1).font = { bold: true };
+      systemSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
+
+      systemEvents.forEach(log => {
+        systemSheet.addRow({
+          timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
+          type: log.type || '',
+          action: log.action || '',
+          details: log.details ? JSON.stringify(log.details) : '',
+        });
+      });
+    }
+
+    // ЛИСТ 5: ОШИБКИ
+    if (errors.length > 0) {
+      const errorSheet = workbook.addWorksheet('Ошибки');
+      errorSheet.columns = [
+        { header: 'Дата/Время', key: 'timestamp', width: 25 },
+        { header: 'Сообщение', key: 'errorMessage', width: 50 },
+        { header: 'Код', key: 'errorCode', width: 15 },
+        { header: 'User ID', key: 'userId', width: 15 },
+        { header: 'Username', key: 'username', width: 20 },
+        { header: 'Chat ID', key: 'chatId', width: 15 },
+        { header: 'Callback', key: 'callbackData', width: 40 },
+        { header: 'Текст сообщения', key: 'messageText', width: 50 },
+        { header: 'Стек (первые 5 строк)', key: 'errorStack', width: 60 },
+      ];
+
+      errorSheet.getRow(1).font = { bold: true };
+      errorSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFFCCCC'} };
+
+      errors.forEach(log => {
+        errorSheet.addRow({
+          timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
+          errorMessage: log.errorMessage || '',
+          errorCode: log.errorCode || '',
+          userId: log.userId || '',
+          username: log.username || '',
+          chatId: log.chatId || '',
+          callbackData: log.callbackData || '',
+          messageText: log.messageText || '',
+          errorStack: log.errorStack || '',
+        });
+      });
+    }
+  }
+
   return await workbook.xlsx.writeBuffer();
 }
 

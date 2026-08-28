@@ -198,6 +198,42 @@ function logSystemEvent(action, details) {
   });
 }
 
+/**
+ * Читает все события из лог-файла
+ */
+function readAllLogs() {
+  try {
+    if (!fs.existsSync(LOG_FILE)) {
+      return [];
+    }
+    const content = fs.readFileSync(LOG_FILE, 'utf8');
+    const lines = content.split('\n').filter(line => line.trim());
+    return lines.map(line => {
+      try {
+        return JSON.parse(line);
+      } catch (e) {
+        return null;
+      }
+    }).filter(Boolean);
+  } catch (err) {
+    console.error('❌ Ошибка чтения логов:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Очищает лог-файл (создаёт новый пустой)
+ */
+function clearLogs() {
+  try {
+    fs.writeFileSync(LOG_FILE, '', 'utf8');
+    return true;
+  } catch (err) {
+    console.error('❌ Ошибка очистки логов:', err.message);
+    return false;
+  }
+}
+
 module.exports = {
   logEvent,
   logMessage,
@@ -207,5 +243,7 @@ module.exports = {
   logChatMessage,
   logAdminAction,
   logSystemEvent,
+  readAllLogs,
+  clearLogs,
   LOG_FILE
 };
