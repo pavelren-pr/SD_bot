@@ -373,7 +373,16 @@ function register(bot) {
     if (state.startsWith('add_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_work_needs:${state.split(':')[1]}`;
-      await ctx.reply('📎 *Шаг 7/9: Требования через запятую (photo, details, variant) или "нет":*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(
+        '📎 *Шаг 7/9: Требования к заказу*\n\n' +
+        'Отправьте через запятую или напишите "нет":\n\n' +
+        '• `photo`\n' +
+        '• `details`\n' +
+        '• `variant`\n' +
+        '• `details, photo`\n\n' +
+        'Введите требования:',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      ); return;
     }
     if (state.startsWith('add_work_needs:')) {
       ctx.session.tempWorkData.needs = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
