@@ -9,6 +9,48 @@ const { generateExcelExport } = require('../utils/export');
 const logger = require('../utils/logger');
 const { assignExecutorToOrder, unassignExecutorFromOrder } = require('./order');
 
+// 🌟 Получение доступных переменных окружения из .env
+function getAvailableEnvVars() {
+  const chatVars = [];
+  const paymentVars = [];
+  
+  for (const [key, value] of Object.entries(process.env)) {
+    // Переменные чатов (заканчиваются на CHAT_ID или CHAT)
+    if (key.endsWith('_CHAT_ID') || key.endsWith('_CHAT')) {
+      chatVars.push({ name: key, value: value || 'не задано' });
+    }
+    // Переменные оплаты (заканчиваются на NUMBER, NUMB, CARD)
+    if (key.endsWith('_NUMBER') || key.endsWith('_NUMB') || key.endsWith('_CARD')) {
+      paymentVars.push({ name: key }); // 🌟 Значения карт НЕ показываем для безопасности
+    }
+  }
+  
+  return { chatVars, paymentVars };
+}
+
+// 🌟 Форматирование списка переменных для вывода
+function formatEnvVarsList(vars, type) {
+  if (vars.length === 0) {
+    return `_⚠️ Переменные не найдены в .env_\n\n`;
+  }
+  
+  let text = type === 'chat' 
+    ? `💬 *Доступные переменные чатов:*\n` 
+    : `💳 *Доступные переменные оплаты:*\n`;
+  
+  vars.forEach(v => {
+    if (type === 'chat') {
+      // Для чатов показываем имя и значение (чтобы понимать, какая группа)
+      text += `• \`${v.name}\` — ID: ${v.value}\n`;
+    } else {
+      // Для оплаты показываем только имя (без номера карты!)
+      text += `• \`${v.name}\`\n`;
+    }
+  });
+  
+  return text;
+}
+
 // 🌟 Экранирование спецсимволов Markdown
 function escapeMarkdown(text) {
   if (!text) return '';
@@ -39,7 +81,7 @@ function getAdminMainMenu() {
     [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
     [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
     [Markup.button.callback('🏅 Назначить исполнителя/админа', 'admin:set_user_rank')],
-    [Markup.button.callback('📊 Экспорт в Excel', 'admin:export_excel')],
+    [Markup.button.callback('📊 Экспорт данных', 'admin:export_excel')],
     [Markup.button.callback('🔙 Назад', 'profile:back')]
   ]);
 }
@@ -252,12 +294,26 @@ function register(bot) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_custom_work_chatEnv:${state.split(':')[1]}`;
-      await ctx.reply('💬 *Шаг 4/7: Имя переменной окружения для чата исполнителей:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      
+      // 🌟 Показываем доступные переменные чатов
+      const envVars = getAvailableEnvVars();
+      let message = '💬 *Шаг 4/7: Имя переменной окружения для чата исполнителей*\n\n';
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
+      
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_chatEnv:')) {
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_custom_work_paymentEnv:${state.split(':')[1]}`;
-      await ctx.reply('💳 *Шаг 5/7: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      
+      // 🌟 Показываем доступные переменные оплаты
+      const envVars = getAvailableEnvVars();
+      let message = '💳 *Шаг 5/7: Имя переменной окружения для оплаты*\n\n';
+      message += formatEnvVarsList(envVars.paymentVars, 'payment');
+      message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
+      
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
@@ -293,12 +349,26 @@ function register(bot) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_work_chatEnv:${state.split(':')[1]}`;
-      await ctx.reply('💬 *Шаг 5/9: Имя переменной окружения для чата:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      
+      // 🌟 Показываем доступные переменные чатов
+      const envVars = getAvailableEnvVars();
+      let message = '💬 *Шаг 5/9: Имя переменной окружения для чата*\n\n';
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
+      
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_chatEnv:')) {
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_work_paymentEnv:${state.split(':')[1]}`;
-      await ctx.reply('💳 *Шаг 6/9: Имя переменной окружения для оплаты:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      
+      // 🌟 Показываем доступные переменные оплаты
+      const envVars = getAvailableEnvVars();
+      let message = '💳 *Шаг 6/9: Имя переменной окружения для оплаты*\n\n';
+      message += formatEnvVarsList(envVars.paymentVars, 'payment');
+      message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
+      
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
@@ -849,9 +919,23 @@ function register(bot) {
       else if (field === 'price') oldValue = `${oldValue} ₽`;
       else if (field === 'commission') oldValue = `${oldValue}%`;
       else if (!oldValue) oldValue = 'не указано';
-
       ctx.session.adminState = `edit_work_input:${workId}:${field}`;
-      await ctx.editMessageText(`✏️ *Введите новое значение для поля "${field}":*\n\n📌 *Текущее:* \`${oldValue}\``, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:edit_work:${workId}`)]]) });
+      
+      // 🌟 Базовое сообщение
+      let message = `✏️ *Введите новое значение для поля "${field}":*\n\n📌 *Текущее:* \`${oldValue}\`\n\n`;
+      
+      // 🌟 Для переменных окружения показываем список доступных
+      if (field === 'chatEnv') {
+        const envVars = getAvailableEnvVars();
+        message += formatEnvVarsList(envVars.chatVars, 'chat');
+        message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
+      } else if (field === 'paymentEnv') {
+        const envVars = getAvailableEnvVars();
+        message += formatEnvVarsList(envVars.paymentVars, 'payment');
+        message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
+      }
+      
+      await ctx.editMessageText(message, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:edit_work:${workId}`)]]) });
     }
 
     // --- КАТАЛОГ: Удаление ---
@@ -1292,17 +1376,18 @@ function register(bot) {
     // 📊 ЭКСПОРТ ДАННЫХ В EXCEL
     // ==========================================
     else if (action === 'export_excel') {
-      // Показываем меню выбора типа экспорта
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('📊 Только заказы и лояльность', 'admin:export_orders_only')],
         [Markup.button.callback('📋 С логами (все события)', 'admin:export_with_logs')],
+        [Markup.button.callback('📁 Экспорт файлов БД', 'admin:export_db_files')],
         [Markup.button.callback('🗑 Очистить логи', 'admin:clear_logs_confirm')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
       await ctx.editMessageText(
         '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
         '• **Только заказы** — базовый экспорт (2 листа)\n' +
-        '• **С логами** — + взаимодействия, системные события, ошибки (до 5 листов)',
+        '• **С логами** — + взаимодействия, системные события, ошибки (до 5 листов)\n' +
+        '• **Экспорт файлов БД** — отправка orders.json, loyalty.json и catalog.json в группу бэкапов',
         { parse_mode: 'Markdown', ...keyboard }
       );
     }
@@ -1344,6 +1429,77 @@ function register(bot) {
       } catch (error) {
         console.error('Ошибка при экспорте с логами:', error);
         await ctx.reply('❌ Произошла ошибка при формировании файла.');
+      }
+    }
+    // ==========================================
+    // 📁 РУЧНОЙ ЭКСПОРТ ФАЙЛОВ БД В ГРУППУ БЭКАПОВ
+    // ==========================================
+    else if (action === 'export_db_files') {
+      try {
+        await ctx.answerCbQuery('⏳ Отправляю файлы БД...');
+
+        const backupChatId = process.env.BACKUP_CHAT_ID;
+        if (!backupChatId) {
+          await ctx.reply('❌ Переменная окружения `BACKUP_CHAT_ID` не настроена в .env файле.');
+          return;
+        }
+
+        await ctx.replyWithChatAction('upload_document');
+
+        const dataDir = path.join(__dirname, '../data');
+        const files = [
+          { name: 'orders.json', path: path.join(dataDir, 'orders.json') },
+          { name: 'loyalty.json', path: path.join(dataDir, 'loyalty.json') },
+          { name: 'catalog.json', path: path.join(dataDir, 'catalog.json') },
+        ];
+
+        // Заголовок с информацией, кто запросил бэкап
+        const requester = ctx.from.username ? `@${ctx.from.username}` : `ID: ${ctx.from.id}`;
+        await ctx.telegram.sendMessage(
+          backupChatId,
+          `📦 *Ручной экспорт файлов БД*\n📅 ${new Date().toLocaleString('ru-RU')}\n👤 *Запрошен:* ${requester}`,
+          { parse_mode: 'Markdown' }
+        );
+
+        let sentCount = 0;
+        const missingFiles = [];
+
+        for (const file of files) {
+          if (fs.existsSync(file.path)) {
+            const stats = fs.statSync(file.path);
+            const sizeKB = (stats.size / 1024).toFixed(1);
+
+            await ctx.telegram.sendDocument(backupChatId, {
+              source: fs.createReadStream(file.path),
+              filename: file.name
+            }, {
+              caption: `📄 ${file.name} (${sizeKB} КБ)`
+            });
+            sentCount++;
+          } else {
+            missingFiles.push(file.name);
+          }
+        }
+
+        // Логируем действие админа
+        logger.logAdminAction('export_db_files', { 
+          sentCount, 
+          totalFiles: files.length,
+          missingFiles 
+        }, ctx);
+
+        let resultMessage = `✅ *Экспорт файлов БД завершён!*\n\n`;
+        resultMessage += `📁 Отправлено файлов: *${sentCount}* из ${files.length}\n`;
+        resultMessage += `📍 Файлы отправлены в группу бэкапов.`;
+        if (missingFiles.length > 0) {
+          resultMessage += `\n\n⚠️ Не найдены файлы: ${missingFiles.join(', ')}`;
+        }
+
+        await ctx.reply(resultMessage, { parse_mode: 'Markdown' });
+      } catch (error) {
+        console.error('Ошибка при экспорте файлов БД:', error);
+        logger.logError(error, ctx);
+        await ctx.reply(`❌ Произошла ошибка при экспорте файлов БД: ${error.message}`);
       }
     }
     else if (action === 'clear_logs_confirm') {
