@@ -7,17 +7,21 @@ const Drive1yearLink = 'https://drive.google.com/drive/folders/1nAbmEz2CvQAzk2yZ
 const Drive2yearLink = 'https://drive.google.com/drive/folders/1GtQEJQESq0OVhOGmWE3zo94PfScD3ypk?usp=sharing';
 const Drive3yearLink = 'https://drive.google.com/drive/folders/1pU-uhO03bL6IJq9Js6f-DtaomNwPd90t?usp=sharing';
 const Drive4yearLink = 'https://drive.google.com/drive/folders/1ImX8bRsg1OFrsIY0LmuYjecOfuu2U4N_?usp=sharing';
+const Drive5yearLink = 'https://drive.google.com/drive/folders/1TXK4H3cNm83vGpiynEf3VpEzI4vzmOnr?usp=drive_link';
+const Drive6yearLink = 'https://drive.google.com/drive/folders/126K1UUNbxK7Zy2PbRUQyHylEaqZR39EW?usp=drive_link';
 const DrivePractice = 'https://drive.google.com/drive/folders/1lNX7F6AUTA7SSIhwhLlQebDFvGnAJT-E?usp=sharing';
 
 function register(bot) {
   // Главное меню сокровищницы
   bot.action('treasure:main', async (ctx) => {
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('1 курс ⭐️', 'treasure:1')],
-      [Markup.button.callback('2 курс ⭐️⭐️', 'treasure:2')],
-      [Markup.button.callback('3 курс ⭐️⭐️⭐️', 'treasure:3')],
-      [Markup.button.callback('4 курс ⭐️⭐️⭐️⭐️', 'treasure:4')],
-      [Markup.button.callback('Практика 🚢', 'treasure:prac')],
+      [Markup.button.callback('1 курс 🌊', 'treasure:1')],
+      [Markup.button.callback('2 курс ⚓️', 'treasure:2')],
+      [Markup.button.callback('3 курс 🧭', 'treasure:3')],
+      [Markup.button.callback('4 курс 🗺', 'treasure:4')],
+      [Markup.button.callback('5 курс 🚢', 'treasure:5')],
+      [Markup.button.callback('6 курс 🎓', 'treasure:6')],
+      [Markup.button.callback('Практика 🏴‍☠️', 'treasure:prac')],
       [Markup.button.callback('🥂 Предложить работу 🥂', 'treasure:offer')]
     ]);
 
@@ -44,31 +48,43 @@ function register(bot) {
 
   // 🌟 Обработчики подразделов с ИСПРАВЛЕННОЙ передачей клавиатуры
   bot.action('treasure:1', async (ctx) => {
-    const data = createTreasureMessage('1 курс ⭐️', Drive1yearLink);
+    const data = createTreasureMessage('1 курс 🌊', Drive1yearLink);
     await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:2', async (ctx) => {
-    const data = createTreasureMessage('2 курс ⭐️⭐️', Drive2yearLink);
+    const data = createTreasureMessage('2 курс ⚓️', Drive2yearLink);
     await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:3', async (ctx) => {
-    const data = createTreasureMessage('3 курс ️⭐️⭐️', Drive3yearLink);
+    const data = createTreasureMessage('3 курс ️🧭', Drive3yearLink);
     await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); //  Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:4', async (ctx) => {
-    const data = createTreasureMessage('4 курс ⭐️⭐️⭐️⭐️', Drive4yearLink);
+    const data = createTreasureMessage('4 курс 🗺', Drive4yearLink);
+    await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
+    await ctx.answerCbQuery();
+  });
+
+  bot.action('treasure:5', async (ctx) => {
+    const data = createTreasureMessage('5 курс 🚢', Drive5yearLink);
+    await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
+    await ctx.answerCbQuery();
+  });
+
+  bot.action('treasure:6', async (ctx) => {
+    const data = createTreasureMessage('6 курс 🎓', Drive6yearLink);
     await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
 
   bot.action('treasure:prac', async (ctx) => {
-    const data = createTreasureMessage('Практика 🚢', DrivePractice);
+    const data = createTreasureMessage('Практика 🏴‍☠️', DrivePractice);
     await ctx.editMessageText(data.text, { parse_mode: 'HTML', ...data.keyboard }); // 🌟 Распаковка
     await ctx.answerCbQuery();
   });
