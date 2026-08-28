@@ -58,11 +58,13 @@ function register(bot) {
   // 🌟 Сокровищница — с правильным синтаксисом клавиатуры
     bot.hears('🏴‍☠️ Морская Сокровищница', async (ctx) => {
     const treasureKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('1 курс ⭐️', 'treasure:1')],
-      [Markup.button.callback('2 курс ⭐️⭐️', 'treasure:2')],
-      [Markup.button.callback('3 курс ⭐️⭐️⭐️', 'treasure:3')],
-      [Markup.button.callback('4 курс ⭐️⭐️⭐️⭐️', 'treasure:4')],
-      [Markup.button.callback('Практика 🚢', 'treasure:prac')],
+      [Markup.button.callback('1 курс 🌊', 'treasure:1')],
+      [Markup.button.callback('2 курс ⚓️', 'treasure:2')],
+      [Markup.button.callback('3 курс 🧭', 'treasure:3')],
+      [Markup.button.callback('4 курс 🗺', 'treasure:4')],
+      [Markup.button.callback('5 курс 🚢', 'treasure:5')],
+      [Markup.button.callback('6 курс 🎓', 'treasure:6')],
+      [Markup.button.callback('Практика 🏴‍☠️', 'treasure:prac')],
       [Markup.button.callback('🥂 Предложить работу 🥂', 'treasure:offer')]
     ]);
     
