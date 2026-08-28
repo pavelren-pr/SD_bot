@@ -5,7 +5,7 @@ const { logMessage, logButton, logError } = require('./utils/logger');
 
 // 🌟 Прокси для обхода блокировки Telegram на VDS
 // Используем публичный HTTPS прокси
-const PROXY_URL = 'http://proxy.telegram-free.workers.dev:80';
+const PROXY_URL = 'https://tg-proxy.pavelren-pr.workers.dev';
 
 const telegramOptions = {};
 try {
