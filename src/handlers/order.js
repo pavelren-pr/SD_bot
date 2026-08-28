@@ -3,6 +3,7 @@ const loyalty = require('../data/loyalty');
 const orders = require('../data/orders');
 const ordersDb = require('../data/orders');
 const { createInlineKeyboard } = require('../utils/keyboard');
+const logger = require('../utils/logger');
 const { Markup } = require('telegraf');
 
 const mediaBuffer = {};
@@ -441,6 +442,9 @@ function register(bot) {
         });
         
         ctx.session.currentOrderId = newOrder.id;
+
+        // 🌟 Логируем создание заказа
+        logger.logOrderEvent('created', newOrder, ctx.from.id, ctx.from.username);
         
         let updatedOrderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
         updatedOrderText += `🆔 *Номер заказа:* №${newOrder.orderNumber}\n`;
@@ -717,6 +721,16 @@ const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
       { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) }
     );
     
+    // 🌟 Логируем принятие заказа
+    logger.logOrderEvent('accepted', {
+      orderNumber: orderNumber,
+      orderId: activeOrder ? activeOrder.id : null,
+      workTitle: work.title,
+      status: 'active',
+      executorId: executorUserId,
+      customerId: customerUserId
+    }, executorUserId, ctx.from.username);
+
     await ctx.answerCbQuery('✅ Заказ принят');
   });
 
@@ -735,11 +749,26 @@ const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
 
     await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Заказ выполнен!*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    
+    // 🌟 Логируем завершение заказа
+    logger.logOrderEvent('completed', {
+      orderNumber: chatData.orderNumber,
+      orderId: chatData.orderId,
+      workTitle: chatData.workTitle,
+      status: 'completed',
+      executorId: chatData.executorUserId,
+      customerId: chatData.customerUserId
+    }, ctx.from.id, ctx.from.username);
+    
     await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
   });
 
   async function handleExecutorMessage(ctx, chatData) {
     const { customerUserId, workTitle, chatId, executorUserId } = chatData;
+    
+    // 🌟 Логируем сообщение в чате
+    logger.logChatMessage(chatData, 'executor', ctx);
+    
     const messageText = ctx.message.text || '[Фото/Файл]';
     await ctx.telegram.sendMessage(customerUserId, `💬 *Вам сообщение от исполнителя*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`, { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) });
     if (ctx.message.photo) await ctx.telegram.sendPhoto(customerUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
@@ -750,6 +779,10 @@ const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
 
   async function handleCustomerMessage(ctx, chatData) {
     const { executorUserId, workTitle, chatId, customerUserId } = chatData;
+    
+    // 🌟 Логируем сообщение в чате
+    logger.logChatMessage(chatData, 'customer', ctx);
+ 
     const messageText = ctx.message.text || '[Фото/Файл]';
     
     // 🌟 Создаём клавиатуру отдельно

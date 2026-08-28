@@ -1,5 +1,6 @@
 require('dotenv').config();
 const bot = require('./bot');
+const { logSystemEvent } = require('./utils/logger');
 
 // 🌟 1. Сначала регистрируем меню и команды (чтобы они перехватывали /start первыми)
 const menu = require('./handlers/menu');
@@ -24,6 +25,26 @@ treasure.register(bot);
 // Запуск бота
 bot.launch();
 console.log('✅ Бот успешно запущен!');
+logSystemEvent('bot_started', { pid: process.pid });
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => {
+  logSystemEvent('bot_stopped', { signal: 'SIGINT' });
+  bot.stop('SIGINT');
+});
+
+process.once('SIGTERM', () => {
+  logSystemEvent('bot_stopped', { signal: 'SIGTERM' });
+  bot.stop('SIGTERM');
+});
+
+// 🌟 Логируем необработанные исключения (критические ошибки)
+process.on('uncaughtException', (err) => {
+  logSystemEvent('uncaught_exception', { message: err.message, stack: err.stack });
+  console.error('💥 Необработанное исключение:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logSystemEvent('unhandled_rejection', { reason: String(reason) });
+  console.error('💥 Необработанный промис:', reason);
+});

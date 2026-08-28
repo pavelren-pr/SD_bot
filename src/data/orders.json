@@ -1,7 +1,7 @@
 [
   {
     "_meta": {
-      "nextOrderNumber": 10006
+      "nextOrderNumber": 10007
     }
   },
   {
@@ -89,6 +89,29 @@
     "status": "active",
     "createdAt": "26.08.2026, 16:35:40",
     "acceptedAt": "26.08.2026, 16:38:40",
+    "completedAt": null,
+    "description": null,
+    "fileName": null,
+    "fileId": null,
+    "fileType": null,
+    "isCustomOrder": false
+  },
+  {
+    "orderNumber": 10006,
+    "id": "order_1787896536666_b8e5w",
+    "workId": "Astro_kr2",
+    "workTitle": "Помощь на контрольной по МАЕ (Килнас) 🔭",
+    "subjectName": "Астрономия 🌌",
+    "courseName": "4 курс 🗺",
+    "customerId": 1012758149,
+    "customerUsername": "pavelren",
+    "executorId": 7195122925,
+    "executorUsername": "SmartDealsManager",
+    "price": 1352,
+    "commission": 20,
+    "status": "active",
+    "createdAt": "28.08.2026, 08:55:35",
+    "acceptedAt": "28.08.2026, 08:55:51",
     "completedAt": null,
     "description": null,
     "fileName": null,

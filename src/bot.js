@@ -1,6 +1,7 @@
 require('dotenv').config(); // Убедитесь, что .env подгружается здесь
 const { Telegraf, session } = require('telegraf');
 const { HttpsProxyAgent } = require('https-proxy-agent');
+const { logMessage, logButton, logError } = require('./utils/logger');
 
 // 🌟 Создаем агент, который будет перенаправлять трафик в v2rayN (порт 10808)
 const proxyAgent = new HttpsProxyAgent('http://127.0.0.1:10808');
@@ -18,9 +19,33 @@ bot.telegram.deleteWebhook({ drop_pending_updates: true })
   .then(() => console.log('🧹 Старые подключения очищены'))
   .catch(err => console.warn('Не удалось очистить webhook:', err.message));
 
-// 🌟 Глобальный обработчик ошибок
+// 🌟 Middleware: логируем все входящие сообщения
+bot.use((ctx, next) => {
+  if (ctx.message) {
+    logMessage(ctx);
+  }
+  return next();
+});
+
+// 🌟 Middleware: логируем все нажатия кнопок
+bot.use((ctx, next) => {
+  if (ctx.callbackQuery) {
+    logButton(ctx);
+  }
+  return next();
+});
+
+bot.telegram.deleteWebhook({ drop_pending_updates: true })
+  .then(() => console.log('🧹 Старые подключения очищены'))
+  .catch(err => console.warn('Не удалось очистить webhook:', err.message));
+
+// 🌟 Глобальный обработчик ошибок (с логированием)
 bot.catch((err, ctx) => {
   console.error('❌ Глобальная ошибка:', err);
+  
+  // Записываем ошибку в лог
+  logError(err, ctx);
+  
   if (ctx && ctx.reply) {
     ctx.reply(
       '⚙️ Технические работы\n\n' +
@@ -33,5 +58,6 @@ bot.catch((err, ctx) => {
     });
   }
 });
+
 
 module.exports = bot;

@@ -1,11 +1,12 @@
 const catalog = require('../data/catalog');
 const loyalty = require('../data/loyalty');
 const ordersDb = require('../data/orders');
-const { formatOrderCard } = require('./menu'); // Импортируем функцию форматирования карточки
+const { formatOrderCard } = require('./menu');
 const { Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
 const { generateExcelExport } = require('../utils/export');
+const logger = require('../utils/logger');
 const { assignExecutorToOrder, unassignExecutorFromOrder } = require('./order');
 
 // 🌟 Экранирование спецсимволов Markdown
@@ -323,6 +324,14 @@ function register(bot) {
       const works = catalog.getData().works;
       works.push(ctx.session.tempWorkData);
       catalog.saveData({ ...catalog.getData(), works });
+
+      // 🌟 Логируем добавление работы
+      logger.logAdminAction('catalog_work_added', {
+        workId: ctx.session.tempWorkData.id,
+        title: ctx.session.tempWorkData.title,
+        price: ctx.session.tempWorkData.price
+      }, ctx);
+
       await ctx.reply(`✅ *Работа добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`, { parse_mode: 'Markdown', ...getSubjectWorks(subjectId) });
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -384,6 +393,13 @@ function register(bot) {
       }
       loyaltyData[customerId].totalSpent = newAmount;
       loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем изменение суммы выкупа
+      logger.logAdminAction('customer_spent_changed', {
+        customerId: customerId,
+        newAmount: newAmount
+      }, ctx);
+
       await ctx.reply(
         `✅ Сумма выкупа для заказчика ${customerId} изменена на ${newAmount} ₽`,
         { parse_mode: 'Markdown', ...getAdminMainMenu() }
@@ -407,6 +423,13 @@ function register(bot) {
       if (!loyaltyData[userId]) loyaltyData[userId] = { username: '', totalSpent: 0 };
       loyaltyData[userId].rank = rankName;
       loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем назначение ранга
+      logger.logAdminAction('rank_assigned', {
+        targetUserId: userId,
+        rankName: rankName
+      }, ctx);
+
       const rankEmoji = rankName === 'Посейдон' ? '👑' : '🔥';
       await ctx.reply(`${rankEmoji} Ранг пользователя \`${userId}\` изменён на "${rankName}"`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) });
       ctx.session.adminState = null; ctx.session.tempRankUserId = null; return;
@@ -877,6 +900,13 @@ function register(bot) {
       const data = catalog.getData();
       data.works = data.works.filter(w => w.id !== workId);
       catalog.saveData(data);
+
+      // 🌟 Логируем удаление работы
+      logger.logAdminAction('catalog_work_deleted', {
+        workId: workId,
+        title: work.title
+      }, ctx);
+
       await ctx.editMessageText(`✅ Работа удалена!`, { parse_mode: 'Markdown', ...getSubjectWorks(work.subjectId) });
     }
 
@@ -1066,6 +1096,15 @@ function register(bot) {
         if (newStatus === 'active' && !order.acceptedAt) updates.acceptedAt = new Date().toLocaleString('ru-RU');
         if (newStatus === 'completed' && !order.completedAt) updates.completedAt = new Date().toLocaleString('ru-RU');
         ordersDb.updateOrder(orderId, updates);
+
+        // 🌟 Логируем смену статуса
+        logger.logAdminAction('order_status_change', {
+          orderId: orderId,
+          orderNumber: order.orderNumber,
+          workTitle: order.workTitle,
+          oldStatus: order.status,
+          newStatus: newStatus
+        }, ctx);
       }
       
       await ctx.answerCbQuery('✅ Статус изменён');
@@ -1112,6 +1151,14 @@ function register(bot) {
     else if (action.startsWith('order_delete_confirm:')) {
       const orderId = action.split(':')[1];
       ordersDb.deleteOrder(orderId);
+
+      // 🌟 Логируем удаление заказа
+      logger.logAdminAction('order_deleted', {
+        orderId: orderId,
+        orderNumber: order.orderNumber,
+        workTitle: order.workTitle
+      }, ctx);
+
       await ctx.answerCbQuery('✅ Заказ удалён');
       
       const all = ordersDb.getAllOrders();
@@ -1231,6 +1278,9 @@ function register(bot) {
         await ctx.answerCbQuery('⏳ Формирую таблицу, это может занять пару секунд...');
         await ctx.replyWithChatAction('upload_document'); 
         
+        // 🌟 Логируем экспорт
+        logger.logAdminAction('export_excel', {}, ctx);
+
         // Генерируем файл в оперативной памяти (Buffer)
         const excelBuffer = await generateExcelExport();
         
@@ -1364,7 +1414,7 @@ function register(bot) {
       
       loyaltyData[userId].rank = 'Прометей';
       loyalty.saveData(loyaltyData);
-      
+
       await ctx.answerCbQuery('✅ Ранг понижен до Прометей');
       
       let text = `👤 *Пользователь:* \`${userId}\`\n`;
