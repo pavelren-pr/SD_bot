@@ -1388,6 +1388,7 @@ function register(bot) {
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('📊 Экспорт заказов и скидок', 'admin:export_orders')],
         [Markup.button.callback('📋 Экспорт логов', 'admin:export_logs')],
+        [Markup.button.callback('📁 Экспорт файлов БД', 'admin:export_db_files')],
         [Markup.button.callback('🗑 Очистить логи', 'admin:clear_logs_confirm')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
@@ -1395,7 +1396,8 @@ function register(bot) {
         '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
         '• **Экспорт заказов и скидок** — 2 листа (заказы + лояльность)\n' +
         '• **Экспорт логов** — 2 листа (взаимодействия + ошибки/события)',
-        { parse_mode: 'Markdown', ...keyboard }
+        '• **Экспорт файлов БД** — отправка orders.json, loyalty.json и catalog.json в группу бэкапов',
+      { parse_mode: 'Markdown', ...keyboard }
       );
     }
     else if (action === 'export_orders') {
