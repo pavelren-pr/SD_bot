@@ -1265,14 +1265,21 @@ function register(bot) {
     
     else if (action.startsWith('order_delete_confirm:')) {
       const orderId = action.split(':')[1];
+      
+      // 🌟 Получаем данные заказа ПЕРЕД удалением
+      const order = ordersDb.getOrder(orderId);
+      
       ordersDb.deleteOrder(orderId);
+      
+      // 🌟 Логируем удаление заказа
       logger.logAdminAction('order_deleted', {
         orderId: orderId,
         orderNumber: order ? order.orderNumber : null,
         workTitle: order ? order.workTitle : null
       }, ctx);
+      
       await ctx.answerCbQuery('✅ Заказ удалён');
-      // 🌟 Фильтруем метаданные _meta
+      
       const all = ordersDb.getAllOrders().filter(o => !o._meta);
       const p = all.filter(o => PENDING_STATUSES.includes(o.status)).length;
       const a = all.filter(o => ACTIVE_STATUSES.includes(o.status)).length;
