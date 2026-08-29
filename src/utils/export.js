@@ -78,140 +78,116 @@ async function generateExcelExport(includeLogs = false) {
   
   loyaltySheet.addRows(loyaltyRows);
 
-  // ==========================================
-  // ЛИСТ 3-5: ЛОГИ (только если includeLogs = true)
-  // ==========================================
-  if (includeLogs) {
-    const logs = logger.readAllLogs();
-    
-    // Разделяем логи по типам
-    const userInteractions = [];
-    const systemEvents = [];
-    const errors = [];
+  return await workbook.xlsx.writeBuffer();
+}
 
-    logs.forEach(log => {
-      if (log.type === 'error') {
-        errors.push(log);
-        // Если есть userId — добавляем также в userInteractions
-        if (log.userId) {
-          userInteractions.push(log);
-        } else {
-          systemEvents.push(log);
-        }
-      } else if (log.userId) {
-        userInteractions.push(log);
-      } else {
-        systemEvents.push(log);
-      }
+/**
+ * 🌟 Генерирует Excel с логами (взаимодействия пользователей + ошибки/системные события)
+ */
+async function generateLogsExport() {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'SD Bot Admin';
+  workbook.created = new Date();
+
+  const logs = logger.readAllLogs();
+  
+  // Разделяем логи на две категории
+  const userInteractions = [];
+  const systemAndErrors = [];
+
+  logs.forEach(log => {
+    if (log.type === 'error' || log.type === 'system') {
+      systemAndErrors.push(log);
+    } else if (log.userId) {
+      userInteractions.push(log);
+    } else {
+      systemAndErrors.push(log);
+    }
+  });
+
+  // ==========================================
+  // ЛИСТ 1: ВЗАИМОДЕЙСТВИЯ ПОЛЬЗОВАТЕЛЕЙ
+  // ==========================================
+  const userSheet = workbook.addWorksheet('Взаимодействия');
+  userSheet.columns = [
+    { header: 'Дата/Время', key: 'timestamp', width: 25 },
+    { header: 'Тип', key: 'type', width: 18 },
+    { header: 'Действие', key: 'action', width: 20 },
+    { header: 'User ID', key: 'userId', width: 15 },
+    { header: 'Username', key: 'username', width: 20 },
+    { header: 'Имя', key: 'firstName', width: 20 },
+    { header: 'Chat ID', key: 'chatId', width: 15 },
+    { header: 'Тип чата', key: 'chatType', width: 12 },
+    { header: 'Тип контента', key: 'contentType', width: 15 },
+    { header: 'Контент', key: 'content', width: 50 },
+    { header: 'Файл', key: 'fileName', width: 30 },
+    { header: 'Callback', key: 'callbackData', width: 40 },
+    { header: '№ Заказа', key: 'orderNumber', width: 12 },
+    { header: 'Работа', key: 'workTitle', width: 30 },
+    { header: 'Цена (₽)', key: 'price', width: 10 },
+    { header: 'Статус', key: 'status', width: 15 },
+    { header: 'Детали', key: 'details', width: 50 },
+  ];
+
+  userSheet.getRow(1).font = { bold: true };
+  userSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
+
+  userInteractions.forEach(log => {
+    userSheet.addRow({
+      timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
+      type: log.type || '',
+      action: log.action || '',
+      userId: log.userId || '',
+      username: log.username || '',
+      firstName: log.firstName || '',
+      chatId: log.chatId || '',
+      chatType: log.chatType || '',
+      contentType: log.contentType || '',
+      content: log.content || '',
+      fileName: log.fileName || '',
+      callbackData: log.callbackData || '',
+      orderNumber: log.orderNumber || '',
+      workTitle: removeEmojis(log.workTitle || ''),
+      price: log.price || '',
+      status: log.status || '',
+      details: log.details ? JSON.stringify(log.details).substring(0, 100) : '',
     });
+  });
 
-    // ЛИСТ 3: ВЗАИМОДЕЙСТВИЯ ПОЛЬЗОВАТЕЛЕЙ
-    if (userInteractions.length > 0) {
-      const userSheet = workbook.addWorksheet('Взаимодействия');
-      userSheet.columns = [
-        { header: 'Дата/Время', key: 'timestamp', width: 25 },
-        { header: 'Тип', key: 'type', width: 18 },
-        { header: 'Действие', key: 'action', width: 20 },
-        { header: 'User ID', key: 'userId', width: 15 },
-        { header: 'Username', key: 'username', width: 20 },
-        { header: 'Имя', key: 'firstName', width: 20 },
-        { header: 'Chat ID', key: 'chatId', width: 15 },
-        { header: 'Тип чата', key: 'chatType', width: 12 },
-        { header: 'Тип контента', key: 'contentType', width: 15 },
-        { header: 'Контент', key: 'content', width: 50 },
-        { header: 'Файл', key: 'fileName', width: 30 },
-        { header: 'Callback', key: 'callbackData', width: 40 },
-        { header: '№ Заказа', key: 'orderNumber', width: 12 },
-        { header: 'Работа', key: 'workTitle', width: 30 },
-        { header: 'Цена (₽)', key: 'price', width: 10 },
-        { header: 'Статус', key: 'status', width: 15 },
-        { header: 'Детали', key: 'details', width: 50 },
-      ];
+  // ==========================================
+  // ЛИСТ 2: ОШИБКИ И СИСТЕМНЫЕ СОБЫТИЯ
+  // ==========================================
+  const errorSheet = workbook.addWorksheet('Ошибки и события');
+  errorSheet.columns = [
+    { header: 'Дата/Время', key: 'timestamp', width: 25 },
+    { header: 'Тип', key: 'type', width: 15 },
+    { header: 'Действие', key: 'action', width: 25 },
+    { header: 'Сообщение ошибки', key: 'errorMessage', width: 50 },
+    { header: 'Код ошибки', key: 'errorCode', width: 15 },
+    { header: 'User ID', key: 'userId', width: 15 },
+    { header: 'Username', key: 'username', width: 20 },
+    { header: 'Callback', key: 'callbackData', width: 40 },
+    { header: 'Детали', key: 'details', width: 60 },
+  ];
 
-      userSheet.getRow(1).font = { bold: true };
-      userSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
+  errorSheet.getRow(1).font = { bold: true };
+  errorSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFFCCCC'} };
 
-      userInteractions.forEach(log => {
-        userSheet.addRow({
-          timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
-          type: log.type || '',
-          action: log.action || '',
-          userId: log.userId || '',
-          username: log.username || '',
-          firstName: log.firstName || '',
-          chatId: log.chatId || '',
-          chatType: log.chatType || '',
-          contentType: log.contentType || '',
-          content: log.content || '',
-          fileName: log.fileName || '',
-          callbackData: log.callbackData || '',
-          orderNumber: log.orderNumber || '',
-          workTitle: removeEmojis(log.workTitle || ''), // 🌟 Очищаем только название работы
-          price: log.price || '',
-          status: log.status || '',
-          details: log.details ? JSON.stringify(log.details).substring(0, 100) : '',
-        });
-      });
-    }
-
-    // ЛИСТ 4: СИСТЕМНЫЕ СОБЫТИЯ
-    if (systemEvents.length > 0) {
-      const systemSheet = workbook.addWorksheet('Системные события');
-      systemSheet.columns = [
-        { header: 'Дата/Время', key: 'timestamp', width: 25 },
-        { header: 'Тип', key: 'type', width: 15 },
-        { header: 'Действие', key: 'action', width: 25 },
-        { header: 'Детали', key: 'details', width: 60 },
-      ];
-
-      systemSheet.getRow(1).font = { bold: true };
-      systemSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFD3D3D3'} };
-
-      systemEvents.forEach(log => {
-        systemSheet.addRow({
-          timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
-          type: log.type || '',
-          action: log.action || '',
-          details: log.details ? JSON.stringify(log.details) : '',
-        });
-      });
-    }
-
-    // ЛИСТ 5: ОШИБКИ
-    if (errors.length > 0) {
-      const errorSheet = workbook.addWorksheet('Ошибки');
-      errorSheet.columns = [
-        { header: 'Дата/Время', key: 'timestamp', width: 25 },
-        { header: 'Сообщение', key: 'errorMessage', width: 50 },
-        { header: 'Код', key: 'errorCode', width: 15 },
-        { header: 'User ID', key: 'userId', width: 15 },
-        { header: 'Username', key: 'username', width: 20 },
-        { header: 'Chat ID', key: 'chatId', width: 15 },
-        { header: 'Callback', key: 'callbackData', width: 40 },
-        { header: 'Текст сообщения', key: 'messageText', width: 50 },
-        { header: 'Стек (первые 5 строк)', key: 'errorStack', width: 60 },
-      ];
-
-      errorSheet.getRow(1).font = { bold: true };
-      errorSheet.getRow(1).fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFFCCCC'} };
-
-      errors.forEach(log => {
-        errorSheet.addRow({
-          timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
-          errorMessage: log.errorMessage || '',
-          errorCode: log.errorCode || '',
-          userId: log.userId || '',
-          username: log.username || '',
-          chatId: log.chatId || '',
-          callbackData: log.callbackData || '',
-          messageText: log.messageText || '',
-          errorStack: log.errorStack || '',
-        });
-      });
-    }
-  }
+  systemAndErrors.forEach(log => {
+    errorSheet.addRow({
+      timestamp: log.timestamp ? new Date(log.timestamp).toLocaleString('ru-RU') : '',
+      type: log.type || '',
+      action: log.action || '',
+      errorMessage: log.errorMessage || '',
+      errorCode: log.errorCode || '',
+      userId: log.userId || '',
+      username: log.username || '',
+      callbackData: log.callbackData || '',
+      details: log.details ? JSON.stringify(log.details) : '',
+    });
+  });
 
   return await workbook.xlsx.writeBuffer();
 }
 
-module.exports = { generateExcelExport };
+module.exports = { generateExcelExport, generateLogsExport };

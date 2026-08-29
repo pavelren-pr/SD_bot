@@ -5,7 +5,7 @@ const { formatOrderCard } = require('./menu');
 const { Markup } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
-const { generateExcelExport } = require('../utils/export');
+const { generateExcelExport, generateLogsExport } = require('../utils/export');
 const logger = require('../utils/logger');
 const { assignExecutorToOrder, unassignExecutorFromOrder } = require('./order');
 
@@ -1368,7 +1368,7 @@ function register(bot) {
       const order = ordersDb.getOrder(orderId);
       if (!order) return;
       const statusKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('🟡 Ожидает оценки', `admin:order_status:${orderId}:waiting_acceptance`)],
+        [Markup.button.callback('🟡 Ожидает принятия', `admin:order_status:${orderId}:waiting_acceptance`)],
         [Markup.button.callback('🟠 Ожидает цену', `admin:order_status:${orderId}:waiting_price`)],
         [Markup.button.callback('🔵 Согласование цены', `admin:order_status:${orderId}:price_negotiating`)],
         [Markup.button.callback('🟢 Оплачен', `admin:order_status:${orderId}:paid`)],
@@ -1386,57 +1386,52 @@ function register(bot) {
     // ==========================================
     else if (action === 'export_excel') {
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('📊 Только заказы и лояльность', 'admin:export_orders_only')],
-        [Markup.button.callback('📋 С логами (все события)', 'admin:export_with_logs')],
-        [Markup.button.callback('📁 Экспорт файлов БД', 'admin:export_db_files')],
+        [Markup.button.callback('📊 Экспорт заказов и скидок', 'admin:export_orders')],
+        [Markup.button.callback('📋 Экспорт логов', 'admin:export_logs')],
         [Markup.button.callback('🗑 Очистить логи', 'admin:clear_logs_confirm')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
       await ctx.editMessageText(
         '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
-        '• **Только заказы** — базовый экспорт (2 листа)\n' +
-        '• **С логами** — + взаимодействия, системные события, ошибки (до 5 листов)\n' +
-        '• **Экспорт файлов БД** — отправка orders.json, loyalty.json и catalog.json в группу бэкапов',
+        '• **Экспорт заказов и скидок** — 2 листа (заказы + лояльность)\n' +
+        '• **Экспорт логов** — 2 листа (взаимодействия + ошибки/события)',
         { parse_mode: 'Markdown', ...keyboard }
       );
     }
-    else if (action === 'export_orders_only') {
+    else if (action === 'export_orders') {
       try {
         await ctx.answerCbQuery('⏳ Формирую таблицу...');
         await ctx.replyWithChatAction('upload_document');
         const excelBuffer = await generateExcelExport(false);
-        logger.logAdminAction('export_excel_orders_only', {}, ctx);
+        logger.logAdminAction('export_orders_and_discounts', {}, ctx);
         const today = new Date().toISOString().split('T')[0];
         await ctx.replyWithDocument(
-          { source: excelBuffer, filename: `SD_Bot_Export_${today}.xlsx` },
-          { caption: '📊 *Экспорт базы данных*\n\n• Лист 1: Все заказы\n• Лист 2: Программа лояльности', parse_mode: 'Markdown' }
+          { source: excelBuffer, filename: `SD_Bot_Orders_${today}.xlsx` },
+          { caption: '📊 *Экспорт заказов и скидок*\n\n• Лист 1: Все заказы\n• Лист 2: Программа лояльности', parse_mode: 'Markdown' }
         );
       } catch (error) {
-        console.error('Ошибка при экспорте:', error);
+        console.error('Ошибка при экспорте заказов:', error);
         await ctx.reply('❌ Произошла ошибка при формировании файла.');
       }
     }
-    else if (action === 'export_with_logs') {
+    else if (action === 'export_logs') {
       try {
         await ctx.answerCbQuery('⏳ Формирую таблицу с логами...');
         await ctx.replyWithChatAction('upload_document');
-        const excelBuffer = await generateExcelExport(true);
-        logger.logAdminAction('export_excel_with_logs', {}, ctx);
+        const excelBuffer = await generateLogsExport();
+        logger.logAdminAction('export_logs', {}, ctx);
         const today = new Date().toISOString().split('T')[0];
         await ctx.replyWithDocument(
-          { source: excelBuffer, filename: `SD_Bot_Full_Export_${today}.xlsx` },
+          { source: excelBuffer, filename: `SD_Bot_Logs_${today}.xlsx` },
           { 
-            caption: '📊 *Полный экспорт с логами*\n\n' +
-                    '• Лист 1: Заказы\n' +
-                    '• Лист 2: Лояльность\n' +
-                    '• Лист 3: Взаимодействия пользователей\n' +
-                    '• Лист 4: Системные события\n' +
-                    '• Лист 5: Ошибки',
+            caption: '📋 *Экспорт логов*\n\n' +
+                    '• Лист 1: Взаимодействия пользователей (сообщения, кнопки, чаты)\n' +
+                    '• Лист 2: Ошибки и системные события (запуски, остановки)',
             parse_mode: 'Markdown' 
           }
         );
       } catch (error) {
-        console.error('Ошибка при экспорте с логами:', error);
+        console.error('Ошибка при экспорте логов:', error);
         await ctx.reply('❌ Произошла ошибка при формировании файла.');
       }
     }
