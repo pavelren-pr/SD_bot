@@ -1395,9 +1395,9 @@ function register(bot) {
       await ctx.editMessageText(
         '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
         '• **Экспорт заказов и скидок** — 2 листа (заказы + лояльность)\n' +
-        '• **Экспорт логов** — 2 листа (взаимодействия + ошибки/события)',
+        '• **Экспорт логов** — 2 листа (взаимодействия + ошибки/события)\n' +
         '• **Экспорт файлов БД** — отправка orders.json, loyalty.json и catalog.json в группу бэкапов',
-      { parse_mode: 'Markdown', ...keyboard }
+        { parse_mode: 'Markdown', ...keyboard }
       );
     }
     else if (action === 'export_orders') {
