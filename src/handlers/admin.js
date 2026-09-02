@@ -820,18 +820,25 @@ function register(bot) {
                 newStatus = order.isCustomOrder ? 'waiting_price' : 'active';
               }
 
-              // 🌟 Обновляем заказ в БД
-              ordersDb.updateOrder(orderId, {
-                executorId: executorId,
-                executorUsername: executorUsername,
-                status: newStatus,
-                acceptedAt: new Date().toLocaleString('ru-RU')
-              });
-
               // ==========================================
               // 🌟 ИНДИВИДУАЛЬНЫЙ ЗАКАЗ — отдельная логика
               // ==========================================
               if (order.isCustomOrder) {
+                // 🌟 Определяем статус: сохраняем текущий, если заказ уже оплачен/выполнен
+                let newStatus;
+                if (order.status === 'paid' || order.status === 'completed') {
+                  newStatus = order.status;
+                } else {
+                  newStatus = 'waiting_price';
+                }
+
+                // 🌟 Обновляем заказ в БД (только для индивидуальных!)
+                ordersDb.updateOrder(orderId, {
+                  executorId: executorId,
+                  executorUsername: executorUsername,
+                  status: newStatus,
+                  acceptedAt: new Date().toLocaleString('ru-RU')
+                });
                 // 1. Уведомляем НОВОГО исполнителя с кнопками управления
                 if (order.status !== 'completed') {
                   const isPaid = order.status === 'paid';
