@@ -912,7 +912,7 @@ function register(bot) {
               // 📦 ОБЫЧНЫЙ ЗАКАЗ — используем существующую функцию
               // ==========================================
               else {
-                const result = await assignExecutorToOrder(orderId, executorId, bot, true);
+                const result = await assignExecutorToOrder(orderId, executorId, bot, isReassignment);
 
                 // При переназначении обычного заказа тоже уведомляем старого исполнителя
                 if (isReassignment && oldExecutorId) {

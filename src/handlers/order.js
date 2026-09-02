@@ -1029,7 +1029,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
 }
 
 // 🌟 Функция ручного назначения исполнителя из админ-панели
-async function assignExecutorToOrder(orderId, executorUserId, bot, force = false) {
+async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignment = false) {
   const order = ordersDb.getOrder(orderId);
   if (!order) throw new Error('Заказ не найден');
   if (order.executorId && !force) {
@@ -1095,9 +1095,14 @@ async function assignExecutorToOrder(orderId, executorUserId, bot, force = false
   // Отправляем уведомление заказчику
   const customerKeyboard = getChatKeyboard(chatId, true);
   const executorUsername = executorUser.username ? `@${executorUser.username}` : executorUser.first_name || 'Исполнитель';
+
+  const customerText = isReassignment
+    ? `👷 *По вашему заказу изменён исполнитель*\n\n🆔 *Номер заказа:* №${order.orderNumber || '—'}\n📚 *Работа:* ${order.workTitle}\n\nТеперь вы можете обсудить детали выполнения заказа:`
+    : `✅ *Ваш заказ в работе!*\n\n🆔 *Номер заказа:* №${order.orderNumber || '—'}\n📚 *Работа:* ${order.workTitle}\n\nТеперь вы можете обсудить детали выполнения заказа:`;
+
   await bot.telegram.sendMessage(
     order.customerId,
-    `✅ *Ваш заказ в работе!*\n\n🆔 *Номер заказа:* №${order.orderNumber || '—'}\n📚 *Работа:* ${order.workTitle}\n\nТеперь вы можете обсудить детали выполнения заказа:`,
+    customerText,
     { parse_mode: 'Markdown', reply_markup: customerKeyboard }
   );
   
