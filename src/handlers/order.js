@@ -1029,14 +1029,23 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
 }
 
 // 🌟 Функция ручного назначения исполнителя из админ-панели
-async function assignExecutorToOrder(orderId, executorUserId, bot) {
+async function assignExecutorToOrder(orderId, executorUserId, bot, force = false) {
   const order = ordersDb.getOrder(orderId);
   if (!order) throw new Error('Заказ не найден');
-  
-  if (order.executorId) {
+  if (order.executorId && !force) {
     throw new Error('У заказа уже есть исполнитель');
   }
-  
+
+  // 🌟 При переназначении удаляем старый чат из activeChats
+  if (force && order.executorId) {
+    for (const [chatId, chatData] of activeChats) {
+      if (chatData.orderId === orderId) {
+        activeChats.delete(chatId);
+        break;
+      }
+    }
+  }
+
   let executorUser;
   try {
     executorUser = await bot.telegram.getChat(executorUserId);
