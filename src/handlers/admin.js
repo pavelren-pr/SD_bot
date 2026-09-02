@@ -798,6 +798,7 @@ function register(bot) {
 
             const isReassignment = !!order.executorId && String(order.executorId) !== String(executorId);
             const oldExecutorId = order.executorId;
+            const orderNumber = order.orderNumber || orderId;
 
             try {
               // Получаем данные нового исполнителя
@@ -810,7 +811,6 @@ function register(bot) {
 
               const executorUsername = executorUser.username || null;
               const executorName = executorUser.username ? `@${executorUser.username}` : executorUser.first_name || 'Исполнитель';
-              const orderNumber = order.orderNumber || orderId;
 
               // 🌟 Обновляем заказ в БД
               ordersDb.updateOrder(orderId, {
@@ -820,64 +820,60 @@ function register(bot) {
                 acceptedAt: new Date().toLocaleString('ru-RU')
               });
 
-              // 🌟 Уведомляем НОВОГО исполнителя с кнопками
-              if (order.status !== 'completed') {
-                let executorMessage;
-                let executorKeyboard;
-
-                if (order.isCustomOrder) {
-                  executorMessage =
+              // ==========================================
+              // 🌟 ИНДИВИДУАЛЬНЫЙ ЗАКАЗ — отдельная логика
+              // ==========================================
+              if (order.isCustomOrder) {
+                // 1. Уведомляем НОВОГО исполнителя с кнопками управления
+                if (order.status !== 'completed') {
+                  const privateText =
                     `✅ *Вам назначен индивидуальный заказ!*\n\n` +
                     `🆔 *Номер заказа:* №${orderNumber}\n` +
                     `📚 *Предмет:* ${order.subjectName || order.workTitle}\n` +
                     `👤 *Заказчик:* ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\n` +
                     `Назначьте цену или свяжитесь с заказчиком:`;
 
-                  executorKeyboard = Markup.inlineKeyboard([
+                  const privateKeyboard = Markup.inlineKeyboard([
                     [Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)],
                     [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
                   ]);
-                } else {
-                  executorMessage =
-                    `✅ *Вам назначен новый заказ!*\n\n` +
-                    `🆔 *Номер заказа:* №${orderNumber}\n` +
-                    `📚 *Работа:* ${order.workTitle}\n` +
-                    `👤 *Заказчик ID:* ${order.customerId}\n\n` +
-                    `Напишите сообщение для заказчика или используйте кнопки ниже:`;
 
-                  const chatId = `order_${order.customerId}_${order.workId || 'custom'}_${Date.now()}`;
-                  executorKeyboard = Markup.inlineKeyboard([
-                    [Markup.button.callback('✏️ Ответить заказчику', `er:${chatId}`)],
-                    [Markup.button.callback('📎 Отправить файл/фото', `esf:${chatId}`)],
-                    [Markup.button.callback('✅ Заказ выполнен', `oc:${chatId}`)]
-                  ]);
+                  try {
+                    await bot.telegram.sendMessage(executorId, privateText, {
+                      parse_mode: 'Markdown',
+                      reply_markup: privateKeyboard.reply_markup
+                    });
+                  } catch (e) {
+                    console.log('Не удалось уведомить нового исполнителя:', e.message);
+                  }
+
+                  // Пересылаем файл задания новому исполнителю
+                  if (order.fileId) {
+                    try {
+                      const fileCaption = `📎 Файл задания к заказу №${orderNumber}`;
+                      if (order.fileType === 'photo') {
+                        await bot.telegram.sendPhoto(executorId, order.fileId, { caption: fileCaption });
+                      } else {
+                        await bot.telegram.sendDocument(executorId, order.fileId, { caption: fileCaption });
+                      }
+                    } catch (e) {
+                      console.log('Не удалось переслать файл новому исполнителю:', e.message);
+                    }
+                  }
                 }
 
-                try {
-                  await bot.telegram.sendMessage(executorId, executorMessage, {
-                    parse_mode: 'Markdown',
-                    reply_markup: executorKeyboard.reply_markup
-                  });
-                } catch (e) {
-                  console.log('Не удалось уведомить нового исполнителя:', e.message);
-                }
-
-                // 🌟 Уведомляем заказчика о новом исполнителе
+                // 2. Уведомляем заказчика (без username исполнителя, с правильным текстом)
                 if (order.customerId) {
                   const actionWord = isReassignment ? 'изменён' : 'назначен';
                   const customerMessage =
                     `👷 *По вашему заказу ${actionWord} исполнитель*\n\n` +
                     `🆔 *Номер заказа:* №${orderNumber}\n` +
-                    `📚 *Работа:* ${order.workTitle}\n\n` +
+                    `📚 *Предмет:* ${order.subjectName || order.workTitle}\n\n` +
                     `Вы можете связаться с исполнителем для обсуждения деталей:`;
 
-                  const customerKeyboard = order.isCustomOrder
-                    ? Markup.inlineKeyboard([
-                        [Markup.button.callback('✏️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
-                      ])
-                    : Markup.inlineKeyboard([
-                        [Markup.button.callback('✏️ Написать исполнителю', `orders:customer:contact:${orderId}`)]
-                      ]);
+                  const customerKeyboard = Markup.inlineKeyboard([
+                    [Markup.button.callback('✏️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
+                  ]);
 
                   try {
                     await bot.telegram.sendMessage(order.customerId, customerMessage, {
@@ -889,7 +885,28 @@ function register(bot) {
                   }
                 }
 
-                // 🌟 Уведомляем СТАРОГО исполнителя о снятии (если это переназначение)
+                // 3. Уведомляем СТАРОГО исполнителя о снятии
+                if (isReassignment && oldExecutorId) {
+                  try {
+                    await bot.telegram.sendMessage(oldExecutorId,
+                      `⚠️ *Заказ передан другому исполнителю*\n\n` +
+                      `🆔 *Номер заказа:* №${orderNumber}\n` +
+                      `📚 *Предмет:* ${order.subjectName || order.workTitle}\n\n` +
+                      `Администратор назначил нового исполнителя. Вы больше не являетесь исполнителем по этому заказу.`,
+                      { parse_mode: 'Markdown' }
+                    );
+                  } catch (e) {
+                    console.log('Не удалось уведомить старого исполнителя:', e.message);
+                  }
+                }
+              }
+              // ==========================================
+              // 📦 ОБЫЧНЫЙ ЗАКАЗ — используем существующую функцию
+              // ==========================================
+              else {
+                const result = await assignExecutorToOrder(orderId, executorId, bot);
+
+                // При переназначении обычного заказа тоже уведомляем старого исполнителя
                 if (isReassignment && oldExecutorId) {
                   try {
                     await bot.telegram.sendMessage(oldExecutorId,
@@ -910,14 +927,20 @@ function register(bot) {
                 orderId: orderId,
                 orderNumber: orderNumber,
                 newExecutorId: executorId,
-                oldExecutorId: oldExecutorId || null
+                oldExecutorId: oldExecutorId || null,
+                isCustomOrder: order.isCustomOrder
               }, ctx);
 
+              const actionLabel = isReassignment ? 'переназначен' : 'назначен';
+              const notifyDetails = isReassignment
+                ? 'новому исполнителю, заказчику и старому исполнителю'
+                : 'исполнителю и заказчику';
+
               await ctx.reply(
-                `✅ *Исполнитель успешно ${isReassignment ? 'переназначен' : 'назначен'}!*\n\n` +
+                `✅ *Исполнитель успешно ${actionLabel}!*\n\n` +
                 `👷 *Исполнитель:* ${executorName}\n` +
                 `📦 *Заказ:* №${orderNumber}\n\n` +
-                `Уведомления отправлены${isReassignment ? ' новому исполнителю, заказчику и старому исполнителю' : ' исполнителю и заказчику'}.`,
+                `Уведомления отправлены ${notifyDetails}.`,
                 { parse_mode: 'Markdown' }
               );
 
