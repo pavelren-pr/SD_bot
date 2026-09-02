@@ -864,12 +864,18 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         );
       }
 
-      // 🌟 Показываем заказчику кнопки «написать ещё / отправить файл»
+      // 🌟 Показываем заказчику кнопки для продолжения общения
+      const customerReplyButtons = [
+        [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
+        [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
+      ];
+      // Добавляем кнопку оплаты, если цена назначена и заказ не оплачен
+      if (orderRecord.price && orderRecord.price > 0 && orderRecord.status !== 'paid') {
+        customerReplyButtons.push([Markup.button.callback('💳 Оплатить заказ', `custom_pay:${orderNumber}`)]);
+      }
       await ctx.reply('✅ Сообщение отправлено исполнителю.', {
-        reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
-          [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
-        ]).reply_markup
+        parse_mode: 'Markdown',
+        reply_markup: Markup.inlineKeyboard(customerReplyButtons).reply_markup
       });
 
       ctx.session.waitingCustomReplyToExecutor = null;
@@ -936,12 +942,18 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         }
       }
 
-      // 🌟 Показываем заказчику кнопки «написать ещё / отправить файл»
+      // 🌟 Показываем заказчику кнопки для продолжения общения
+      const customerFileReplyButtons = [
+        [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
+        [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
+      ];
+      // Добавляем кнопку оплаты, если цена назначена и заказ не оплачен
+      if (orderRecord.price && orderRecord.price > 0 && orderRecord.status !== 'paid') {
+        customerFileReplyButtons.push([Markup.button.callback('💳 Оплатить заказ', `custom_pay:${orderNumber}`)]);
+      }
       await ctx.reply('✅ Файл отправлен исполнителю.', {
-        reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
-          [Markup.button.callback('📎 Отправить ещё файл', `custom_reply_file:${orderNumber}`)]
-        ]).reply_markup
+        parse_mode: 'Markdown',
+        reply_markup: Markup.inlineKeyboard(customerFileReplyButtons).reply_markup
       });
 
       ctx.session.waitingCustomReplyFileToExecutor = null;
@@ -1136,12 +1148,18 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         );
       }
 
-      // 🌟 Показываем заказчику кнопки «написать ещё / отправить файл»
+      // 🌟 Показываем заказчику кнопки для продолжения общения
+      const customerWriteButtons = [
+        [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
+        [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
+      ];
+      // Добавляем кнопку оплаты, если цена назначена и заказ не оплачен
+      if (orderRecord.price && orderRecord.price > 0 && orderRecord.status !== 'paid') {
+        customerWriteButtons.push([Markup.button.callback('💳 Оплатить заказ', `custom_pay:${orderNumber}`)]);
+      }
       await ctx.reply('✅ Сообщение отправлено исполнителю.', {
-        reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
-          [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
-        ]).reply_markup
+        parse_mode: 'Markdown',
+        reply_markup: Markup.inlineKeyboard(customerWriteButtons).reply_markup
       });
 
       ctx.session.waitingCustomWriteToExecutor = null;
