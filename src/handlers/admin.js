@@ -1346,12 +1346,44 @@ function register(bot) {
       const order = ordersDb.getOrder(orderId);
       if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
       
+      // 🌟 Получаем список исполнителей и администраторов из базы рангов
+      const loyaltyData = loyalty.loadData();
+      const admins = [];
+      const executors = [];
+      for (const [userId, userData] of Object.entries(loyaltyData)) {
+        if (userData.rank === 'Посейдон') {
+          admins.push({ id: userId, username: userData.username || null });
+        } else if (userData.rank === 'Прометей') {
+          executors.push({ id: userId, username: userData.username || null });
+        }
+      }
+      
+      // 🌟 Формируем текст со списком доступных пользователей
+      let availableUsersText = '';
+      
+      if (executors.length > 0) {
+        availableUsersText += `🔥 *Исполнители (Прометей):*\n`;
+        executors.forEach(e => {
+          availableUsersText += `• ${e.id}${e.username ? ` (@${e.username})` : ''}\n`;
+        });
+      } else {
+        availableUsersText += `🔥 *Исполнители:* _нет назначенных рангов_\n`;
+      }
+      
+      if (admins.length > 0) {
+        availableUsersText += `\n👑 *Администраторы (Посейдон):*\n`;
+        admins.forEach(a => {
+          availableUsersText += `• ${a.id}${a.username ? ` (@${a.username})` : ''}\n`;
+        });
+      }
+      
       ctx.session.adminState = `awaiting_executor_id_for_order:${orderId}`;
       await ctx.editMessageText(
         `👷 *Назначение исполнителя*\n\n` +
         `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n` +
         `Введите Telegram ID исполнителя (число):\n\n` +
-        `_Подсказка: ID можно посмотреть в списке "Исполнители" в разделе управления рангами_`,
+        `${availableUsersText}\n` +
+        `_Или введите ID любого пользователя вручную_`,
         { 
           parse_mode: 'Markdown', 
           ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:order_view:${orderId}`)]]) 
