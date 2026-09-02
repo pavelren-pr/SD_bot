@@ -671,41 +671,42 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     if (!ctx.session.waitingCustomMessageToCustomer) {
       return next();
     }
+
     const { orderNumber } = ctx.session.waitingCustomMessageToCustomer;
     const orderRecord = orders.getOrderByNumber(orderNumber);
     if (!orderRecord) {
       ctx.session.waitingCustomMessageToCustomer = null;
       return ctx.reply('❌ Заказ не найден.');
     }
-    // Проверяем, что текущий пользователь - исполнитель этого заказа
     if (String(orderRecord.executorId) !== String(ctx.from.id)) {
       return ctx.reply('❌ Это не ваш заказ.');
     }
+
     const messageText = ctx.message.text;
-    const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+
     // Пересылаем сообщение заказчику
-    const customerMessage = 
-      `💬 *Вам сообщение от исполнителя*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${orderRecord.subjectName}\n` +
-      `${messageText}\n\n` +
-      `✏️ Для ответа используйте кнопку ниже:`;
-    const replyKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✏️ Ответить исполнителю', `custom_reply_executor:${orderNumber}`)]
-    ]);
     try {
-      await ctx.telegram.sendMessage(orderRecord.customerId, customerMessage, {
-        parse_mode: 'Markdown',
-        reply_markup: replyKeyboard.reply_markup
-      });
-      // 🌟 Показываем исполнителю кнопки для продолжения общения
+      await ctx.telegram.sendMessage(orderRecord.customerId,
+        `💬 *Вам сообщение от исполнителя*\n\n` +
+        `🆔 *Номер заказа:* №${orderNumber}\n` +
+        `📚 *Предмет:* ${orderRecord.subjectName}\n\n` +
+        `${messageText}`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: Markup.inlineKeyboard([
+            [Markup.button.callback('✏️ Ответить исполнителю', `custom_reply_executor:${orderNumber}`)]
+          ]).reply_markup
+        }
+      );
+
+      // 🌟 Показываем исполнителю кнопки «написать ещё / отправить файл»
       await ctx.reply('✅ Сообщение отправлено заказчику.', {
-        parse_mode: 'Markdown',
         reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать еще сообщение', `custom_write_customer:${orderNumber}`)],
+          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_customer:${orderNumber}`)],
           [Markup.button.callback('📎 Отправить файл', `custom_write_customer_file:${orderNumber}`)]
         ]).reply_markup
       });
+
       ctx.session.waitingCustomMessageToCustomer = null;
     } catch (error) {
       console.error('Ошибка отправки сообщения заказчику:', error);
@@ -719,18 +720,17 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     if (!ctx.session.waitingCustomFileToCustomer) {
       return next();
     }
+
     const { orderNumber } = ctx.session.waitingCustomFileToCustomer;
     const orderRecord = orders.getOrderByNumber(orderNumber);
     if (!orderRecord) {
       ctx.session.waitingCustomFileToCustomer = null;
       return ctx.reply('❌ Заказ не найден.');
     }
-    // Проверяем, что текущий пользователь - исполнитель этого заказа
     if (String(orderRecord.executorId) !== String(ctx.from.id)) {
       return ctx.reply('❌ Это не ваш заказ.');
     }
-    const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
-    // Получаем файл
+
     let fileId, fileType, fileName;
     if (ctx.message.photo) {
       fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
@@ -741,37 +741,35 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       fileType = 'document';
       fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
     }
+
     const caption =
       `📎 *Файл от исполнителя*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${orderRecord.subjectName}\n` +
-      `✏️ Для ответа используйте кнопку ниже:`;
-    // 🌟 Клавиатура для ответа заказчику
+      `📚 *Предмет:* ${orderRecord.subjectName}`;
+
     const replyKeyboard = Markup.inlineKeyboard([
       [Markup.button.callback('✏️ Ответить исполнителю', `custom_reply_executor:${orderNumber}`)]
     ]);
+
     try {
       if (fileType === 'photo') {
         await ctx.telegram.sendPhoto(orderRecord.customerId, fileId, {
-          caption,
-          parse_mode: 'Markdown',
-          reply_markup: replyKeyboard.reply_markup
+          caption, parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup
         });
       } else {
         await ctx.telegram.sendDocument(orderRecord.customerId, fileId, {
-          caption,
-          parse_mode: 'Markdown',
-          reply_markup: replyKeyboard.reply_markup
+          caption, parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup
         });
       }
-      // 🌟 Показываем исполнителю кнопки для продолжения общения
+
+      // 🌟 Показываем исполнителю кнопки «написать ещё / отправить файл»
       await ctx.reply('✅ Файл отправлен заказчику.', {
-        parse_mode: 'Markdown',
         reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать еще сообщение', `custom_write_customer:${orderNumber}`)],
-          [Markup.button.callback('📎 Отправить еще файл', `custom_write_customer_file:${orderNumber}`)]
+          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_customer:${orderNumber}`)],
+          [Markup.button.callback('📎 Отправить ещё файл', `custom_write_customer_file:${orderNumber}`)]
         ]).reply_markup
       });
+
       ctx.session.waitingCustomFileToCustomer = null;
     } catch (error) {
       console.error('Ошибка отправки файла заказчику:', error);
@@ -830,23 +828,17 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     if (!ctx.session.waitingCustomReplyToExecutor) {
       return next();
     }
+
     const { orderNumber } = ctx.session.waitingCustomReplyToExecutor;
     const orderRecord = orders.getOrderByNumber(orderNumber);
     if (!orderRecord) {
       ctx.session.waitingCustomReplyToExecutor = null;
       return ctx.reply('❌ Заказ не найден.');
     }
+
     const messageText = ctx.message.text;
     const customerName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
-    // Получаем данные из кэша
-    const targetChatId = getCustomOrderChatId(orderNumber);
-    // Отправляем сообщение в чат исполнителей
-    const executorMessage = 
-      `💬 *Вам сообщение от заказчика*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `👤 *Заказчик:* ${customerName}\n\n` +
-      `${messageText}\n\n` +
-      `✏️ Для ответа используйте кнопки:`;
+
     let executorKeyboardButtons;
     if (orderRecord.status === 'paid') {
       executorKeyboardButtons = [
@@ -859,22 +851,27 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       ];
     }
     const executorKeyboard = createInlineKeyboard(executorKeyboardButtons);
+
     try {
-      // 🌟 Отправляем в ЛИЧНЫЙ чат исполнителя, а не в чат предмета
+      // Отправляем в личный чат исполнителя
       if (orderRecord.executorId) {
-        await ctx.telegram.sendMessage(orderRecord.executorId, executorMessage, {
-          parse_mode: 'Markdown',
-          reply_markup: executorKeyboard.reply_markup
-        });
+        await ctx.telegram.sendMessage(orderRecord.executorId,
+          `💬 *Вам сообщение от заказчика*\n\n` +
+          `🆔 *Номер заказа:* №${orderNumber}\n` +
+          `👤 *Заказчик:* ${customerName}\n\n` +
+          `${messageText}`,
+          { parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup }
+        );
       }
-      // 🌟 Показываем заказчику кнопки для продолжения общения
+
+      // 🌟 Показываем заказчику кнопки «написать ещё / отправить файл»
       await ctx.reply('✅ Сообщение отправлено исполнителю.', {
-        parse_mode: 'Markdown',
         reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать еще сообщение', `custom_write_executor:${orderNumber}`)],
+          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
           [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
         ]).reply_markup
       });
+
       ctx.session.waitingCustomReplyToExecutor = null;
     } catch (error) {
       console.error('Ошибка отправки сообщения исполнителю:', error);
@@ -888,14 +885,16 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     if (!ctx.session.waitingCustomReplyFileToExecutor) {
       return next();
     }
+
     const { orderNumber } = ctx.session.waitingCustomReplyFileToExecutor;
     const orderRecord = orders.getOrderByNumber(orderNumber);
     if (!orderRecord) {
       ctx.session.waitingCustomReplyFileToExecutor = null;
       return ctx.reply('❌ Заказ не найден.');
     }
+
     const customerName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
-    // Получаем файл
+
     let fileId, fileType, fileName;
     if (ctx.message.photo) {
       fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
@@ -906,13 +905,12 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       fileType = 'document';
       fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
     }
+
     const caption =
       `📎 *Файл от заказчика*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `👤 *Заказчик:* ${customerName}\n` +
-      `📄 *Файл:* ${escapeMarkdown(fileName)}\n\n` +
-      `✏️ Для ответа используйте кнопки:`;
-    // 🌟 Клавиатура для ответа заказчику
+      `👤 *Заказчик:* ${customerName}`;
+
     let executorKeyboard;
     if (orderRecord.status === 'paid') {
       executorKeyboard = Markup.inlineKeyboard([
@@ -924,31 +922,28 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
       ]);
     }
+
     try {
-      // 🌟 Отправляем в ЛИЧНЫЙ чат исполнителя, а не в чат предмета
       if (orderRecord.executorId) {
         if (fileType === 'photo') {
           await ctx.telegram.sendPhoto(orderRecord.executorId, fileId, {
-            caption,
-            parse_mode: 'Markdown',
-            reply_markup: executorKeyboard.reply_markup
+            caption, parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup
           });
         } else {
           await ctx.telegram.sendDocument(orderRecord.executorId, fileId, {
-            caption,
-            parse_mode: 'Markdown',
-            reply_markup: executorKeyboard.reply_markup
+            caption, parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup
           });
         }
       }
-      // 🌟 Показываем заказчику кнопки для продолжения общения
+
+      // 🌟 Показываем заказчику кнопки «написать ещё / отправить файл»
       await ctx.reply('✅ Файл отправлен исполнителю.', {
-        parse_mode: 'Markdown',
         reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать еще сообщение', `custom_write_executor:${orderNumber}`)],
-          [Markup.button.callback('📎 Отправить еще файл', `custom_reply_file:${orderNumber}`)]
+          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
+          [Markup.button.callback('📎 Отправить ещё файл', `custom_reply_file:${orderNumber}`)]
         ]).reply_markup
       });
+
       ctx.session.waitingCustomReplyFileToExecutor = null;
     } catch (error) {
       console.error('Ошибка отправки файла исполнителю:', error);
@@ -1105,23 +1100,17 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     if (!ctx.session.waitingCustomWriteToExecutor) {
       return next();
     }
+
     const { orderNumber } = ctx.session.waitingCustomWriteToExecutor;
     const orderRecord = orders.getOrderByNumber(orderNumber);
     if (!orderRecord) {
       ctx.session.waitingCustomWriteToExecutor = null;
       return ctx.reply('❌ Заказ не найден.');
     }
+
     const messageText = ctx.message.text;
     const customerName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
-    // Получаем данные из кэша
-    const targetChatId = getCustomOrderChatId(orderNumber);
-    // Отправляем в чат исполнителей
-    const executorMessage = 
-      `💬 *Сообщение от заказчика*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `👤 *Заказчик:* ${customerName}\n\n` +
-      `${messageText}\n\n` +
-      `✏️ Действия:`;
+
     let executorKeyboardButtons;
     if (orderRecord.status === 'paid') {
       executorKeyboardButtons = [
@@ -1134,22 +1123,27 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       ];
     }
     const executorKeyboard = createInlineKeyboard(executorKeyboardButtons);
+
     try {
-      // 🌟 Отправляем в ЛИЧНЫЙ чат исполнителя
+      // Отправляем в личный чат исполнителя
       if (orderRecord.executorId) {
-        await ctx.telegram.sendMessage(orderRecord.executorId, executorMessage, {
-          parse_mode: 'Markdown',
-          reply_markup: executorKeyboard.reply_markup
-        });
+        await ctx.telegram.sendMessage(orderRecord.executorId,
+          `💬 *Сообщение от заказчика*\n\n` +
+          `🆔 *Номер заказа:* №${orderNumber}\n` +
+          `👤 *Заказчик:* ${customerName}\n\n` +
+          `${messageText}`,
+          { parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup }
+        );
       }
-      // 🌟 Показываем заказчику кнопки для продолжения общения
+
+      // 🌟 Показываем заказчику кнопки «написать ещё / отправить файл»
       await ctx.reply('✅ Сообщение отправлено исполнителю.', {
-        parse_mode: 'Markdown',
         reply_markup: Markup.inlineKeyboard([
-          [Markup.button.callback('✏️ Написать еще сообщение', `custom_write_executor:${orderNumber}`)],
+          [Markup.button.callback('✏️ Написать ещё сообщение', `custom_write_executor:${orderNumber}`)],
           [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
         ]).reply_markup
       });
+
       ctx.session.waitingCustomWriteToExecutor = null;
     } catch (error) {
       console.error('Ошибка отправки сообщения:', error);

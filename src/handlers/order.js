@@ -765,42 +765,60 @@ const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
 
   async function handleExecutorMessage(ctx, chatData) {
     const { customerUserId, workTitle, chatId, executorUserId } = chatData;
-    // 🌟 Логируем сообщение в чате
+    // Логируем сообщение
     logger.logChatMessage(chatData, 'executor', ctx);
     const messageText = ctx.message.text || '[Фото/Файл]';
-    await ctx.telegram.sendMessage(customerUserId, `💬 *Вам сообщение от исполнителя*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`, { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) });
-    if (ctx.message.photo) await ctx.telegram.sendPhoto(customerUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
-    else if (ctx.message.document) await ctx.telegram.sendDocument(customerUserId, ctx.message.document.file_id);
+
+    // Отправляем заказчику текст + кнопки для ответа
+    await ctx.telegram.sendMessage(
+      customerUserId,
+      `💬 *Вам сообщение от исполнителя*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`,
+      { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) }
+    );
+
+    // Пересылаем файл, если есть
+    if (ctx.message.photo) {
+      await ctx.telegram.sendPhoto(customerUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
+    } else if (ctx.message.document) {
+      await ctx.telegram.sendDocument(customerUserId, ctx.message.document.file_id);
+    }
+
     chatData.status = 'waiting_customer_action';
-    // 🌟 Показываем исполнителю кнопки для продолжения общения
-    await ctx.telegram.sendMessage(executorUserId, '✅ Сообщение отправлено заказчику.', { reply_markup: getChatKeyboard(chatId, false) });
+
+    // 🌟 Показываем ИСПОЛНИТЕЛЮ кнопки «написать ещё / отправить файл»
+    await ctx.telegram.sendMessage(
+      executorUserId,
+      '✅ Сообщение отправлено заказчику.',
+      { reply_markup: getChatKeyboard(chatId, false) }
+    );
   }
 
   async function handleCustomerMessage(ctx, chatData) {
     const { executorUserId, workTitle, chatId, customerUserId } = chatData;
-    // 🌟 Логируем сообщение в чате
+    // Логируем сообщение
     logger.logChatMessage(chatData, 'customer', ctx);
     const messageText = ctx.message.text || '[Фото/Файл]';
-    // 🌟 Создаём клавиатуру отдельно
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('💬 Написать сообщение заказчику', `erm:${chatId}`)],
-      [Markup.button.callback('📎 Отправить файл заказчику', `erf:${chatId}`)]
-    ]);
+
+    // Отправляем исполнителю текст + кнопки для ответа
     await ctx.telegram.sendMessage(
-      executorUserId, 
-      `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`, 
-      { parse_mode: 'Markdown', ...keyboard }
+      executorUserId,
+      `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`,
+      { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, false) }
     );
+
+    // Пересылаем файл, если есть
     if (ctx.message.photo) {
       await ctx.telegram.sendPhoto(executorUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
     } else if (ctx.message.document) {
       await ctx.telegram.sendDocument(executorUserId, ctx.message.document.file_id);
     }
+
     chatData.status = 'waiting_executor_message';
-    // 🌟 Показываем заказчику кнопки для продолжения общения (исправляем двойной .reply_markup)
+
+    // 🌟 Показываем ЗАКАЗЧИКУ кнопки «написать ещё / отправить файл»
     await ctx.telegram.sendMessage(
-      customerUserId, 
-      '✅ Сообщение отправлено исполнителю.', 
+      customerUserId,
+      '✅ Сообщение отправлено исполнителю.',
       { reply_markup: getChatKeyboard(chatId, true) }
     );
   }
