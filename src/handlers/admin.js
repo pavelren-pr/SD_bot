@@ -834,17 +834,25 @@ function register(bot) {
               if (order.isCustomOrder) {
                 // 1. Уведомляем НОВОГО исполнителя с кнопками управления
                 if (order.status !== 'completed') {
+                  const isPaid = order.status === 'paid';
+                  
                   const privateText =
                     `✅ *Вам назначен индивидуальный заказ!*\n\n` +
                     `🆔 *Номер заказа:* №${orderNumber}\n` +
                     `📚 *Предмет:* ${order.subjectName || order.workTitle}\n` +
-                    `👤 *Заказчик:* ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\n` +
-                    `Назначьте цену или свяжитесь с заказчиком:`;
+                    `👤 *Заказчик:* ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n` +
+                    (isPaid ? `💰 *Цена:* ${order.price} ₽\n` : '') +
+                    `\n${isPaid ? 'Свяжитесь с заказчиком:' : 'Назначьте цену или свяжитесь с заказчиком:'}`;
 
-                  const privateKeyboard = Markup.inlineKeyboard([
-                    [Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)],
-                    [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
-                  ]);
+                  // 🌟 Если заказ уже оплачен — кнопку "Назначить цену" не показываем
+                  const privateKeyboard = isPaid
+                    ? Markup.inlineKeyboard([
+                        [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
+                      ])
+                    : Markup.inlineKeyboard([
+                        [Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)],
+                        [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
+                      ]);
 
                   try {
                     await bot.telegram.sendMessage(executorId, privateText, {
