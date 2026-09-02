@@ -1025,17 +1025,29 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     }
     
     try {
-      // Получаем данные из кэша
+      // Получаем личку исполнителя (целевой чат из кэша)
       const targetChatId = getCustomOrderChatId(orderNumber);
-      
-      // Отправляем скриншот в чат исполнителей
+      // Получаем групповой чат из конфигурации работы
+      const work = catalog.getWork(orderRecord.workId);
+      const { chatId: groupChatId } = getWorkConfig(work);
+
       const paymentMsg = `💳 *ПОДТВЕРЖДЕНИЕ ОПЛАТЫ*\n\n🆔 *Номер заказа:* №${orderNumber}\n👤 *Заказчик:* ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}`;
-      
+
+      // 1. Отправляем в личку исполнителя
       if (targetChatId) {
         if (fileType === 'photo') {
           await ctx.telegram.sendPhoto(targetChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
         } else {
           await ctx.telegram.sendDocument(targetChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+        }
+      }
+
+      // 2. Отправляем в групповой чат
+      if (groupChatId && String(groupChatId) !== String(targetChatId)) {
+        if (fileType === 'photo') {
+          await ctx.telegram.sendPhoto(groupChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+        } else {
+          await ctx.telegram.sendDocument(groupChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
         }
       }
       

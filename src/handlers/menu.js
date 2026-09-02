@@ -672,30 +672,35 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   bot.action(/^orders:executor:view:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
-    
     if (!order || String(order.executorId) !== String(ctx.from.id)) {
       await ctx.answerCbQuery('❌ Заказ не найден');
       return;
     }
-    
     const text = formatOrderCard(order, 'executor');
-    
     const buttons = [];
-    // 🌟 Для custom orders используем отдельную кнопку
+
     if (order.isCustomOrder) {
+      // 🌟 Кнопка назначения/изменения цены — только если заказ не оплачен
+      if (order.status !== 'paid') {
+        if (!order.price || order.price <= 0) {
+          buttons.push([Markup.button.callback('💰 Назначить цену', `custom_set_price:${order.orderNumber}`)]);
+        } else {
+          buttons.push([Markup.button.callback('💰 Изменить цену', `custom_set_price:${order.orderNumber}`)]);
+        }
+      }
       buttons.push([Markup.button.callback('💬 Написать заказчику', `custom_write_customer:${order.orderNumber}`)]);
     } else {
-      // 🌟 Для обычных заказов — всегда показываем кнопку
       buttons.push([Markup.button.callback('💬 Написать заказчику', `orders:executor:contact:${orderId}`)]);
     }
-    // 🌟 Кнопка "Отметить выполненным" — только если заказ ещё не выполнен
+
+    // Кнопка "Отметить выполненным" — только если заказ ещё не выполнен
     if (order.status !== 'completed') {
       buttons.push([Markup.button.callback('✅ Отметить выполненным', `orders:executor:complete:${orderId}`)]);
     }
-     // 🌟 Нормализуем статус для кнопки "Назад"
+
     const backStatus = EXECUTOR_ACTIVE_STATUSES.includes(order.status) ? 'active' : 'completed';
     buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${backStatus}`)]);
-    
+
     await ctx.editMessageText(text, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard(buttons)
