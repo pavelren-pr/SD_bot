@@ -1032,12 +1032,12 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
 async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignment = false) {
   const order = ordersDb.getOrder(orderId);
   if (!order) throw new Error('Заказ не найден');
-  if (order.executorId && !force) {
+  if (order.executorId && !isReassignment) {
     throw new Error('У заказа уже есть исполнитель');
   }
 
   // 🌟 При переназначении удаляем старый чат из activeChats
-  if (force && order.executorId) {
+  if (isReassignment && order.executorId) {
     for (const [chatId, chatData] of activeChats) {
       if (chatData.orderId === orderId) {
         activeChats.delete(chatId);
