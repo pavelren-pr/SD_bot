@@ -864,11 +864,11 @@ function register(bot) {
 
                 // 🌟 Уведомляем заказчика о новом исполнителе
                 if (order.customerId) {
+                  const actionWord = isReassignment ? 'изменён' : 'назначен';
                   const customerMessage =
-                    `👷 *По вашему заказу назначен исполнитель*\n\n` +
+                    `👷 *По вашему заказу ${actionWord} исполнитель*\n\n` +
                     `🆔 *Номер заказа:* №${orderNumber}\n` +
-                    `📚 *Работа:* ${order.workTitle}\n` +
-                    `👷 *Исполнитель:* ${executorName}\n\n` +
+                    `📚 *Работа:* ${order.workTitle}\n\n` +
                     `Вы можете связаться с исполнителем для обсуждения деталей:`;
 
                   const customerKeyboard = order.isCustomOrder
