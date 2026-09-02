@@ -812,11 +812,19 @@ function register(bot) {
               const executorUsername = executorUser.username || null;
               const executorName = executorUser.username ? `@${executorUser.username}` : executorUser.first_name || 'Исполнитель';
 
+              // 🌟 Определяем статус: сохраняем текущий, если заказ уже оплачен/выполнен
+              let newStatus;
+              if (order.status === 'paid' || order.status === 'completed') {
+                newStatus = order.status; // Не сбрасываем статус оплаченных/выполненных заказов
+              } else {
+                newStatus = order.isCustomOrder ? 'waiting_price' : 'active';
+              }
+
               // 🌟 Обновляем заказ в БД
               ordersDb.updateOrder(orderId, {
                 executorId: executorId,
                 executorUsername: executorUsername,
-                status: order.isCustomOrder ? 'waiting_price' : 'active',
+                status: newStatus,
                 acceptedAt: new Date().toLocaleString('ru-RU')
               });
 
