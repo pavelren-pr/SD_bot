@@ -1364,7 +1364,7 @@ function register(bot) {
       if (executors.length > 0) {
         availableUsersText += `🔥 *Исполнители (Прометей):*\n`;
         executors.forEach(e => {
-          availableUsersText += `• ${e.id}${e.username ? ` (@${e.username})` : ''}\n`;
+          availableUsersText += `• \`${e.id}\`${e.username ? ` (\`@${e.username}\`)` : ''}\n`;
         });
       } else {
         availableUsersText += `🔥 *Исполнители:* _нет назначенных рангов_\n`;
@@ -1373,7 +1373,7 @@ function register(bot) {
       if (admins.length > 0) {
         availableUsersText += `\n👑 *Администраторы (Посейдон):*\n`;
         admins.forEach(a => {
-          availableUsersText += `• ${a.id}${a.username ? ` (@${a.username})` : ''}\n`;
+          availableUsersText += `• \`${a.id}\`${a.username ? ` (\`@${a.username}\`)` : ''}\n`;
         });
       }
       
