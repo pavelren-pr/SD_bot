@@ -4,22 +4,51 @@ const loyalty = require('../data/loyalty');
 
 function register(bot) {
 
-  // 1. Показ курсов (с фильтрацией по специальности пользователя)
+  // 1. Показ курсов + общие работы
   bot.action('catalog:courses', (ctx) => {
     const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
-    
     if (!userSpecialty) {
       return ctx.answerCbQuery('❌ Сначала выберите специальность в меню');
     }
-    
     const courses = catalog.getCourses(userSpecialty);
-    
-    if (!courses || courses.length === 0) {
-      return ctx.answerCbQuery('📭 Для вашей специальности пока нет курсов');
-    }
+    const generalWorks = catalog.getWorksBySpecialty(userSpecialty);
     
     const buttons = courses.map(c => [{ text: c.name, callback: `catalog:subject:${c.id}` }]);
+    
+    // 🌟 Добавляем пункт "Общие работы" если они есть
+    if (generalWorks.length > 0) {
+      buttons.push([{ text: `📋 Общие работы`, callback: `catalog:general_works` }]);
+    }
+    
+    if (buttons.length === 0) {
+      return ctx.answerCbQuery('📭 Для вашей специальности пока нет курсов и работ');
+    }
+    
     ctx.editMessageText('Выберите курс:', createInlineKeyboard(buttons));
+  });
+
+  // 🌟 Показ общих работ (без курса/предмета)
+  bot.action('catalog:general_works', (ctx) => {
+    const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
+    if (!userSpecialty) {
+      return ctx.answerCbQuery('❌ Сначала выберите специальность в меню');
+    }
+    const works = catalog.getWorksBySpecialty(userSpecialty);
+    if (!works || works.length === 0) {
+      return ctx.answerCbQuery('📭 Для вашей специальности пока нет общих работ');
+    }
+    
+    let header = `📋 *Общие работы*\n`;
+    header += `📝 *Выберите работу:*`;
+    
+    const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
+    ctx.editMessageText(
+      header,
+      {
+        parse_mode: 'Markdown',
+        ...createInlineKeyboard(buttons, 'catalog:courses')
+      }
+    );
   });
 
   // 2. Показ предметов выбранного курса
@@ -95,46 +124,49 @@ function register(bot) {
   bot.action(/^catalog:details:(.+)$/, async (ctx) => {
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
-    
     if (!work) {
       return ctx.answerCbQuery('❌ Работа не найдена');
     }
     
-    const subject = catalog.getSubject(work.subjectId);
-    const course = catalog.getCourse(subject.courseId);
-    
-    // Проверка: работа принадлежит специальности пользователя
+    // 🌟 Проверка специальности
     const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
-    if (userSpecialty && course.specialty && course.specialty !== userSpecialty) {
+    if (userSpecialty && work.specialty && work.specialty !== userSpecialty) {
       return ctx.answerCbQuery('❌ Эта работа не для вашей специальности');
+    }
+    
+    // 🌟 Безопасное получение курса (для общих работ курс/предмет отсутствуют)
+    if (work.subjectId) {
+      const subject = catalog.getSubject(work.subjectId);
+      if (subject) {
+        const course = catalog.getCourse(subject.courseId);
+        if (userSpecialty && course && course.specialty && course.specialty !== userSpecialty) {
+          return ctx.answerCbQuery('❌ Эта работа не для вашей специальности');
+        }
+      }
     }
     
     const pricing = require('../data/loyalty').calculatePrice(work.price, ctx.from.id);
     
     let text = `🎯 *${work.title}*\n\n`;
-    
-    // Безопасно показываем описание, если оно есть и не пустое
     if (work.description && work.description.trim() !== '') {
       text += `${work.description}\n\n`;
     }
-    
-    // Ссылка на примеры работ (если есть в каталоге)
     if (work.exampleUrl && work.exampleUrl.trim() !== '') {
       text += `🔍 *Пример работы и методички* [доступны по ссылке](${work.exampleUrl})\n\n`;
     }
-    
     text += `💰 *Стоимость:* ${work.price} ₽\n`;
-    
     if (pricing.discountPercent > 0) {
       text += `🎉 *Ваша скидка:* ${pricing.discountPercent}%\n`;
     }
-    
     text += `✅ *Итого к оплате:* ${pricing.finalPrice} ₽\n\n`;
     text += `📌 *Что нужно для заказа:*\n${work.prompt}`;
     
+    // 🌟 Кнопка "Назад" — зависит от типа работы
+    const backCallback = work.subjectId ? `catalog:work:${work.subjectId}` : 'catalog:general_works';
+    
     const buttons = [
       [{ text: '✅ Оформить этот заказ', callback: `order:start:${workId}` }],
-      [{ text: '⬅️ Назад к работам предмета', callback: `catalog:work:${work.subjectId}` }]
+      [{ text: '⬅️ Назад', callback: backCallback }]
     ];
     
     await ctx.editMessageText(

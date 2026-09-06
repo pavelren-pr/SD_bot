@@ -190,6 +190,11 @@ function deleteSpecialty(specialtyId) {
   return { success: true };
 }
 
+// Получить работы, привязанные напрямую к специальности (без предмета/курса)
+function getWorksBySpecialty(specialtyId) {
+  return getData().works.filter(w => !w.subjectId && w.specialty === specialtyId);
+}
+
 module.exports = {
   get courses() { return getData().courses; },
   get subjects() { return getData().subjects; },
@@ -200,6 +205,7 @@ module.exports = {
   getSubjectsByCourse,
   getWork,
   getWorksBySubject,
+  getWorksBySpecialty,
   saveData,
   getData,
   migrateData,
