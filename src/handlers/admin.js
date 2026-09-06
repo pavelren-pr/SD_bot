@@ -263,7 +263,7 @@ function register(bot) {
         `📚 *Курс:* ${text}\n\n🎓 *Теперь выберите специальность для этого курса:*`,
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }
       );
-      ctx.session.adminState = null; return;
+      return;
     }
     if (state.startsWith('awaiting_subject_name:')) {
       const courseId = state.split(':')[1];

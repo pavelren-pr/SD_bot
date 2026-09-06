@@ -47,71 +47,66 @@ async function showSpecialtySelection(ctx, isChange = false) {
 }
 
 function register(bot) {
-  // ==========================================
-  // ГЛАВНОЕ МЕНЮ
-  // ==========================================
-  bot.command('start', async (ctx) => {
-    ctx.session = ctx.session || {};
-    const userName = ctx.from.first_name || 'Пользователь';
-    const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
-    
-    // Если специальность не выбрана — показываем выбор
-    if (!userSpecialty) {
-      await ctx.reply(
-        `👋 *Добро пожаловать, ${userName}!*\n\n` +
-        `Я — бот для заказа учебных работ.`,
-        { parse_mode: 'Markdown' }
-      );
-      await showSpecialtySelection(ctx);
-      return;
-    }
-
-    // Обработчик выбора специальности
-    bot.action(/^specialty:set:(.+)$/, async (ctx) => {
-        console.log('🔘 Нажата кнопка специальности:', ctx.match[1]);
-        console.log('👤 Пользователь:', ctx.from.id);
-      
-      const specialtyId = ctx.match[1];
-      loyalty.setUserSpecialty(ctx.from.id, specialtyId);
-      
-      const specialty = loyalty.getSpecialtyById(specialtyId);
-      
-      await ctx.editMessageText(
-        `✅ *Специальность выбрана:* ${specialty.name}\n\n` +
-        `Теперь в каталоге вы будете видеть работы для вашей специальности.`,
-        { parse_mode: 'Markdown' }
-      );
-      
-      // Показываем главное меню
-      await ctx.reply(
-        `Выберите раздел в меню 👇`,
-        { 
-          parse_mode: 'Markdown',
-          ...getMainMenuKeyboard()
-        }
-      );
-      
-      await ctx.answerCbQuery();
-    });
-
-    // Обработчик кнопки "Изменить специальность" из профиля
-    bot.action('specialty:change', async (ctx) => {
-      await showSpecialtySelection(ctx, true);
-      await ctx.answerCbQuery();
-    });
-    
+// ==========================================
+// ГЛАВНОЕ МЕНЮ
+// ==========================================
+bot.command('start', async (ctx) => {
+  ctx.session = ctx.session || {};
+  const userName = ctx.from.first_name || 'Пользователь';
+  const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
+  
+  // Если специальность не выбрана — показываем выбор
+  if (!userSpecialty) {
     await ctx.reply(
       `👋 *Добро пожаловать, ${userName}!*\n\n` +
-      `Я — бот для заказа учебных работ.\n` +
-      `Выберите раздел в меню 👇`,
-      { 
-        parse_mode: 'Markdown',
-        ...getMainMenuKeyboard()
-      }
+      `Я — бот для заказа учебных работ.`,
+      { parse_mode: 'Markdown' }
     );
-  });
+    await showSpecialtySelection(ctx);
+    return;
+  }
+  
+  await ctx.reply(
+    `👋 *Добро пожаловать, ${userName}!*\n\n` +
+    `Я — бот для заказа учебных работ.\n` +
+    `Выберите раздел в меню 👇`,
+    { 
+      parse_mode: 'Markdown',
+      ...getMainMenuKeyboard()
+    }
+  );
+});
 
-  bot.hears('📚 Заказать работу', async (ctx) => {
+// 🌟 ВЫНЕСЕНО НАРУЖУ — обработчики специальностей теперь регистрируются при загрузке модуля!
+bot.action(/^specialty:set:(.+)$/, async (ctx) => {
+  const specialtyId = ctx.match[1];
+  loyalty.setUserSpecialty(ctx.from.id, specialtyId);
+  
+  const specialty = loyalty.getSpecialtyById(specialtyId);
+  
+  await ctx.editMessageText(
+    `✅ *Специальность выбрана:* ${specialty.name}\n\n` +
+    `Теперь в каталоге вы будете видеть работы для вашей специальности.`,
+    { parse_mode: 'Markdown' }
+  );
+  
+  await ctx.reply(
+    `Выберите раздел в меню 👇`,
+    { 
+      parse_mode: 'Markdown',
+      ...getMainMenuKeyboard()
+    }
+  );
+  
+  await ctx.answerCbQuery();
+});
+
+bot.action('specialty:change', async (ctx) => {
+  await showSpecialtySelection(ctx, true);
+  await ctx.answerCbQuery();
+});
+
+bot.hears('📚 Заказать работу', async (ctx) => {
     const catalog = require('../data/catalog');
     const { createInlineKeyboard } = require('../utils/keyboard');
     
