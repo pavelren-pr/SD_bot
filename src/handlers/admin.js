@@ -119,8 +119,8 @@ function getSpecialtyCourses(specialtyId) {
     buttons.push([Markup.button.callback('— курсов пока нет —', 'noop')]);
   }
   buttons.push([Markup.button.callback('➕ Добавить курс', `admin:add_course:${specialtyId}`)]);
-  buttons.push([Markup.button.callback('✏️ Изменить курс', 'admin:edit_course')]);
-  buttons.push([Markup.button.callback('🗑 Удалить курс', 'admin:delete_course')]);
+  buttons.push([Markup.button.callback('✏️ Изменить курс', `admin:edit_course:${specialtyId}`)]);
+  buttons.push([Markup.button.callback('🗑 Удалить курс', `admin:delete_course:${specialtyId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', 'admin:catalog')]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -222,16 +222,24 @@ function getWorkCard(workId) {
   return { text, keyboard };
 }
 
-function getDeleteCourseList() {
+function getDeleteCourseList(specialtyId = null) {
   const specialties = catalog.getSpecialties();
   const emojiMap = {};
   specialties.forEach(s => { emojiMap[s.id] = s.emoji; });
-  
-  const buttons = catalog.courses.map(c => {
+
+  const courses = specialtyId ? catalog.getCourses(specialtyId) : catalog.courses;
+
+  const buttons = courses.map(c => {
     const emoji = emojiMap[c.specialty] || '📚';
     return [Markup.button.callback(`🗑 ${emoji} ${c.name}`, `admin:delete_course_confirm:${c.id}`)];
   });
-  buttons.push([Markup.button.callback('⬅️ Отмена', 'admin:catalog')]);
+
+  if (buttons.length === 0) {
+    buttons.push([Markup.button.callback('— курсов пока нет —', 'noop')]);
+  }
+
+  const backCallback = specialtyId ? `admin:catalog_specialty:${specialtyId}` : 'admin:catalog';
+  buttons.push([Markup.button.callback('⬅️ Отмена', backCallback)]);
   return Markup.inlineKeyboard(buttons);
 }
 
@@ -249,16 +257,26 @@ function getDeleteWorkList(subjectId) {
   return Markup.inlineKeyboard(buttons);
 }
 
-function getEditCourseList() {
+function getEditCourseList(specialtyId = null) {
   const specialties = catalog.getSpecialties();
   const emojiMap = {};
   specialties.forEach(s => { emojiMap[s.id] = s.emoji; });
-  
-  const buttons = catalog.courses.map(c => {
+
+  // Фильтруем курсы по специальности, если указана
+  const courses = specialtyId ? catalog.getCourses(specialtyId) : catalog.courses;
+
+  const buttons = courses.map(c => {
     const emoji = emojiMap[c.specialty] || '📚';
     return [Markup.button.callback(`${emoji} ${c.name}`, `admin:edit_course_select:${c.id}`)];
   });
-  buttons.push([Markup.button.callback('⬅️ Отмена', 'admin:catalog')]);
+
+  if (buttons.length === 0) {
+    buttons.push([Markup.button.callback('— курсов пока нет —', 'noop')]);
+  }
+
+  // Кнопка "Отмена" ведёт обратно к специальности или к общему каталогу
+  const backCallback = specialtyId ? `admin:catalog_specialty:${specialtyId}` : 'admin:catalog';
+  buttons.push([Markup.button.callback('⬅️ Отмена', backCallback)]);
   return Markup.inlineKeyboard(buttons);
 }
 
@@ -1325,9 +1343,10 @@ function register(bot) {
     }
 
     // --- КАТАЛОГ: Изменение ---
-    else if (action === 'edit_course') {
+    else if (action === 'edit_course' || action.startsWith('edit_course:')) {
+      const specialtyId = action.includes(':') ? action.split(':')[1] : null;
       ctx.session.adminState = null;
-      await ctx.editMessageText('✏️ *Изменение курса*\n\nВыберите курс:', { parse_mode: 'Markdown', ...getEditCourseList() });
+      await ctx.editMessageText('✏️ *Изменение курса*\n\nВыберите курс:', { parse_mode: 'Markdown', ...getEditCourseList(specialtyId) });
     }
     else if (action.startsWith('edit_course_select:')) {
       const courseId = action.split(':')[1];
@@ -1388,9 +1407,10 @@ function register(bot) {
     }
 
     // --- КАТАЛОГ: Удаление ---
-    else if (action === 'delete_course') {
+    else if (action === 'delete_course' || action.startsWith('delete_course:')) {
+      const specialtyId = action.includes(':') ? action.split(':')[1] : null;
       ctx.session.adminState = null;
-      await ctx.editMessageText('🗑 *Удаление курса*\n\nВыберите курс:', { parse_mode: 'Markdown', ...getDeleteCourseList() });
+      await ctx.editMessageText('🗑 *Удаление курса*\n\nВыберите курс:', { parse_mode: 'Markdown', ...getDeleteCourseList(specialtyId) });
     }
     else if (action.startsWith('delete_course_confirm:')) {
       const courseId = action.split(':')[1];
@@ -1404,14 +1424,15 @@ function register(bot) {
     else if (action.startsWith('delete_course_execute:')) {
       const courseId = action.split(':')[1];
       const course = catalog.getCourse(courseId);
-      const specialtyId = course ? course.specialty : 'navigation';
       const data = catalog.getData();
       const subIds = data.subjects.filter(s => s.courseId === courseId).map(s => s.id);
       data.subjects = data.subjects.filter(s => s.courseId !== courseId);
       data.works = data.works.filter(w => !subIds.includes(w.subjectId));
       data.courses = data.courses.filter(c => c.id !== courseId);
       catalog.saveData(data);
-      await ctx.editMessageText(`✅ Курс "${course.name}" удалён!`, { parse_mode: 'Markdown', ...getSpecialtyCourses(specialtyId) });
+      const specialtyId = course ? course.specialty : null;
+      const backKeyboard = specialtyId ? getSpecialtyCourses(specialtyId) : getCatalogSpecialtiesMenu();
+      await ctx.editMessageText(`✅ Курс "${course.name}" удалён!`, { parse_mode: 'Markdown', ...backKeyboard });
     }
     else if (action.startsWith('delete_subject:')) {
       ctx.session.adminState = null;
