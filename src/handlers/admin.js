@@ -57,6 +57,13 @@ function escapeMarkdown(text) {
   return String(text).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 }
 
+// 🌟 Безопасный вывод username (экранирование спецсимволов Markdown)
+function safeUsername(username) {
+  if (!username || username === 'N/A') return 'не указан';
+  // Экранируем все спецсимволы Markdown
+  return '@' + String(username).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+}
+
 // 🌟 Статусы для категорий (включая custom orders)
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
 const ACTIVE_STATUSES = ['active', 'paid'];
@@ -1278,7 +1285,7 @@ function register(bot) {
       
       let textMsg = `👤 *Информация о заказчике*\n\n`;
       textMsg += `ID: \`${foundCustomer.id}\`\n`;
-      textMsg += `Username: ${foundCustomer.username !== 'N/A' ? '@' + foundCustomer.username : 'не указан'}\n`;
+      textMsg += `Username: ${safeUsername(foundCustomer.username)}\n`;
       textMsg += `Сумма выкупа: ${loyaltyInfo.totalSpent} ₽\n`;
       textMsg += `Количество заказов: ${foundCustomer.orderCount}\n\n`;
       
@@ -2696,6 +2703,7 @@ function register(bot) {
       const buttons = [];
       displayCustomers.forEach(c => {
         const usernameDisplay = c.username !== 'N/A' ? '@' + c.username : 'без username';
+        // В callback-кнопках Markdown не парсится, поэтому экранирование не нужно
         buttons.push([Markup.button.callback(`${c.id} | ${usernameDisplay} | ${c.totalSpent}₽`, `admin:customer_view:${c.id}`)]);
       });
       
@@ -2729,6 +2737,7 @@ function register(bot) {
       const buttons = [];
       displayCustomers.forEach(c => {
         const usernameDisplay = c.username !== 'N/A' ? '@' + c.username : 'без username';
+        // В callback-кнопках Markdown не парсится, поэтому экранирование не нужно
         buttons.push([Markup.button.callback(`${c.id} | ${usernameDisplay} | ${c.totalSpent}₽`, `admin:customer_view:${c.id}`)]);
       });
       
@@ -2762,7 +2771,7 @@ function register(bot) {
       
       let text = `👤 Информация о заказчике\n\n`;
       text += `ID: \`${customer.id}\`\n`;
-      text += `Username: ${customer.username !== 'N/A' ? '@' + customer.username : 'не указан'}\n`;
+      text += `Username: ${safeUsername(customer.username)}\n`;
       text += `Сумма выкупа: ${customer.totalSpent} ₽\n`;
       text += `Количество заказов: ${customer.orderCount}\n\n`;
       

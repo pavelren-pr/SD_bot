@@ -11,6 +11,12 @@ const EXECUTOR_ACTIVE_STATUSES = ['active', 'paid', 'waiting_price', 'price_nego
 
 const ORDERS_PER_PAGE = 5;
 
+// 🌟 Безопасный вывод username (экранирование спецсимволов Markdown)
+function safeUsername(username) {
+  if (!username) return null;
+  return '@' + String(username).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+}
+
 function getMainMenuKeyboard() {
   return Markup.keyboard([
     ['📚 Заказать работу'],
@@ -999,18 +1005,18 @@ function formatOrderCard(order, role) {
   // Отображение ID заказчика и исполнителя для админа и исполнителя
   if (role === 'admin' || role === 'executor') {
     const customerDisplay = order.customerUsername 
-      ? `${order.customerId} (@${order.customerUsername})`
+      ? `${order.customerId} (${safeUsername(order.customerUsername)})`
       : `${order.customerId}`;
     text += `👤 *Заказчик:* ${customerDisplay}\n`;
     
     if (role === 'admin') {
       const executorDisplay = order.executorUsername 
-        ? `${order.executorId} (@${order.executorUsername})`
+        ? `${order.executorId} (${safeUsername(order.executorUsername)})`
         : (order.executorId ? `${order.executorId}` : '_не назначен_');
       text += `👷 *Исполнитель:* ${executorDisplay}\n\n`;
     } else if (role === 'executor' && order.executorId) {
       const executorDisplay = order.executorUsername 
-        ? `${order.executorId} (@${order.executorUsername})`
+        ? `${order.executorId} (${safeUsername(order.executorUsername)})`
         : `${order.executorId}`;
       text += `👷 *Вы (исполнитель):* ${executorDisplay}\n\n`;
     }
