@@ -585,11 +585,12 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     const active = executorOrders.filter(o => EXECUTOR_ACTIVE_STATUSES.includes(o.status)).length;
     const completed = executorOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
     
-    // Рассчитываем общий заработок (цена - комиссия) для выполненных заказов
+    // Рассчитываем общий заработок: цена × (1 - комиссия%) для выполненных заказов
     let totalEarnings = 0;
     executorOrders.forEach(order => {
-      if (order.status === 'completed' && order.price && order.commission) {
-        totalEarnings += (order.price - order.commission);
+      if (order.status === 'completed' && order.price) {
+        const commission = order.commission || 0;
+        totalEarnings += Math.round(order.price * (1 - commission / 100));
       }
     });
     
@@ -875,10 +876,30 @@ function formatOrderCard(order, role) {
   text += `📚 *Работа:* ${order.workTitle}\n`;
   text += `📖 *Предмет:* ${order.subjectName}\n`;
   text += `🎓 *Курс:* ${order.courseName}\n\n`;
-  text += `💰 *Стоимость:* ${order.price} ₽\n`;
-  
+  // 🌟 Отображение стоимости
+  if (order.isCustomOrder && order.finalPrice && order.finalPrice > 0) {
+    // Индивидуальный заказ: finalPrice = что платит заказчик, price = что получает исполнитель
+    text += `💰 *Стоимость:* ${order.finalPrice} ₽\n`;
+  } else {
+    // Обычный заказ: price = что платит заказчик
+    text += `💰 *Стоимость:* ${order.price} ₽\n`;
+  }
+
   if (role === 'executor' || role === 'admin') {
-    text += `📊 *Комиссия:* ${order.commission}%\n\n`;
+    if (order.isCustomOrder && order.finalPrice && order.finalPrice > 0) {
+      // Для индивидуальных заказов: price — это уже цена исполнителя
+      const commissionAmount = order.finalPrice - order.price;
+      const commissionPercent = order.commission || 0;
+      text += `📊 *Комиссия:* ${commissionPercent}% (${commissionAmount} ₽)\n`;
+      text += `💰 *Цена исполнителя:* ${order.price} ₽\n\n`;
+    } else {
+      // Для обычных заказов: вычисляем цену исполнителя из цены заказа
+      const commissionPercent = order.commission || 0;
+      const commissionAmount = Math.round(order.price * commissionPercent / 100);
+      const executorPrice = order.price - commissionAmount;
+      text += `📊 *Комиссия:* ${commissionPercent}% (${commissionAmount} ₽)\n`;
+      text += `💰 *Цена исполнителя:* ${executorPrice} ₽\n\n`;
+    }
   } else {
     text += `\n`;
   }
