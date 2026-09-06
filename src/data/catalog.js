@@ -195,6 +195,16 @@ function getWorksBySpecialty(specialtyId) {
   return getData().works.filter(w => !w.subjectId && w.specialty === specialtyId);
 }
 
+// Получить общие работы курса (без предмета, но привязанные к курсу)
+function getWorksByCourse(courseId) {
+  return getData().works.filter(w => !w.subjectId && w.courseId === courseId);
+}
+
+// Получить общие работы специальности (без курса и предмета)
+function getWorksBySpecialty(specialtyId) {
+  return getData().works.filter(w => !w.subjectId && !w.courseId && w.specialty === specialtyId);
+}
+
 module.exports = {
   get courses() { return getData().courses; },
   get subjects() { return getData().subjects; },
@@ -205,6 +215,8 @@ module.exports = {
   getSubjectsByCourse,
   getWork,
   getWorksBySubject,
+  getWorksByCourse,
+  getWorksBySpecialty,
   getWorksBySpecialty,
   saveData,
   getData,

@@ -140,8 +140,17 @@ function getCourseSubjects(courseId) {
   const subjects = catalog.getSubjectsByCourse(courseId);
   const course = catalog.getCourse(courseId);
   const specialtyId = course ? course.specialty : 'navigation';
+  const generalWorks = catalog.getWorksByCourse(courseId);
+  
   const buttons = subjects.map(s => [Markup.button.callback(s.name, `admin:catalog_subject:${s.id}`)]);
+  
+  // 🌟 Пункт "Общие работы курса"
+  buttons.push([
+    Markup.button.callback(`📋 Общие работы курса (${generalWorks.length})`, `admin:catalog_course_general:${courseId}`)
+  ]);
+  
   buttons.push([Markup.button.callback('➕ Добавить предмет', `admin:add_subject:${courseId}`)]);
+  buttons.push([Markup.button.callback('➕ Добавить общую работу курса', `admin:add_course_general_work:${courseId}`)]);
   buttons.push([Markup.button.callback('✏️ Изменить предмет', `admin:edit_subject:${courseId}`)]);
   buttons.push([Markup.button.callback('🗑 Удалить предмет', `admin:delete_subject:${courseId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_specialty:${specialtyId}`)]);
@@ -172,6 +181,20 @@ function getGeneralWorks(specialtyId) {
   buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_general_work:${specialtyId}`)]);
   buttons.push([Markup.button.callback('🌟 Добавить общий индив. заказ', `admin:add_general_custom_work:${specialtyId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_specialty:${specialtyId}`)]);
+  return Markup.inlineKeyboard(buttons);
+}
+
+// Общие работы курса (без предмета)
+function getCourseGeneralWorks(courseId) {
+  const works = catalog.getWorksByCourse(courseId);
+  const buttons = works.map(w => [
+    Markup.button.callback(`№${w.orderNumber || 'N/A'} | ${w.title.substring(0, 35)}`, `admin:catalog_work:${w.id}`)
+  ]);
+  if (buttons.length === 0) {
+    buttons.push([Markup.button.callback('— общих работ пока нет —', 'noop')]);
+  }
+  buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_course_general_work:${courseId}`)]);
+  buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_course:${courseId}`)]);
   return Markup.inlineKeyboard(buttons);
 }
 
@@ -224,21 +247,19 @@ function getWorkCard(workId) {
   let text = `✏️ *Редактирование работы*\n\n`;
   text += `🎓 *Специальность:* ${specialtyName}\n`;
   
-  // 🌟 Показываем курс и предмет только если они есть
   if (work.subjectId) {
     const subject = catalog.getSubject(work.subjectId);
-    if (subject) {
-      const course = catalog.getCourse(subject.courseId);
-      text += `📚 *Курс:* ${course ? escapeMarkdown(course.name) : 'Не указан'}\n`;
-      text += `📖 *Предмет:* ${escapeMarkdown(subject.name)}\n\n`;
-    } else {
-      text += `📚 *Курс:* _не указан_\n📖 *Предмет:* _не указан_\n\n`;
-    }
+    const course = subject ? catalog.getCourse(subject.courseId) : null;
+    text += `📚 *Курс:* ${course ? escapeMarkdown(course.name) : '_не указан_'}\n`;
+    text += `📖 *Предмет:* ${subject ? escapeMarkdown(subject.name) : '_не указан_'}\n\n`;
+  } else if (work.courseId) {
+    const course = catalog.getCourse(work.courseId);
+    text += `📚 *Курс:* ${course ? escapeMarkdown(course.name) : '_не указан_'}\n`;
+    text += `📋 *Тип:* Общая работа курса (без предмета)\n\n`;
   } else {
-    text += `📋 *Тип:* Общая работа (без курса/предмета)\n\n`;
+    text += `📋 *Тип:* Общая работа специальности (без курса/предмета)\n\n`;
   }
-  text += `📚 *Курс:* ${escapeMarkdown(course.name)}\n`;
-  text += `📖 *Предмет:* ${escapeMarkdown(subject.name)}\n\n`;
+  
   text += `📝 *Название:* ${escapeMarkdown(work.title)}\n`;
   if (work.description && work.description.trim() !== '') text += `📄 *Описание:* ${escapeMarkdown(work.description)}\n`;
   text += `💰 *Цена:* ${work.price} ₽\n`;
@@ -250,11 +271,20 @@ function getWorkCard(workId) {
   if (work.exampleUrl && work.exampleUrl.trim() !== '') text += `🔗 *Примеры:* ${escapeMarkdown(work.exampleUrl)}\n`;
   text += `\n📌 *Подсказка:*\n${escapeMarkdown(work.prompt)}`;
   
+  // 🌟 Кнопка "Назад" зависит от типа работы
+  let backCallback;
+  if (work.subjectId) {
+    backCallback = `admin:catalog_subject:${work.subjectId}`;
+  } else if (work.courseId) {
+    backCallback = `admin:catalog_course_general:${work.courseId}`;
+  } else {
+    backCallback = `admin:catalog_specialty:${work.specialty}`;
+  }
+  
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('✏️ Изменить информацию', `admin:edit_work:${workId}`)],
-    [Markup.button.callback('⬅️ Назад', `admin:catalog_subject:${work.subjectId}`)]
+    [Markup.button.callback('⬅️ Назад', backCallback)]
   ]);
-  
   return { text, keyboard };
 }
 
@@ -605,6 +635,94 @@ function register(bot) {
       await ctx.reply(
         `✅ *Общий индивидуальный заказ добавлен!*\n\n🌟 *${escapeMarkdown(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
         { parse_mode: 'Markdown', ...getGeneralWorks(specialtyId) }
+      );
+      ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
+    }
+
+    // ==========================================
+    // 🌟 ДОБАВЛЕНИЕ ОБЩЕЙ РАБОТЫ КУРСА (без предмета)
+    // ==========================================
+    if (state.startsWith('add_course_general_work_title:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.title = text;
+      ctx.session.adminState = `add_course_general_work_desc:${courseId}`;
+      await ctx.reply('📄 *Шаг 2/9: Введите описание работы (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_work_desc:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
+      ctx.session.adminState = `add_course_general_work_price:${courseId}`;
+      await ctx.reply('💵 *Шаг 3/9: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_work_price:')) {
+      if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.price = parseInt(text);
+      ctx.session.adminState = `add_course_general_work_comm:${courseId}`;
+      await ctx.reply('📊 *Шаг 4/9: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_work_comm:')) {
+      if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.commission = parseInt(text);
+      ctx.session.adminState = `add_course_general_work_chat:${courseId}`;
+      const envVars = getAvailableEnvVars();
+      let message = '💬 *Шаг 5/9: Имя переменной окружения для чата*\n\n';
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nОтправьте имя переменной:`;
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_work_chat:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.chatEnv = text;
+      ctx.session.adminState = `add_course_general_work_pay:${courseId}`;
+      const envVars = getAvailableEnvVars();
+      let message = '💳 *Шаг 6/9: Имя переменной окружения для оплаты*\n\n';
+      message += formatEnvVarsList(envVars.paymentVars, 'payment');
+      message += `\nОтправьте имя переменной:`;
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_work_pay:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.paymentEnv = text;
+      ctx.session.adminState = `add_course_general_work_needs:${courseId}`;
+      await ctx.reply(
+        '📎 *Шаг 7/9: Требования к заказу*\n\nОтправьте через запятую или напишите "нет":\n• `photo`\n• `details`\n• `variant`',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      ); return;
+    }
+    if (state.startsWith('add_course_general_work_needs:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.needs = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
+      ctx.session.tempWorkData.id = `work_${Date.now()}`;
+      ctx.session.adminState = `add_course_general_work_prompt:${courseId}`;
+      await ctx.reply('📌 *Шаг 8/9: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_work_prompt:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.prompt = text;
+      ctx.session.adminState = `add_course_general_work_url:${courseId}`;
+      await ctx.reply('🔗 *Шаг 9/9: Ссылка на примеры работ (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_work_url:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.exampleUrl = text.toLowerCase() === 'нет' ? '' : text;
+      // Наследуем специальность от курса
+      const course = catalog.getCourse(courseId);
+      ctx.session.tempWorkData.specialty = course ? course.specialty : 'navigation';
+      ctx.session.tempWorkData.subjectId = null; // без предмета
+      ctx.session.tempWorkData.courseId = courseId; // привязка к курсу
+      const works = catalog.getData().works;
+      works.push(ctx.session.tempWorkData);
+      catalog.saveData({ ...catalog.getData(), works });
+      logger.logAdminAction('catalog_course_general_work_added', {
+        workId: ctx.session.tempWorkData.id,
+        title: ctx.session.tempWorkData.title,
+        courseId: courseId
+      }, ctx);
+      await ctx.reply(
+        `✅ *Общая работа курса добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`,
+        { parse_mode: 'Markdown', ...getCourseGeneralWorks(courseId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -1448,6 +1566,15 @@ function register(bot) {
       ctx.session.adminState = null;
       await ctx.editMessageText('📝 *Работы предмета*\n\nВыберите работу:', { parse_mode: 'Markdown', ...getSubjectWorks(action.split(':')[1]) });
     }
+    // 🌟 Общие работы курса
+    else if (action.startsWith('catalog_course_general:')) {
+      const courseId = action.split(':')[1];
+      ctx.session.adminState = null;
+      await ctx.editMessageText(
+        '📋 *Общие работы курса (без предмета)*\n\nВыберите работу:',
+        { parse_mode: 'Markdown', ...getCourseGeneralWorks(courseId) }
+      );
+    }
     else if (action.startsWith('catalog_work:')) {
       ctx.session.adminState = null;
       const card = getWorkCard(action.split(':')[1]);
@@ -1538,6 +1665,13 @@ function register(bot) {
     else if (action.startsWith('add_subject:')) {
       ctx.session.adminState = `awaiting_subject_name:${action.split(':')[1]}`;
       await ctx.editMessageText('✏️ *Введите название нового предмета:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+    }
+    // 🌟 Добавление общей работы курса
+    else if (action.startsWith('add_course_general_work:')) {
+      const courseId = action.split(':')[1];
+      ctx.session.tempWorkData = { subjectId: null, courseId: courseId };
+      ctx.session.adminState = `add_course_general_work_title:${courseId}`;
+      await ctx.editMessageText('✍️ *Шаг 1/9: Введите название общей работы курса:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('add_work:')) {
       ctx.session.adminState = `add_work_title:${action.split(':')[1]}`;
@@ -1685,12 +1819,20 @@ function register(bot) {
       catalog.saveData(data);
       logger.logAdminAction('catalog_work_deleted', { workId: workId, title: work.title }, ctx);
       
-      // 🌟 Если это общая работа — возвращаем к списку общих работ
-      if (!work.subjectId && work.specialty) {
-        await ctx.editMessageText(`✅ Работа удалена!`, { parse_mode: 'Markdown', ...getGeneralWorks(work.specialty) });
+      // 🌟 Определяем, куда возвращаться
+      let backKeyboard;
+      if (!work.subjectId && work.courseId) {
+        // Общая работа курса
+        backKeyboard = getCourseGeneralWorks(work.courseId);
+      } else if (!work.subjectId && !work.courseId) {
+        // Общая работа специальности
+        backKeyboard = getGeneralWorks(work.specialty);
       } else {
-        await ctx.editMessageText(`✅ Работа удалена!`, { parse_mode: 'Markdown', ...getSubjectWorks(work.subjectId) });
+        // Обычная работа предмета
+        backKeyboard = getSubjectWorks(work.subjectId);
       }
+      
+      await ctx.editMessageText(`✅ Работа удалена!`, { parse_mode: 'Markdown', ...backKeyboard });
     }
 
     // ==========================================

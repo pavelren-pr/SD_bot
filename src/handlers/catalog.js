@@ -55,32 +55,35 @@ function register(bot) {
   bot.action(/^catalog:subject:(.+)$/, (ctx) => {
     const courseId = ctx.match[1];
     const course = catalog.getCourse(courseId);
+    if (!course) return ctx.answerCbQuery('❌ Курс не найден');
     
-    if (!course) {
-      return ctx.answerCbQuery('❌ Курс не найден');
-    }
-    
-    // Проверка: курс принадлежит специальности пользователя
     const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
     if (userSpecialty && course.specialty && course.specialty !== userSpecialty) {
       return ctx.answerCbQuery('❌ Этот курс не для вашей специальности');
     }
     
     const subjects = catalog.getSubjectsByCourse(courseId);
-    
-    if (!subjects || subjects.length === 0) {
-      return ctx.answerCbQuery('📭 Для этого курса пока нет предметов');
-    }
+    const generalWorks = catalog.getWorksByCourse(courseId);
     
     const buttons = subjects.map(s => [{ text: s.name, callback: `catalog:work:${s.id}` }]);
+    
+    // 🌟 Добавляем пункт "Общие работы" если они есть
+    if (generalWorks.length > 0) {
+      buttons.push([{ text: `📋 Общие работы`, callback: `catalog:course_general:${courseId}` }]);
+    }
+    
+    if (buttons.length === 0) {
+      return ctx.answerCbQuery('📭 Для этого курса пока нет предметов и работ');
+    }
+    
     ctx.editMessageText(
-      `📚 Курс: *${course.name}*\nВыберите предмет:`, 
+      `📚 Курс: *${course.name}*\nВыберите предмет:`,
       {
         parse_mode: 'Markdown',
         ...createInlineKeyboard(buttons, 'catalog:courses')
       }
     );
-  });
+});
 
   // 3. Показ работ выбранного предмета с информацией о курсе и предмете в заголовке
   bot.action(/^catalog:work:(.+)$/, (ctx) => {
@@ -116,6 +119,36 @@ function register(bot) {
       {
         parse_mode: 'Markdown',
         ...createInlineKeyboard(buttons, `catalog:subject:${subject.courseId}`)
+      }
+    );
+  });
+
+  // 🌟 Показ общих работ курса (без предмета)
+  bot.action(/^catalog:course_general:(.+)$/, (ctx) => {
+    const courseId = ctx.match[1];
+    const course = catalog.getCourse(courseId);
+    if (!course) return ctx.answerCbQuery('❌ Курс не найден');
+    
+    const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
+    if (userSpecialty && course.specialty && course.specialty !== userSpecialty) {
+      return ctx.answerCbQuery('❌ Этот курс не для вашей специальности');
+    }
+    
+    const works = catalog.getWorksByCourse(courseId);
+    if (!works || works.length === 0) {
+      return ctx.answerCbQuery('📭 Для этого курса пока нет общих работ');
+    }
+    
+    let header = `📋 *Общие работы*\n`;
+    header += `📚 Курс: *${course.name}*\n\n`;
+    header += `📝 *Выберите работу:*`;
+    
+    const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
+    ctx.editMessageText(
+      header,
+      {
+        parse_mode: 'Markdown',
+        ...createInlineKeyboard(buttons, `catalog:subject:${courseId}`)
       }
     );
   });
@@ -161,9 +194,16 @@ function register(bot) {
     text += `✅ *Итого к оплате:* ${pricing.finalPrice} ₽\n\n`;
     text += `📌 *Что нужно для заказа:*\n${work.prompt}`;
     
-    // 🌟 Кнопка "Назад" — зависит от типа работы
-    const backCallback = work.subjectId ? `catalog:work:${work.subjectId}` : 'catalog:general_works';
-    
+    // 🌟 Кнопка "Назад" зависит от типа работы
+    let backCallback;
+    if (work.subjectId) {
+      backCallback = `catalog:work:${work.subjectId}`;
+    } else if (work.courseId) {
+      backCallback = `catalog:course_general:${work.courseId}`;
+    } else {
+      backCallback = 'catalog:general_works';
+    }
+
     const buttons = [
       [{ text: '✅ Оформить этот заказ', callback: `order:start:${workId}` }],
       [{ text: '⬅️ Назад', callback: backCallback }]
