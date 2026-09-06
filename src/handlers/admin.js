@@ -1201,6 +1201,7 @@ function register(bot) {
       await ctx.answerCbQuery('❌ У вас нет прав');
       return;
     }
+    const action = ctx.match[1];
 
     // --- ГЛАВНОЕ МЕНЮ ---
     if (action === 'main') {
@@ -1403,13 +1404,14 @@ function register(bot) {
     else if (action.startsWith('delete_course_execute:')) {
       const courseId = action.split(':')[1];
       const course = catalog.getCourse(courseId);
+      const specialtyId = course ? course.specialty : 'navigation';
       const data = catalog.getData();
       const subIds = data.subjects.filter(s => s.courseId === courseId).map(s => s.id);
       data.subjects = data.subjects.filter(s => s.courseId !== courseId);
       data.works = data.works.filter(w => !subIds.includes(w.subjectId));
       data.courses = data.courses.filter(c => c.id !== courseId);
       catalog.saveData(data);
-      await ctx.editMessageText(`✅ Курс "${course.name}" удалён!`, { parse_mode: 'Markdown', ...catalog.courses() });
+      await ctx.editMessageText(`✅ Курс "${course.name}" удалён!`, { parse_mode: 'Markdown', ...getSpecialtyCourses(specialtyId) });
     }
     else if (action.startsWith('delete_subject:')) {
       ctx.session.adminState = null;
