@@ -78,6 +78,7 @@ function isAdmin(userId) {
 function getAdminMainMenu() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('🗂 Управление каталогом', 'admin:catalog')],
+    [Markup.button.callback('🎓 Управление специальностями', 'admin:specialties')],
     [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
     [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
     [Markup.button.callback('🏅 Назначить исполнителя/админа', 'admin:set_user_rank')],
@@ -90,6 +91,16 @@ function getBackToAdminMenu() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('⬅️ Назад в меню', 'admin:main')]
   ]);
+}
+
+function getSpecialtiesMenu() {
+  const specialties = catalog.getSpecialties();
+  const buttons = specialties.map(s => [
+    Markup.button.callback(`${s.emoji} ${s.name.replace(s.emoji, '').trim()}`, `admin:specialty_view:${s.id}`)
+  ]);
+  buttons.push([Markup.button.callback('➕ Добавить специальность', 'admin:add_specialty')]);
+  buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
+  return Markup.inlineKeyboard(buttons);
 }
 
 function getCatalogMainMenu() {
@@ -250,6 +261,43 @@ function register(bot) {
     
     const state = ctx.session.adminState;
     const text = ctx.message.text;
+
+    // --- СПЕЦИАЛЬНОСТИ: Добавление ---
+    if (state === 'awaiting_specialty_name') {
+      ctx.session.tempSpecialtyName = text;
+      ctx.session.adminState = 'awaiting_specialty_emoji';
+      await ctx.reply(
+        `🎓 *Специальность:* ${text}\n\nТеперь введите эмодзи (например: 🚢, ⚙️, 📐):`,
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+
+    if (state === 'awaiting_specialty_emoji') {
+      const name = ctx.session.tempSpecialtyName;
+      const emoji = text.trim();
+      const newSpecialty = catalog.addSpecialty(name, emoji);
+      logger.logAdminAction('specialty_added', { specialtyId: newSpecialty.id, name }, ctx);
+      await ctx.reply(
+        `✅ *Специальность добавлена!*\n\n${emoji} *Название:* ${name}\n*ID:* \`${newSpecialty.id}\``,
+        { parse_mode: 'Markdown', ...getSpecialtiesMenu() }
+      );
+      ctx.session.tempSpecialtyName = null;
+      ctx.session.adminState = null;
+      return;
+    }
+
+    // --- СПЕЦИАЛЬНОСТИ: Редактирование названия ---
+    if (state.startsWith('edit_specialty_name:')) {
+      const specialtyId = state.split(':')[1];
+      const updated = catalog.updateSpecialty(specialtyId, { name: text });
+      await ctx.reply(
+        `✅ Название специальности изменено на: *${text}*`,
+        { parse_mode: 'Markdown', ...getSpecialtiesMenu() }
+      );
+      ctx.session.adminState = null;
+      return;
+    }
 
     // --- КАТАЛОГ: Добавление/Изменение ---
     if (state === 'awaiting_course_name') {
@@ -1103,6 +1151,83 @@ function register(bot) {
     }
 
     const action = ctx.match[1];
+
+    // --- СПЕЦИАЛЬНОСТИ ---
+    if (action === 'specialties') {
+      ctx.session.adminState = null;
+      await ctx.editMessageText(
+        '🎓 *Управление специальностями*\n\nВыберите специальность:',
+        { parse_mode: 'Markdown', ...getSpecialtiesMenu() }
+      );
+    }
+    else if (action === 'add_specialty') {
+      ctx.session.adminState = 'awaiting_specialty_name';
+      await ctx.editMessageText(
+        '✏️ *Введите название новой специальности:*\n\nНапример: 🚢 Судомеханика',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+    }
+    else if (action.startsWith('specialty_view:')) {
+      const specialtyId = action.split(':')[1];
+      const specialty = catalog.getSpecialtyById(specialtyId);
+      if (!specialty) { await ctx.answerCbQuery('❌ Не найдено'); return; }
+      const linkedCourses = catalog.getCourses(specialtyId);
+      
+      let text = `🎓 *Специальность:* ${specialty.name}\n`;
+      text += `🆔 *ID:* \`${specialty.id}\`\n`;
+      text += `${specialty.emoji} *Эмодзи:* ${specialty.emoji}\n\n`;
+      text += `📚 *Курсов привязано:* ${linkedCourses.length}\n`;
+      if (linkedCourses.length > 0) {
+        linkedCourses.forEach(c => { text += `• ${c.name}\n`; });
+      }
+      
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✏️ Изменить название', `admin:edit_specialty:${specialtyId}`)],
+        [Markup.button.callback('🗑 Удалить специальность', `admin:delete_specialty:${specialtyId}`)],
+        [Markup.button.callback('⬅️ Назад', 'admin:specialties')]
+      ]);
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+    else if (action.startsWith('edit_specialty:')) {
+      const specialtyId = action.split(':')[1];
+      const specialty = catalog.getSpecialtyById(specialtyId);
+      ctx.session.adminState = `edit_specialty_name:${specialtyId}`;
+      await ctx.editMessageText(
+        `✏️ *Текущее название:* ${specialty.name}\n\nВведите новое:`,
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+    }
+    else if (action.startsWith('delete_specialty:')) {
+      const specialtyId = action.split(':')[1];
+      const specialty = catalog.getSpecialtyById(specialtyId);
+      const linkedCourses = catalog.getCourses(specialtyId);
+      
+      if (linkedCourses.length > 0) {
+        await ctx.editMessageText(
+          `⚠️ *Нельзя удалить специальность*\n\nК специальности «${specialty.name}» привязано курсов: *${linkedCourses.length}*.\n\nСначала удалите или перенесите эти курсы.`,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:specialties')]]) }
+        );
+      } else {
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback(`✅ Да, удалить "${specialty.name}"`, `admin:delete_specialty_confirm:${specialtyId}`)],
+          [Markup.button.callback('❌ Отмена', 'admin:specialties')]
+        ]);
+        await ctx.editMessageText(
+          `⚠️ *Подтверждение удаления*\n\nСпециальность: *${specialty.name}*`,
+          { parse_mode: 'Markdown', ...keyboard }
+        );
+      }
+    }
+    else if (action.startsWith('delete_specialty_confirm:')) {
+      const specialtyId = action.split(':')[1];
+      const result = catalog.deleteSpecialty(specialtyId);
+      if (result.success) {
+        logger.logAdminAction('specialty_deleted', { specialtyId }, ctx);
+        await ctx.editMessageText('✅ Специальность удалена!', { parse_mode: 'Markdown', ...getSpecialtiesMenu() });
+      } else {
+        await ctx.answerCbQuery(`❌ ${result.reason}`);
+      }
+}
 
     // --- ГЛАВНОЕ МЕНЮ ---
     if (action === 'main') {

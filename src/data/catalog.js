@@ -2,6 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const catalogPath = path.join(__dirname, 'catalog.json');
 
+// Дефолтные специальности (для миграции)
+const DEFAULT_SPECIALTIES = [
+  { id: 'navigation', name: '⚓ Судовождение', emoji: '⚓' },
+  { id: 'electromechanic', name: '⚡ Электромеханик', emoji: '⚡' },
+  { id: 'other', name: '📚 Другое', emoji: '📚' }
+];
+
 // Чтение данных
 function getData() {
   try {
@@ -9,7 +16,7 @@ function getData() {
     return JSON.parse(rawData);
   } catch (error) {
     console.error('Ошибка чтения catalog.json:', error);
-    return { courses: [], subjects: [], works: [] };
+    return { specialties: [], courses: [], subjects: [], works: [] };
   }
 }
 
@@ -24,12 +31,19 @@ function saveData(newData) {
   }
 }
 
-// Миграция: добавляем поле specialty всем старым элементам, у которых его нет
-// По умолчанию присваиваем 'navigation' (судовождение), т.к. раньше был только этот каталог
+// Миграция: добавляем специальности и поле specialty всем элементам
 function migrateData() {
   const data = getData();
   let changed = false;
-  
+
+  // 1. Создаём массив специальностей, если его нет
+  if (!Array.isArray(data.specialties)) {
+    data.specialties = DEFAULT_SPECIALTIES;
+    changed = true;
+    console.log('✅ Миграция: добавлены специальности в catalog.json');
+  }
+
+  // 2. Добавляем поле specialty курсам, предметам и работам
   const arrays = ['courses', 'subjects', 'works'];
   arrays.forEach(arr => {
     if (!Array.isArray(data[arr])) data[arr] = [];
@@ -40,64 +54,110 @@ function migrateData() {
       }
     });
   });
-  
+
   if (changed) {
     saveData(data);
-    console.log('✅ Миграция catalog.json: добавлено поле specialty ко всем элементам');
+    console.log('✅ Миграция catalog.json завершена');
   }
 }
 
 // Запускаем миграцию при загрузке модуля
 migrateData();
 
-// Получить все курсы (опционально с фильтрацией по специальности)
+// ==========================================
+// СПЕЦИАЛЬНОСТИ
+// ==========================================
+function getSpecialties() {
+  return getData().specialties || [];
+}
+
+function getSpecialtyById(specialtyId) {
+  return (getData().specialties || []).find(s => s.id === specialtyId) || null;
+}
+
+function addSpecialty(name, emoji) {
+  const data = getData();
+  if (!Array.isArray(data.specialties)) data.specialties = [];
+  const newSpecialty = {
+    id: `specialty_${Date.now()}`,
+    name: name,
+    emoji: emoji || '📚'
+  };
+  data.specialties.push(newSpecialty);
+  saveData(data);
+  return newSpecialty;
+}
+
+function updateSpecialty(specialtyId, updates) {
+  const data = getData();
+  const index = (data.specialties || []).findIndex(s => s.id === specialtyId);
+  if (index === -1) return null;
+  data.specialties[index] = { ...data.specialties[index], ...updates };
+  saveData(data);
+  return data.specialties[index];
+}
+
+function deleteSpecialty(specialtyId) {
+  const data = getData();
+  // Проверка: нельзя удалить специальность, если к ней привязаны курсы
+  const linkedCourses = (data.courses || []).filter(c => c.specialty === specialtyId);
+  if (linkedCourses.length > 0) {
+    return { success: false, reason: `К специальности привязано курсов: ${linkedCourses.length}` };
+  }
+  const filtered = (data.specialties || []).filter(s => s.id !== specialtyId);
+  if (filtered.length === (data.specialties || []).length) return { success: false, reason: 'Специальность не найдена' };
+  data.specialties = filtered;
+  saveData(data);
+  return { success: true };
+}
+
+// ==========================================
+// КУРСЫ / ПРЕДМЕТЫ / РАБОТЫ
+// ==========================================
 function getCourses(specialty = null) {
   const courses = getData().courses;
   if (!specialty) return courses;
   return courses.filter(c => c.specialty === specialty);
 }
 
-// Получить курс по ID
 function getCourse(id) {
   return getData().courses.find(c => c.id === id);
 }
 
-// Получить предмет по ID
 function getSubject(id) {
   return getData().subjects.find(s => s.id === id);
 }
 
-// Получить предметы курса
 function getSubjectsByCourse(courseId) {
   return getData().subjects.filter(s => s.courseId === courseId);
 }
 
-// Получить работу по ID
 function getWork(id) {
   return getData().works.find(w => w.id === id);
 }
 
-// Получить работы предмета
 function getWorksBySubject(subjectId) {
   return getData().works.filter(w => w.subjectId === subjectId);
 }
 
 module.exports = {
-  // Совместимость со старым кодом (геттеры для всех данных)
   get courses() { return getData().courses; },
   get subjects() { return getData().subjects; },
   get works() { return getData().works; },
-  
-  // Методы для получения данных
   getCourses,
   getCourse,
   getSubject,
   getSubjectsByCourse,
   getWork,
   getWorksBySubject,
-  
-  // Сохранение/чтение
   saveData,
   getData,
-  migrateData
+  migrateData,
+  // Специальности
+  getSpecialties,
+  getSpecialtyById,
+  addSpecialty,
+  updateSpecialty,
+  deleteSpecialty,
+  DEFAULT_SPECIALTIES
 };

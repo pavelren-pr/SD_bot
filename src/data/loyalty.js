@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const catalog = require('./catalog');
 const loyaltyPath = path.join(__dirname, 'loyalty.json');
 
 if (!fs.existsSync(loyaltyPath)) {
@@ -13,13 +14,6 @@ function loadData() {
 function saveData(data) {
   fs.writeFileSync(loyaltyPath, JSON.stringify(data, null, 2));
 }
-
-// Список доступных специальностей
-const SPECIALTIES = [
-  { id: 'navigation', name: '⚓ Судовождение', emoji: '⚓' },
-  { id: 'electromechanic', name: '⚡ Электромеханик', emoji: '⚡' },
-  { id: 'other', name: '📚 Другое', emoji: '📚' }
-];
 
 // Оригинальные ранги + секретные звания
 const RANKS = [
@@ -154,14 +148,14 @@ function setUserSpecialty(userId, specialtyId) {
   return true;
 }
 
-// Получить список всех специальностей
+// Получить список всех специальностей (теперь из catalog.json)
 function getSpecialties() {
-  return SPECIALTIES;
+  return catalog.getSpecialties();
 }
 
-// Получить специальность по ID
+// Получить специальность по ID (теперь из catalog.json)
 function getSpecialtyById(specialtyId) {
-  return SPECIALTIES.find(s => s.id === specialtyId) || null;
+  return catalog.getSpecialtyById(specialtyId);
 }
 
 function getRanksDescription(loyaltyDocLink) {
@@ -190,5 +184,4 @@ module.exports = {
   setUserSpecialty,
   getSpecialties,
   getSpecialtyById,
-  SPECIALTIES
 };
