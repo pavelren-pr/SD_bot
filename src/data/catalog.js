@@ -2,13 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const catalogPath = path.join(__dirname, 'catalog.json');
 
-// Дефолтные специальности (для миграции)
-const DEFAULT_SPECIALTIES = [
-  { id: 'navigation', name: '⚓ Судовождение', emoji: '⚓' },
-  { id: 'electromechanic', name: '⚡ Электромеханик', emoji: '⚡' },
-  { id: 'other', name: '📚 Другое', emoji: '📚' }
-];
-
 // Чтение данных
 function getData() {
   try {
@@ -138,6 +131,63 @@ function getWork(id) {
 
 function getWorksBySubject(subjectId) {
   return getData().works.filter(w => w.subjectId === subjectId);
+}
+
+// ==========================================
+// СПЕЦИАЛЬНОСТИ
+// ==========================================
+
+// Дефолтные специальности (для миграции)
+const DEFAULT_SPECIALTIES = [
+  { id: 'navigation', name: '⚓ Судоводитель', emoji: '⚓' },
+  { id: 'electromechanic', name: '⚡ Электромеханик', emoji: '⚡' },
+  { id: 'other', name: '📚 Другое', emoji: '📚' }
+];
+
+function getSpecialties() {
+  const data = getData();
+  return data.specialties || [];
+}
+
+function getSpecialtyById(specialtyId) {
+  return (getData().specialties || []).find(s => s.id === specialtyId) || null;
+}
+
+function addSpecialty(name, emoji) {
+  const data = getData();
+  if (!Array.isArray(data.specialties)) data.specialties = [];
+  const newSpecialty = {
+    id: `specialty_${Date.now()}`,
+    name: name,
+    emoji: emoji || '📚'
+  };
+  data.specialties.push(newSpecialty);
+  saveData(data);
+  return newSpecialty;
+}
+
+function updateSpecialty(specialtyId, updates) {
+  const data = getData();
+  const index = (data.specialties || []).findIndex(s => s.id === specialtyId);
+  if (index === -1) return null;
+  data.specialties[index] = { ...data.specialties[index], ...updates };
+  saveData(data);
+  return data.specialties[index];
+}
+
+function deleteSpecialty(specialtyId) {
+  const data = getData();
+  const linkedCourses = (data.courses || []).filter(c => c.specialty === specialtyId);
+  if (linkedCourses.length > 0) {
+    return { success: false, reason: `К специальности привязано курсов: ${linkedCourses.length}` };
+  }
+  const filtered = (data.specialties || []).filter(s => s.id !== specialtyId);
+  if (filtered.length === (data.specialties || []).length) {
+    return { success: false, reason: 'Специальность не найдена' };
+  }
+  data.specialties = filtered;
+  saveData(data);
+  return { success: true };
 }
 
 module.exports = {
