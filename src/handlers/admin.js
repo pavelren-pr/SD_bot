@@ -449,7 +449,15 @@ function register(bot) {
       const orderBefore = ordersDb.getOrder(orderId);
       const oldPrice = orderBefore ? orderBefore.price : 0;
 
-      ordersDb.updateOrder(orderId, { [field]: value });
+        // 🌟 При изменении цены пересчитываем итоговую цену с комиссией
+      if (field === 'price' && orderBefore && orderBefore.isCustomOrder) {
+        const commission = orderBefore.commission || 0;
+        const finalPrice = Math.round(value / (1 - commission / 100));
+        ordersDb.updateOrder(orderId, { price: value, finalPrice: finalPrice });
+      } else {
+        ordersDb.updateOrder(orderId, { [field]: value });
+      }
+      
       const order = ordersDb.getOrder(orderId);
 
       // 🌟 Логика уведомлений при изменении цены индивидуального заказа

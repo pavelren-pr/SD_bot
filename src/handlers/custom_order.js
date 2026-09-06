@@ -518,94 +518,100 @@ bot.action(/^custom_back:(\d+)$/, async (ctx) => {
 
   // Обработка введённой цены
   bot.on('text', async (ctx, next) => {
-    ctx.session = ctx.session || {};
-    
-    if (!ctx.session.waitingCustomPrice) {
-      return next();
-    }
-    
-    const { orderNumber } = ctx.session.waitingCustomPrice;
-    const orderRecord = orders.getOrderByNumber(orderNumber);
-    
-    if (!orderRecord) {
-      ctx.session.waitingCustomPrice = null;
-      return ctx.reply('❌ Заказ не найден. Начните заново.');
-    }
-    
-    // Проверяем, что текущий пользователь - исполнитель этого заказа
-    if (String(orderRecord.executorId) !== String(ctx.from.id)) {
-      return ctx.reply('❌ Это не ваш заказ.');
-    }
-    
-    const price = parseInt(ctx.message.text);
-    if (isNaN(price) || price <= 0) {
-      return ctx.reply('❌ Пожалуйста, введите корректную цену (положительное число).');
-    }
-    
-    // Обновляем заказ в orders.json
-    const updatedOrder = orders.updateOrder(orderRecord.id, {
-      price: price,
-      status: 'price_negotiating'  // Статус: идёт согласование цены
-    });
-    
-    const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
-    
-    // Формируем сообщение для заказчика
-    const customerMessage = 
-      `💰 *Назначена цена за ваш заказ*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${updatedOrder.subjectName}\n` +
-      `🎓 *Курс:* ${updatedOrder.courseName}\n` +
-      `📅 *Дата заказа:* ${updatedOrder.createdAt}\n` +
-      `💵 *Назначенная цена:* ${price} ₽\n\n` +
-      `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
-    
-    const customerKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✉️ Обсудить цену с исполнителем', `custom_write_executor:${orderNumber}`)],
-      [Markup.button.callback('💳 Перейти к оплате', `custom_pay:${orderNumber}`)]
-    ]);
-    
-    try {
-      // Отправляем сообщение заказчику
-      await ctx.telegram.sendMessage(
-        updatedOrder.customerId,
-        customerMessage,
-        { 
-          parse_mode: 'Markdown',
-          reply_markup: customerKeyboard.reply_markup
-        }
-      );
-      
-      // Получаем данные из кэша для обновления сообщения в чате исполнителей
-      const targetChatId = getCustomOrderChatId(orderNumber);
-      const cacheData = customOrderStates.get(orderNumber);
-      if (cacheData && cacheData.managerMessageId && targetChatId) {
-        // Обновляем сообщение в чате исполнителей
-        let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-        updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-        updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@' + updatedOrder.customerUsername : 'ID: ' + updatedOrder.customerId}\n`;
-        updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
-        updatedText += `💰 *Цена:* ${price} ₽\n`;
-        updatedText += `👷 *Исполнитель:* ${executorName}\n`;
-        updatedText += `🟡 *Статус:* СОГЛАСОВАНИЕ ЦЕНЫ`;
-        
-        await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
-          parse_mode: 'Markdown',
-          reply_markup: createInlineKeyboard([
-            [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderNumber}` }],
-            [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderNumber}` }]
-          ]).reply_markup
-        });
+  ctx.session = ctx.session || {};
+  if (!ctx.session.waitingCustomPrice) {
+    return next();
+  }
+  const { orderNumber } = ctx.session.waitingCustomPrice;
+  const orderRecord = orders.getOrderByNumber(orderNumber);
+  if (!orderRecord) {
+    ctx.session.waitingCustomPrice = null;
+    return ctx.reply('❌ Заказ не найден. Начните заново.');
+  }
+  // Проверяем, что текущий пользователь - исполнитель этого заказа
+  if (String(orderRecord.executorId) !== String(ctx.from.id)) {
+    return ctx.reply('❌ Это не ваш заказ.');
+  }
+  const executorPrice = parseInt(ctx.message.text);
+  if (isNaN(executorPrice) || executorPrice <= 0) {
+    return ctx.reply('❌ Пожалуйста, введите корректную цену (положительное число).');
+  }
+
+  // 🌟 Рассчитываем итоговую цену с учётом комиссии
+  const commission = orderRecord.commission || 0;
+  const finalPrice = Math.round(executorPrice / (1 - commission / 100));
+  const commissionAmount = finalPrice - executorPrice;
+
+  // Обновляем заказ в orders.json
+  const updatedOrder = orders.updateOrder(orderRecord.id, {
+    price: executorPrice,       // Цена исполнителя (сколько он получит)
+    finalPrice: finalPrice,     // Итоговая цена для заказчика (с комиссией)
+    status: 'price_negotiating'
+  });
+
+  const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+
+  // Формируем сообщение для заказчика
+  const customerMessage = 
+    `💰 *Назначена цена за ваш заказ*\n\n` +
+    `🆔 *Номер заказа:* №${orderNumber}\n` +
+    `📚 *Предмет:* ${updatedOrder.subjectName}\n` +
+    `🎓 *Курс:* ${updatedOrder.courseName}\n` +
+    `📅 *Дата заказа:* ${updatedOrder.createdAt}\n` +
+    `💵 *Стоимость выполнения:* ${finalPrice} ₽\n\n` +
+    `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
+
+  const customerKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✉️ Обсудить цену с исполнителем', `custom_write_executor:${orderNumber}`)],
+    [Markup.button.callback('💳 Перейти к оплате', `custom_pay:${orderNumber}`)]
+  ]);
+
+  try {
+    // Отправляем сообщение заказчику
+    await ctx.telegram.sendMessage(
+      updatedOrder.customerId,
+      customerMessage,
+      { 
+        parse_mode: 'Markdown',
+        reply_markup: customerKeyboard.reply_markup
       }
-      
-      await ctx.reply(`✅ Цена ${price} ₽ назначена. Теперь заказчик может обсудить цену или перейти к оплате.`);
-      
-      ctx.session.waitingCustomPrice = null;
-      
-    } catch (error) {
-      console.error('Ошибка назначения цены:', error);
-      await ctx.reply('❌ Произошла ошибка при назначении цены.');
+    );
+
+    // Получаем данные из кэша для обновления сообщения в чате исполнителей
+    const targetChatId = getCustomOrderChatId(orderNumber);
+    const cacheData = customOrderStates.get(orderNumber);
+    if (cacheData && cacheData.managerMessageId && targetChatId) {
+      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
+      updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
+      updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@' + updatedOrder.customerUsername : 'ID: ' + updatedOrder.customerId}\n`;
+      updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
+      updatedText += `💰 *Цена исполнителя:* ${executorPrice} ₽\n`;
+      updatedText += `📊 *Комиссия:* ${commission}% (${commissionAmount} ₽)\n`;
+      updatedText += `💵 *Итого для заказчика:* ${finalPrice} ₽\n`;
+      updatedText += `👷 *Исполнитель:* ${executorName}\n`;
+      updatedText += `🟡 *Статус:* СОГЛАСОВАНИЕ ЦЕНЫ`;
+      await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
+        parse_mode: 'Markdown',
+        reply_markup: createInlineKeyboard([
+          [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderNumber}` }],
+          [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderNumber}` }]
+        ]).reply_markup
+      });
     }
+
+    await ctx.reply(
+      `✅ Цена назначена!\n\n` +
+      `💰 *Ваша цена:* ${executorPrice} ₽\n` +
+      `📊 *Комиссия:* ${commission}% (${commissionAmount} ₽)\n` +
+      `💵 *Итого для заказчика:* ${finalPrice} ₽\n\n` +
+      `Теперь заказчик может обсудить цену или перейти к оплате.`,
+      { parse_mode: 'Markdown' }
+    );
+    ctx.session.waitingCustomPrice = null;
+  } catch (error) {
+    console.error('Ошибка назначения цены:', error);
+    await ctx.reply('❌ Произошла ошибка при назначении цены.');
+  }
   });
 
 // Написать сообщение заказчику (из чата исполнителей)
@@ -965,38 +971,36 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
 
   // Перейти к оплате
   bot.action(/^custom_pay:(\d+)$/, async (ctx) => {
-    ctx.session = ctx.session || {};
-    const orderNumber = parseInt(ctx.match[1]);
-    const orderRecord = orders.getOrderByNumber(orderNumber);
-    
-    if (!orderRecord || String(orderRecord.customerId) !== String(ctx.from.id)) {
-      return ctx.answerCbQuery('❌ Это не ваш заказ');
-    }
-    
-    // Проверяем, что цена назначена
-    if (!orderRecord.price || orderRecord.price <= 0) {
-      return ctx.answerCbQuery('❌ Цена ещё не назначена исполнителем');
-    }
-    
-    const work = catalog.getWork(orderRecord.workId);
-    const { paymentValue } = getWorkConfig(work);
-    
-    if (!paymentValue) {
-      return ctx.reply(`❌ Ошибка: Не настроен ${work.paymentEnv} в .env файле`);
-    }
-    
-    await ctx.editMessageText(
-      `💳 *Оплата заказа*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `💵 *Стоимость выполнения:* ${orderRecord.price} ₽\n\n` +
-      `Переведите сумму на карту:\n` +
-      `\`${paymentValue}\`\n\n` +
-      `📸 *После оплаты отправьте скриншот чека в этот чат.*`,
-      { parse_mode: 'Markdown' }
-    );
-    
-    ctx.session.waitingCustomPayment = { orderNumber };
-    await ctx.answerCbQuery();
+  ctx.session = ctx.session || {};
+  const orderNumber = parseInt(ctx.match[1]);
+  const orderRecord = orders.getOrderByNumber(orderNumber);
+  if (!orderRecord || String(orderRecord.customerId) !== String(ctx.from.id)) {
+    return ctx.answerCbQuery('❌ Это не ваш заказ');
+  }
+  // Проверяем, что цена назначена
+  if (!orderRecord.price || orderRecord.price <= 0) {
+    return ctx.answerCbQuery('❌ Цена ещё не назначена исполнителем');
+  }
+  const work = catalog.getWork(orderRecord.workId);
+  const { paymentValue } = getWorkConfig(work);
+  if (!paymentValue) {
+    return ctx.reply(`❌ Ошибка: Не настроен ${work.paymentEnv} в .env файле`);
+  }
+
+  // 🌟 Используем итоговую цену (с комиссией)
+  const paymentAmount = orderRecord.finalPrice || orderRecord.price;
+
+  await ctx.editMessageText(
+    `💳 *Оплата заказа*\n\n` +
+    `🆔 *Номер заказа:* №${orderNumber}\n` +
+    `💵 *Стоимость выполнения:* ${paymentAmount} ₽\n\n` +
+    `Переведите сумму на карту:\n` +
+    `\`${paymentValue}\`\n\n` +
+    `📸 *После оплаты отправьте скриншот чека в этот чат.*`,
+    { parse_mode: 'Markdown' }
+  );
+  ctx.session.waitingCustomPayment = { orderNumber };
+  await ctx.answerCbQuery();
   });
 
   // Обработка скриншота оплаты
@@ -1057,8 +1061,8 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         paidAt: new Date().toLocaleString('ru-RU')
       });
 
-      // 🌟 ДОБАВИТЬ: начисляем сумму в loyalty
-      loyalty.addToTotal(ctx.from.id, ctx.from.username, updatedOrder.price);
+      // 🌟 Начисляем итоговую сумму (с комиссией) в loyalty
+      loyalty.addToTotal(ctx.from.id, ctx.from.username, updatedOrder.finalPrice || updatedOrder.price);
       
       // Обновляем сообщение в чате исполнителей
       const cacheData = customOrderStates.get(orderNumber);
@@ -1067,7 +1071,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
         updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@' + updatedOrder.customerUsername : 'ID: ' + updatedOrder.customerId}\n`;
         updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
-        updatedText += `💰 *Цена:* ${updatedOrder.price} ₽\n`;
+        updatedText += `💰 *Цена:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n`;
         updatedText += `👷 *Исполнитель:* ${updatedOrder.executorId ? '@' + (await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
         updatedText += `✅ *Оплачен:* ${updatedOrder.paidAt}\n`;
         updatedText += `🟢 *Статус:* ОПЛАЧЕН - В РАБОТЕ`;
@@ -1079,7 +1083,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       await ctx.reply(
   `✅ *Оплата подтверждена!*\n\n` +
   `🆔 *Номер заказа:* №${orderNumber}\n` +
-  `💵 *Сумма:* ${updatedOrder.price} ₽\n\n` +
+  `💵 *Сумма:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n\n` +
   `Ваш заказ передан исполнителю. Ожидайте выполнения работы.\n\n` +
   `✏️ Если нужно уточнить детали, напишите исполнителю:`,
   { 
