@@ -127,8 +127,6 @@ function getSpecialtyCourses(specialtyId) {
   }
   
   buttons.push([Markup.button.callback('➕ Добавить курс', `admin:add_course:${specialtyId}`)]);
-  buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_general_work:${specialtyId}`)]);
-  buttons.push([Markup.button.callback('🌟 Добавить общий индив. заказ', `admin:add_general_custom_work:${specialtyId}`)]);
   buttons.push([Markup.button.callback('✏️ Изменить курс', `admin:edit_course:${specialtyId}`)]);
   buttons.push([Markup.button.callback('🗑 Удалить курс', `admin:delete_course:${specialtyId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', 'admin:catalog')]);
@@ -150,7 +148,6 @@ function getCourseSubjects(courseId) {
   ]);
   
   buttons.push([Markup.button.callback('➕ Добавить предмет', `admin:add_subject:${courseId}`)]);
-  buttons.push([Markup.button.callback('➕ Добавить общую работу курса', `admin:add_course_general_work:${courseId}`)]);
   buttons.push([Markup.button.callback('✏️ Изменить предмет', `admin:edit_subject:${courseId}`)]);
   buttons.push([Markup.button.callback('🗑 Удалить предмет', `admin:delete_subject:${courseId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_specialty:${specialtyId}`)]);
