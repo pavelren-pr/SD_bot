@@ -68,6 +68,9 @@ function register(bot) {
 
     // Обработчик выбора специальности
     bot.action(/^specialty:set:(.+)$/, async (ctx) => {
+        console.log('🔘 Нажата кнопка специальности:', ctx.match[1]);
+        console.log('👤 Пользователь:', ctx.from.id);
+      
       const specialtyId = ctx.match[1];
       loyalty.setUserSpecialty(ctx.from.id, specialtyId);
       
