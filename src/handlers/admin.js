@@ -537,7 +537,13 @@ function register(bot) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_general_work_needs:${specialtyId}`;
       await ctx.reply(
-        '📎 *Шаг 7/9: Требования к заказу*\n\nОтправьте через запятую или напишите "нет":\n• `photo`\n• `details`\n• `variant`',
+        '📎 *Шаг 7/9: Требования к заказу*\n\n' +
+        'Отправьте через запятую или напишите "нет":\n\n' +
+        '• `photo`\n' +
+        '• `details`\n' +
+        '• `variant`\n' +
+        '• `details, photo`\n\n' +
+        'Введите требования:',
         { parse_mode: 'Markdown', ...getBackToAdminMenu() }
       ); return;
     }
@@ -687,7 +693,13 @@ function register(bot) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_course_general_work_needs:${courseId}`;
       await ctx.reply(
-        '📎 *Шаг 7/9: Требования к заказу*\n\nОтправьте через запятую или напишите "нет":\n• `photo`\n• `details`\n• `variant`',
+        '📎 *Шаг 7/9: Требования к заказу*\n\n' +
+        'Отправьте через запятую или напишите "нет":\n\n' +
+        '• `photo`\n' +
+        '• `details`\n' +
+        '• `variant`\n' +
+        '• `details, photo`\n\n' +
+        'Введите требования:',
         { parse_mode: 'Markdown', ...getBackToAdminMenu() }
       ); return;
     }
