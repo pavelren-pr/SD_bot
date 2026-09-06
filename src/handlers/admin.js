@@ -168,7 +168,7 @@ function getGeneralWorks(specialtyId) {
   }
   buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_general_work:${specialtyId}`)]);
   buttons.push([Markup.button.callback('🌟 Добавить общий индив. заказ', `admin:add_general_custom_work:${specialtyId}`)]);
-  buttons.push([Markup.button.callback('🗑 Удалить общую работу', `admin:delete_general_work:${specialtyId}`)]); // ← ДОБАВИТЬ
+  buttons.push([Markup.button.callback('🗑 Удалить общую работу', `admin:delete_general_work:${specialtyId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_specialty:${specialtyId}`)]);
 return Markup.inlineKeyboard(buttons);
 }
@@ -183,8 +183,31 @@ function getCourseGeneralWorks(courseId) {
     buttons.push([Markup.button.callback('— общих работ пока нет —', 'noop')]);
   }
   buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_course_general_work:${courseId}`)]);
-  buttons.push([Markup.button.callback('🗑 Удалить общую работу', `admin:delete_course_general_work:${courseId}`)]); // ← ДОБАВИТЬ
+  buttons.push([Markup.button.callback('🌟 Добавить общий индив. заказ', `admin:add_course_general_custom_work:${courseId}`)]);
+  buttons.push([Markup.button.callback('🗑 Удалить общую работу', `admin:delete_course_general_work:${courseId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_course:${courseId}`)]);
+  return Markup.inlineKeyboard(buttons);
+}
+
+// Список общих работ специальности для удаления
+function getDeleteGeneralWorkList(specialtyId) {
+  const works = catalog.getWorksBySpecialty(specialtyId);
+  const buttons = works.map(w => [Markup.button.callback(`🗑 №${w.orderNumber || 'N/A'} | ${w.title.substring(0, 30)}`, `admin:delete_work_confirm:${w.id}`)]);
+  if (buttons.length === 0) {
+    buttons.push([Markup.button.callback('— общих работ пока нет —', 'noop')]);
+  }
+  buttons.push([Markup.button.callback('⬅️ Отмена', `admin:catalog_general_works:${specialtyId}`)]);
+  return Markup.inlineKeyboard(buttons);
+}
+
+// Список общих работ курса для удаления
+function getDeleteCourseGeneralWorkList(courseId) {
+  const works = catalog.getWorksByCourse(courseId);
+  const buttons = works.map(w => [Markup.button.callback(`🗑 №${w.orderNumber || 'N/A'} | ${w.title.substring(0, 30)}`, `admin:delete_work_confirm:${w.id}`)]);
+  if (buttons.length === 0) {
+    buttons.push([Markup.button.callback('— общих работ пока нет —', 'noop')]);
+  }
+  buttons.push([Markup.button.callback('⬅️ Отмена', `admin:catalog_course_general:${courseId}`)]);
   return Markup.inlineKeyboard(buttons);
 }
 
@@ -715,6 +738,79 @@ function register(bot) {
       }, ctx);
       await ctx.reply(
         `✅ *Общая работа курса добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`,
+        { parse_mode: 'Markdown', ...getCourseGeneralWorks(courseId) }
+      );
+      ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
+    }
+
+    // ==========================================
+    // 🌟 ДОБАВЛЕНИЕ ОБЩЕГО ИНДИВИДУАЛЬНОГО ЗАКАЗА КУРСА
+    // ==========================================
+    if (state.startsWith('add_course_general_custom_work_title:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.title = text;
+      ctx.session.adminState = `add_course_general_custom_work_desc:${courseId}`;
+      await ctx.reply('📄 *Шаг 2/7: Введите описание (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_custom_work_desc:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
+      ctx.session.adminState = `add_course_general_custom_work_comm:${courseId}`;
+      await ctx.reply('📊 *Шаг 3/7: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_custom_work_comm:')) {
+      if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.commission = parseInt(text);
+      ctx.session.adminState = `add_course_general_custom_work_chat:${courseId}`;
+      const envVars = getAvailableEnvVars();
+      let message = '💬 *Шаг 4/7: Имя переменной окружения для чата*\n\n';
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nОтправьте имя переменной:`;
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_custom_work_chat:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.chatEnv = text;
+      ctx.session.adminState = `add_course_general_custom_work_pay:${courseId}`;
+      const envVars = getAvailableEnvVars();
+      let message = '💳 *Шаг 5/7: Имя переменной окружения для оплаты*\n\n';
+      message += formatEnvVarsList(envVars.paymentVars, 'payment');
+      message += `\nОтправьте имя переменной:`;
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_custom_work_pay:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.paymentEnv = text;
+      ctx.session.adminState = `add_course_general_custom_work_prompt:${courseId}`;
+      await ctx.reply('📌 *Шаг 6/7: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_custom_work_prompt:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.prompt = text;
+      ctx.session.adminState = `add_course_general_custom_work_url:${courseId}`;
+      await ctx.reply('🔗 *Шаг 7/7: Ссылка на примеры работ (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+    }
+    if (state.startsWith('add_course_general_custom_work_url:')) {
+      const courseId = state.split(':')[1];
+      ctx.session.tempWorkData.exampleUrl = text.toLowerCase() === 'нет' ? '' : text;
+      const course = catalog.getCourse(courseId);
+      ctx.session.tempWorkData.specialty = course ? course.specialty : 'navigation';
+      ctx.session.tempWorkData.subjectId = null;
+      ctx.session.tempWorkData.courseId = courseId;
+      ctx.session.tempWorkData.id = `work_${Date.now()}`;
+      ctx.session.tempWorkData.price = 0;
+      ctx.session.tempWorkData.needs = [];
+      const works = catalog.getData().works;
+      works.push(ctx.session.tempWorkData);
+      catalog.saveData({ ...catalog.getData(), works });
+      logger.logAdminAction('catalog_course_general_custom_work_added', {
+        workId: ctx.session.tempWorkData.id,
+        title: ctx.session.tempWorkData.title,
+        courseId: courseId
+      }, ctx);
+      await ctx.reply(
+        `✅ *Общий индивидуальный заказ добавлен!*\n\n🌟 *${escapeMarkdown(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
         { parse_mode: 'Markdown', ...getCourseGeneralWorks(courseId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
@@ -1790,6 +1886,25 @@ function register(bot) {
       data.subjects = data.subjects.filter(s => s.id !== subjectId);
       catalog.saveData(data);
       await ctx.editMessageText(`✅ Предмет "${subject.name}" удалён!`, { parse_mode: 'Markdown', ...getCourseSubjects(subject.courseId) });
+    }
+     // 🌟 Удаление общих работ специальности
+    else if (action.startsWith('delete_general_work:')) {
+      const specialtyId = action.split(':')[1];
+      ctx.session.adminState = null;
+      await ctx.editMessageText('🗑 *Удаление общей работы*\n\nВыберите работу:', { parse_mode: 'Markdown', ...getDeleteGeneralWorkList(specialtyId) });
+    }
+    // 🌟 Удаление общих работ курса
+    else if (action.startsWith('delete_course_general_work:')) {
+      const courseId = action.split(':')[1];
+      ctx.session.adminState = null;
+      await ctx.editMessageText('🗑 *Удаление общей работы курса*\n\nВыберите работу:', { parse_mode: 'Markdown', ...getDeleteCourseGeneralWorkList(courseId) });
+    }
+    // 🌟 Добавление общего индивидуального заказа курса
+    else if (action.startsWith('add_course_general_custom_work:')) {
+      const courseId = action.split(':')[1];
+      ctx.session.tempWorkData = { subjectId: null, courseId: courseId, isCustomOrder: true };
+      ctx.session.adminState = `add_course_general_custom_work_title:${courseId}`;
+      await ctx.editMessageText('✍️ *Шаг 1/7: Введите название общего индивидуального заказа:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('delete_work:')) {
       ctx.session.adminState = null;
