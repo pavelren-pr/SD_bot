@@ -129,8 +129,8 @@ function getSpecialtyCourses(specialtyId) {
   buttons.push([Markup.button.callback('➕ Добавить курс', `admin:add_course:${specialtyId}`)]);
   buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_general_work:${specialtyId}`)]);
   buttons.push([Markup.button.callback('🌟 Добавить общий индив. заказ', `admin:add_general_custom_work:${specialtyId}`)]);
-  buttons.push([Markup.button.callback('✏️ Изменить курс', 'admin:edit_course')]);
-  buttons.push([Markup.button.callback('🗑 Удалить курс', 'admin:delete_course')]);
+  buttons.push([Markup.button.callback('✏️ Изменить курс', `admin:edit_course:${specialtyId}`)]);
+  buttons.push([Markup.button.callback('🗑 Удалить курс', `admin:delete_course:${specialtyId}`)]);
   buttons.push([Markup.button.callback('⬅️ Назад', 'admin:catalog')]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -157,18 +157,6 @@ function getCourseSubjects(courseId) {
   return Markup.inlineKeyboard(buttons);
 }
 
-// Уровень 4: Работы предмета (без изменений)
-function getSubjectWorks(subjectId) {
-  const works = catalog.getWorksBySubject(subjectId);
-  const buttons = works.map(w => [Markup.button.callback(`№${w.orderNumber || 'N/A'} | ${w.title.substring(0, 35)}`, `admin:catalog_work:${w.id}`)]);
-  buttons.push([Markup.button.callback('➕ Добавить работу', `admin:add_work:${subjectId}`)]);
-  buttons.push([Markup.button.callback('🌟 Добавить индив. заказ', `admin:add_custom_work:${subjectId}`)]);
-  buttons.push([Markup.button.callback('🗑 Удалить работу', `admin:delete_work:${subjectId}`)]);
-  const subject = catalog.getSubject(subjectId);
-  buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_course:${subject.courseId}`)]);
-  return Markup.inlineKeyboard(buttons);
-}
-
 // Общие работы специальности (без курса/предмета)
 function getGeneralWorks(specialtyId) {
   const works = catalog.getWorksBySpecialty(specialtyId);
@@ -180,8 +168,9 @@ function getGeneralWorks(specialtyId) {
   }
   buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_general_work:${specialtyId}`)]);
   buttons.push([Markup.button.callback('🌟 Добавить общий индив. заказ', `admin:add_general_custom_work:${specialtyId}`)]);
+  buttons.push([Markup.button.callback('🗑 Удалить общую работу', `admin:delete_general_work:${specialtyId}`)]); // ← ДОБАВИТЬ
   buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_specialty:${specialtyId}`)]);
-  return Markup.inlineKeyboard(buttons);
+return Markup.inlineKeyboard(buttons);
 }
 
 // Общие работы курса (без предмета)
@@ -194,6 +183,7 @@ function getCourseGeneralWorks(courseId) {
     buttons.push([Markup.button.callback('— общих работ пока нет —', 'noop')]);
   }
   buttons.push([Markup.button.callback('➕ Добавить общую работу', `admin:add_course_general_work:${courseId}`)]);
+  buttons.push([Markup.button.callback('🗑 Удалить общую работу', `admin:delete_course_general_work:${courseId}`)]); // ← ДОБАВИТЬ
   buttons.push([Markup.button.callback('⬅️ Назад', `admin:catalog_course:${courseId}`)]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -214,16 +204,6 @@ function getDeleteSpecialtyList() {
     Markup.button.callback(`🗑 ${s.emoji} ${s.name.replace(s.emoji, '').trim()}`, `admin:delete_specialty_confirm:${s.id}`)
   ]);
   buttons.push([Markup.button.callback('⬅️ Отмена', 'admin:catalog')]);
-  return Markup.inlineKeyboard(buttons);
-}
-
-function getCourseSubjects(courseId) {
-  const subjects = catalog.getSubjectsByCourse(courseId);
-  const buttons = subjects.map(s => [Markup.button.callback(s.name, `admin:catalog_subject:${s.id}`)]);
-  buttons.push([Markup.button.callback('➕ Добавить предмет', `admin:add_subject:${courseId}`)]);
-  buttons.push([Markup.button.callback('✏️ Изменить предмет', `admin:edit_subject:${courseId}`)]);
-  buttons.push([Markup.button.callback('🗑 Удалить предмет', `admin:delete_subject:${courseId}`)]);
-  buttons.push([Markup.button.callback('⬅️ Назад', 'admin:catalog')]);
   return Markup.inlineKeyboard(buttons);
 }
 
@@ -343,6 +323,7 @@ function getEditCourseList(specialtyId = null) {
   // Кнопка "Отмена" ведёт обратно к специальности или к общему каталогу
   const backCallback = specialtyId ? `admin:catalog_specialty:${specialtyId}` : 'admin:catalog';
   buttons.push([Markup.button.callback('⬅️ Отмена', backCallback)]);
+
   return Markup.inlineKeyboard(buttons);
 }
 
