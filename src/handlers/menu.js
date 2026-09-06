@@ -585,12 +585,18 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     const active = executorOrders.filter(o => EXECUTOR_ACTIVE_STATUSES.includes(o.status)).length;
     const completed = executorOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
     
-    // Рассчитываем общий заработок: цена × (1 - комиссия%) для выполненных заказов
+    // 🌟 Рассчитываем общий заработок для выполненных заказов
     let totalEarnings = 0;
     executorOrders.forEach(order => {
       if (order.status === 'completed' && order.price) {
-        const commission = order.commission || 0;
-        totalEarnings += Math.round(order.price * (1 - commission / 100));
+        if (order.isCustomOrder) {
+          // 🌟 Для custom orders: price уже является ценой исполнителя (netto)
+          totalEarnings += order.price;
+        } else {
+          // 🌟 Для обычных заказов: вычисляем цену исполнителя из цены заказчика
+          const commission = order.commission || 0;
+          totalEarnings += Math.round(order.price * (1 - commission / 100));
+        }
       }
     });
     
