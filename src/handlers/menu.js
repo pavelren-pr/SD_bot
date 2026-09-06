@@ -19,6 +19,33 @@ function getMainMenuKeyboard() {
   ]).resize();
 }
 
+// ==========================================
+// ВЫБОР СПЕЦИАЛЬНОСТИ
+// ==========================================
+function getSpecialtyKeyboard() {
+  const specialties = loyalty.getSpecialties();
+  const buttons = specialties.map(s => [Markup.button.callback(s.name, `specialty:set:${s.id}`)]);
+  return Markup.inlineKeyboard(buttons);
+}
+
+async function showSpecialtySelection(ctx, isChange = false) {
+  const title = isChange 
+    ? '🎓 *Изменение специальности*\n\nВыберите новую специальность:' 
+    : '🎓 *Добро пожаловать!*\n\nДля начала выберите вашу специальность:';
+  
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(title, {
+      parse_mode: 'Markdown',
+      ...getSpecialtyKeyboard()
+    });
+  } else {
+    await ctx.reply(title, {
+      parse_mode: 'Markdown',
+      ...getSpecialtyKeyboard()
+    });
+  }
+}
+
 function register(bot) {
   // ==========================================
   // ГЛАВНОЕ МЕНЮ
@@ -26,6 +53,49 @@ function register(bot) {
   bot.command('start', async (ctx) => {
     ctx.session = ctx.session || {};
     const userName = ctx.from.first_name || 'Пользователь';
+    const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
+    
+    // Если специальность не выбрана — показываем выбор
+    if (!userSpecialty) {
+      await ctx.reply(
+        `👋 *Добро пожаловать, ${userName}!*\n\n` +
+        `Я — бот для заказа учебных работ.`,
+        { parse_mode: 'Markdown' }
+      );
+      await showSpecialtySelection(ctx);
+      return;
+    }
+
+    // Обработчик выбора специальности
+    bot.action(/^specialty:set:(.+)$/, async (ctx) => {
+      const specialtyId = ctx.match[1];
+      loyalty.setUserSpecialty(ctx.from.id, specialtyId);
+      
+      const specialty = loyalty.getSpecialtyById(specialtyId);
+      
+      await ctx.editMessageText(
+        `✅ *Специальность выбрана:* ${specialty.name}\n\n` +
+        `Теперь в каталоге вы будете видеть работы для вашей специальности.`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      // Показываем главное меню
+      await ctx.reply(
+        `Выберите раздел в меню 👇`,
+        { 
+          parse_mode: 'Markdown',
+          ...getMainMenuKeyboard()
+        }
+      );
+      
+      await ctx.answerCbQuery();
+    });
+
+    // Обработчик кнопки "Изменить специальность" из профиля
+    bot.action('specialty:change', async (ctx) => {
+      await showSpecialtySelection(ctx, true);
+      await ctx.answerCbQuery();
+    });
     
     await ctx.reply(
       `👋 *Добро пожаловать, ${userName}!*\n\n` +
@@ -33,19 +103,37 @@ function register(bot) {
       `Выберите раздел в меню 👇`,
       { 
         parse_mode: 'Markdown',
-        ...getMainMenuKeyboard() // 🌟 Распаковка — 100% работает
+        ...getMainMenuKeyboard()
       }
     );
   });
 
-  // 🌟 ОДНО СООБЩЕНИЕ: текст + inline-кнопки курсов
-    bot.hears('📚 Заказать работу', async (ctx) => {
+  bot.hears('📚 Заказать работу', async (ctx) => {
     const catalog = require('../data/catalog');
     const { createInlineKeyboard } = require('../utils/keyboard');
     
-    const courseButtons = catalog.courses.map(c => [{ text: c.name, callback: `catalog:subject:${c.id}` }]);
+    const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
     
-    // 🌟 Только inline-кнопки курсов. Постоянная клавиатура останется в чате сама по себе.
+    // Если специальность не выбрана — показываем выбор
+    if (!userSpecialty) {
+      await showSpecialtySelection(ctx);
+      return;
+    }
+    
+    // Получаем курсы только для выбранной специальности
+    const courses = catalog.getCourses(userSpecialty);
+    
+    if (!courses || courses.length === 0) {
+      await ctx.reply(
+        `📭 К сожалению, для вашей специальности пока нет работ в каталоге.\n\n` +
+        `Вы можете изменить специальность через Профиль → Изменить специальность.`,
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+    
+    const courseButtons = courses.map(c => [{ text: c.name, callback: `catalog:subject:${c.id}` }]);
+    
     await ctx.reply(
       `📚 *Каталог работ*\n\nВыберите курс, чтобы начать:`,
       { 
@@ -958,6 +1046,15 @@ async function showProfile(ctx) {
   let profileText = `👤 *Профиль пользователя*\n\n`;
   profileText += `*Имя:* ${userName}\n`;
   profileText += `*ID:* \`${ctx.from.id}\`\n\n`;
+  
+  // Специальность пользователя
+  const specialty = loyalty.getSpecialtyById(loyaltyInfo.specialty);
+  if (specialty) {
+    profileText += `🎓 *Специальность:* ${specialty.name}\n\n`;
+  } else {
+    profileText += `🎓 *Специальность:* _не выбрана_\n\n`;
+  }
+  
   profileText += `💵 *Программа лояльности*\n`;
   profileText += `${loyaltyInfo.rank.emoji} *${loyaltyInfo.rank.name}*\n`;
   profileText += `💰 *Сумма заказов:* ${loyaltyInfo.totalSpent} ₽\n`;
@@ -973,7 +1070,8 @@ async function showProfile(ctx) {
   
   const profileButtons = [
     [Markup.button.callback('📜 История заказов', 'profile:history')],
-    [Markup.button.callback('💵 Программа лояльности', 'profile:loyalty')]
+    [Markup.button.callback('💵 Программа лояльности', 'profile:loyalty')],
+    [Markup.button.callback('🎓 Изменить специальность', 'specialty:change')]
   ];
   
   if (loyaltyInfo.hasExecutorAccess || loyaltyInfo.hasFullAccess) {
@@ -986,7 +1084,6 @@ async function showProfile(ctx) {
   
   const profileKeyboard = Markup.inlineKeyboard(profileButtons);
   
-  // 🌟 Если это callbackQuery — редактируем сообщение, иначе отправляем новое
   if (ctx.callbackQuery) {
     await ctx.editMessageText(profileText, { 
       parse_mode: 'Markdown',

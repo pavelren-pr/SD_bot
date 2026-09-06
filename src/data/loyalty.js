@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-
 const loyaltyPath = path.join(__dirname, 'loyalty.json');
 
 if (!fs.existsSync(loyaltyPath)) {
@@ -15,10 +14,16 @@ function saveData(data) {
   fs.writeFileSync(loyaltyPath, JSON.stringify(data, null, 2));
 }
 
-// 🌟 Оригинальные ранги + секретные звания
+// Список доступных специальностей
+const SPECIALTIES = [
+  { id: 'navigation', name: '⚓ Судовождение', emoji: '⚓' },
+  { id: 'electromechanic', name: '⚡ Электромеханик', emoji: '⚡' },
+  { id: 'other', name: '📚 Другое', emoji: '📚' }
+];
+
+// Оригинальные ранги + секретные звания
 const RANKS = [
   { name: 'Мужественный Одиссей', minSpent: 0, discount: 0, emoji: '🗡️' },
-  
   { name: 'Меткий Тритон', minSpent: 5000, discount: 5, emoji: '🧜‍♂️' },
   { name: 'Могучий Гермес', minSpent: 7000, discount: 7, emoji: '🪽' },
   { name: 'Мудрый Аполон', minSpent: 10000, discount: 10, emoji: '👑' },
@@ -32,10 +37,19 @@ function getLoyaltyInfo(userId) {
   const user = data[userId];
   
   if (!user) {
-    return { rank: RANKS[0], discountPercent: 0, isLoyal: false, totalSpent: 0, hasExecutorAccess: false, hasFullAccess: false, progressToNext: null };
+    return { 
+      rank: RANKS[0], 
+      discountPercent: 0, 
+      isLoyal: false, 
+      totalSpent: 0, 
+      hasExecutorAccess: false, 
+      hasFullAccess: false, 
+      progressToNext: null,
+      specialty: null
+    };
   }
   
-  // 🌟 Если у пользователя явно указан ранг — используем его
+  // Если у пользователя явно указан ранг — используем его
   let currentRank = RANKS[0];
   if (user.rank) {
     const foundRank = RANKS.find(r => r.name === user.rank);
@@ -61,6 +75,7 @@ function getLoyaltyInfo(userId) {
         break;
       }
     }
+    
     if (nextPublicRank) {
       progressToNext = {
         nextName: nextPublicRank.name,
@@ -68,15 +83,16 @@ function getLoyaltyInfo(userId) {
       };
     }
   }
-
-  return { 
+  
+  return {
     rank: currentRank,
     discountPercent: currentRank.discount,
     isLoyal: (user.totalSpent || 0) > 0,
     totalSpent: user.totalSpent || 0,
     progressToNext,
     hasExecutorAccess: currentRank.executorAccess || false,
-    hasFullAccess: currentRank.fullAccess || false
+    hasFullAccess: currentRank.fullAccess || false,
+    specialty: user.specialty || null
   };
 }
 
@@ -88,12 +104,64 @@ function calculatePrice(basePrice, userId) {
 
 function addToTotal(userId, username, amount) {
   const data = loadData();
+  
   if (!data[userId]) {
-    data[userId] = { username: username || '', totalSpent: 0 };
+    data[userId] = { 
+      username: username || '', 
+      totalSpent: 0,
+      specialty: null 
+    };
   }
+  
   data[userId].totalSpent = (data[userId].totalSpent || 0) + amount;
   data[userId].username = username || data[userId].username;
+  
+  // Сохраняем specialty если оно уже было
+  if (!data[userId].hasOwnProperty('specialty')) {
+    data[userId].specialty = null;
+  }
+  
   saveData(data);
+}
+
+// Получить специальность пользователя
+function getUserSpecialty(userId) {
+  const data = loadData();
+  const user = data[userId];
+  
+  if (!user || !user.specialty) {
+    return null;
+  }
+  
+  return user.specialty;
+}
+
+// Установить специальность пользователя
+function setUserSpecialty(userId, specialtyId) {
+  const data = loadData();
+  
+  if (!data[userId]) {
+    data[userId] = { 
+      username: '', 
+      totalSpent: 0,
+      specialty: specialtyId
+    };
+  } else {
+    data[userId].specialty = specialtyId;
+  }
+  
+  saveData(data);
+  return true;
+}
+
+// Получить список всех специальностей
+function getSpecialties() {
+  return SPECIALTIES;
+}
+
+// Получить специальность по ID
+function getSpecialtyById(specialtyId) {
+  return SPECIALTIES.find(s => s.id === specialtyId) || null;
 }
 
 function getRanksDescription(loyaltyDocLink) {
@@ -106,7 +174,21 @@ function getRanksDescription(loyaltyDocLink) {
   msg += `🪽 <b>Могучий Гермес</b> (7000+ ₽) Скидка: 7%!\n\n`;
   msg += `👑 <b>Мудрый Аполон</b> (10000+ ₽) Скидка: 10%!\n\n`;
   msg += `Подробные условия читайте <a href="${loyaltyDocLink}">тут</a> 📜`;
+  
   return msg;
 }
 
-module.exports = { getLoyaltyInfo, calculatePrice, addToTotal, getRanksDescription, RANKS, loadData, saveData };
+module.exports = { 
+  getLoyaltyInfo, 
+  calculatePrice, 
+  addToTotal, 
+  getRanksDescription, 
+  RANKS, 
+  loadData, 
+  saveData,
+  getUserSpecialty,
+  setUserSpecialty,
+  getSpecialties,
+  getSpecialtyById,
+  SPECIALTIES
+};

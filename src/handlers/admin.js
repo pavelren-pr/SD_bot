@@ -93,11 +93,20 @@ function getBackToAdminMenu() {
 }
 
 function getCatalogMainMenu() {
-  const buttons = catalog.courses.map(c => [Markup.button.callback(c.name, `admin:catalog_course:${c.id}`)]);
+  const specialties = loyalty.getSpecialties();
+  const specialtyMap = {};
+  specialties.forEach(s => { specialtyMap[s.id] = s.emoji; });
+  
+  const buttons = catalog.courses.map(c => {
+    const emoji = specialtyMap[c.specialty] || '📚';
+    return [Markup.button.callback(`${emoji} ${c.name}`, `admin:catalog_course:${c.id}`)];
+  });
+  
   buttons.push([Markup.button.callback('➕ Добавить курс', 'admin:add_course')]);
   buttons.push([Markup.button.callback('✏️ Изменить курс', 'admin:edit_course')]);
   buttons.push([Markup.button.callback('🗑 Удалить курс', 'admin:delete_course')]);
   buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
+  
   return Markup.inlineKeyboard(buttons);
 }
 
@@ -127,29 +136,42 @@ function getWorkCard(workId) {
   const work = catalog.getWork(workId);
   const subject = catalog.getSubject(work.subjectId);
   const course = catalog.getCourse(subject.courseId);
+  
+  const specialty = loyalty.getSpecialtyById(course.specialty);
+  const specialtyName = specialty ? specialty.name : 'Не указана';
+  
   let text = `✏️ *Редактирование работы*\n\n`;
+  text += `🎓 *Специальность:* ${specialtyName}\n`;
   text += `📚 *Курс:* ${escapeMarkdown(course.name)}\n`;
   text += `📖 *Предмет:* ${escapeMarkdown(subject.name)}\n\n`;
   text += `📝 *Название:* ${escapeMarkdown(work.title)}\n`;
   if (work.description && work.description.trim() !== '') text += `📄 *Описание:* ${escapeMarkdown(work.description)}\n`;
-    text += `💰 *Цена:* ${work.price} ₽\n`;
-    text += `📊 *Комиссия:* ${work.commission}%\n`;
-    text += `💳 *Оплата:* \`${work.paymentEnv}\`\n`;
-    text += `💬 *Чат:* \`${work.chatEnv}\`\n`;
-    text += `📋 *Требования:* ${Array.isArray(work.needs) && work.needs.length > 0 ? work.needs.join(', ') : 'нет'}\n`;
-    text += `🌟 *Индивидуальный заказ:* ${work.isCustomOrder ? 'Да' : 'Нет'}\n`;
-    if (work.exampleUrl && work.exampleUrl.trim() !== '') text += `🔗 *Примеры:* ${escapeMarkdown(work.exampleUrl)}\n`;
-    text += `\n📌 *Подсказка:*\n${escapeMarkdown(work.prompt)}`;
+  text += `💰 *Цена:* ${work.price} ₽\n`;
+  text += `📊 *Комиссия:* ${work.commission}%\n`;
+  text += `💳 *Оплата:* \`${work.paymentEnv}\`\n`;
+  text += `💬 *Чат:* \`${work.chatEnv}\`\n`;
+  text += `📋 *Требования:* ${Array.isArray(work.needs) && work.needs.length > 0 ? work.needs.join(', ') : 'нет'}\n`;
+  text += `🌟 *Индивидуальный заказ:* ${work.isCustomOrder ? 'Да' : 'Нет'}\n`;
+  if (work.exampleUrl && work.exampleUrl.trim() !== '') text += `🔗 *Примеры:* ${escapeMarkdown(work.exampleUrl)}\n`;
+  text += `\n📌 *Подсказка:*\n${escapeMarkdown(work.prompt)}`;
   
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('✏️ Изменить информацию', `admin:edit_work:${workId}`)],
     [Markup.button.callback('⬅️ Назад', `admin:catalog_subject:${work.subjectId}`)]
   ]);
+  
   return { text, keyboard };
 }
 
 function getDeleteCourseList() {
-  const buttons = catalog.courses.map(c => [Markup.button.callback(`🗑 ${c.name}`, `admin:delete_course_confirm:${c.id}`)]);
+  const specialties = loyalty.getSpecialties();
+  const specialtyMap = {};
+  specialties.forEach(s => { specialtyMap[s.id] = s.emoji; });
+  
+  const buttons = catalog.courses.map(c => {
+    const emoji = specialtyMap[c.specialty] || '📚';
+    return [Markup.button.callback(`🗑 ${emoji} ${c.name}`, `admin:delete_course_confirm:${c.id}`)];
+  });
   buttons.push([Markup.button.callback('⬅️ Отмена', 'admin:catalog')]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -169,7 +191,14 @@ function getDeleteWorkList(subjectId) {
 }
 
 function getEditCourseList() {
-  const buttons = catalog.courses.map(c => [Markup.button.callback(`✏️ ${c.name}`, `admin:edit_course_select:${c.id}`)]);
+  const specialties = loyalty.getSpecialties();
+  const specialtyMap = {};
+  specialties.forEach(s => { specialtyMap[s.id] = s.emoji; });
+  
+  const buttons = catalog.courses.map(c => {
+    const emoji = specialtyMap[c.specialty] || '📚';
+    return [Markup.button.callback(`${emoji} ${c.name}`, `admin:edit_course_select:${c.id}`)];
+  });
   buttons.push([Markup.button.callback('⬅️ Отмена', 'admin:catalog')]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -224,17 +253,28 @@ function register(bot) {
 
     // --- КАТАЛОГ: Добавление/Изменение ---
     if (state === 'awaiting_course_name') {
-      const courses = catalog.getData().courses;
-      const newId = `course${Date.now()}`;
-      courses.push({ id: newId, name: text });
-      catalog.saveData({ ...catalog.getData(), courses });
-      await ctx.reply(`✅ Курс добавлен!\n\n*Название:* ${text}\n*ID:* \`${newId}\``, { parse_mode: 'Markdown', ...getCatalogMainMenu() });
+      ctx.session.tempCourseName = text;
+      ctx.session.adminState = 'awaiting_course_specialty';
+      
+      const specialties = loyalty.getSpecialties();
+      const buttons = specialties.map(s => [Markup.button.callback(s.name, `admin:set_course_specialty:${s.id}`)]);
+      
+      await ctx.reply(
+        `📚 *Курс:* ${text}\n\n🎓 *Теперь выберите специальность для этого курса:*`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) }
+      );
       ctx.session.adminState = null; return;
     }
     if (state.startsWith('awaiting_subject_name:')) {
       const courseId = state.split(':')[1];
+      const course = catalog.getCourse(courseId);
       const subjects = catalog.getData().subjects;
-      subjects.push({ id: `subj${Date.now()}`, courseId, name: text });
+      subjects.push({ 
+        id: `subj${Date.now()}`, 
+        courseId, 
+        name: text,
+        specialty: course ? course.specialty : 'navigation'
+      });
       catalog.saveData({ ...catalog.getData(), subjects });
       await ctx.reply(`✅ Предмет добавлен!\n\n*Название:* ${text}`, { parse_mode: 'Markdown', ...getCourseSubjects(courseId) });
       ctx.session.adminState = null; return;
@@ -330,12 +370,19 @@ function register(bot) {
     if (state.startsWith('add_custom_work_exampleUrl:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.exampleUrl = text.toLowerCase() === 'нет' ? '' : text;
+      
+      // Наследуем специальность от предмета/курса
+      const subject = catalog.getSubject(subjectId);
+      const course = subject ? catalog.getCourse(subject.courseId) : null;
+      ctx.session.tempWorkData.specialty = course ? course.specialty : 'navigation';
+      
       ctx.session.tempWorkData.id = `work_${Date.now()}`;
       ctx.session.tempWorkData.price = 0;
       ctx.session.tempWorkData.needs = [];
       const works = catalog.getData().works;
       works.push(ctx.session.tempWorkData);
       catalog.saveData({ ...catalog.getData(), works });
+      
       await ctx.reply(`✅ *Индивидуальный заказ добавлен!*\n\n🌟 *${escapeMarkdown(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`, { parse_mode: 'Markdown', ...getSubjectWorks(subjectId) });
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -400,17 +447,22 @@ function register(bot) {
     if (state.startsWith('add_work_exampleUrl:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.exampleUrl = text.toLowerCase() === 'нет' ? '' : text;
+      
+      // Наследуем специальность от предмета/курса
+      const subject = catalog.getSubject(subjectId);
+      const course = subject ? catalog.getCourse(subject.courseId) : null;
+      ctx.session.tempWorkData.specialty = course ? course.specialty : 'navigation';
+      
       const works = catalog.getData().works;
       works.push(ctx.session.tempWorkData);
       catalog.saveData({ ...catalog.getData(), works });
-
-      // 🌟 Логируем добавление работы
+      
       logger.logAdminAction('catalog_work_added', {
         workId: ctx.session.tempWorkData.id,
         title: ctx.session.tempWorkData.title,
         price: ctx.session.tempWorkData.price
       }, ctx);
-
+      
       await ctx.reply(`✅ *Работа добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`, { parse_mode: 'Markdown', ...getSubjectWorks(subjectId) });
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -1082,6 +1134,30 @@ function register(bot) {
       ctx.session.adminState = 'awaiting_course_name';
       await ctx.editMessageText('✏️ *Введите название нового курса:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
     }
+    else if (action.startsWith('set_course_specialty:')) {
+    const specialtyId = action.split(':')[1];
+    const courseName = ctx.session.tempCourseName;
+    
+    if (!courseName) {
+      await ctx.answerCbQuery('❌ Данные потеряны, начните заново');
+      return;
+    }
+    
+    const courses = catalog.getData().courses;
+    const newId = `course${Date.now()}`;
+    courses.push({ id: newId, name: courseName, specialty: specialtyId });
+    catalog.saveData({ ...catalog.getData(), courses });
+    
+    const specialty = loyalty.getSpecialtyById(specialtyId);
+    
+    await ctx.editMessageText(
+      `✅ Курс добавлен!\n\n*Название:* ${courseName}\n*Специальность:* ${specialty ? specialty.name : specialtyId}\n*ID:* \`${newId}\``,
+      { parse_mode: 'Markdown', ...getCatalogMainMenu() }
+    );
+  
+  ctx.session.tempCourseName = null;
+  await ctx.answerCbQuery();
+}
     else if (action.startsWith('add_subject:')) {
       ctx.session.adminState = `awaiting_subject_name:${action.split(':')[1]}`;
       await ctx.editMessageText('✏️ *Введите название нового предмета:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
