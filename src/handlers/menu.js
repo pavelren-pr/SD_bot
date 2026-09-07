@@ -28,26 +28,31 @@ function getMainMenuKeyboard() {
 // ==========================================
 // ВЫБОР СПЕЦИАЛЬНОСТИ
 // ==========================================
-function getSpecialtyKeyboard() {
+function getSpecialtyKeyboard(showBack = false) {
   const specialties = loyalty.getSpecialties();
   const buttons = specialties.map(s => [Markup.button.callback(s.name, `specialty:set:${s.id}`)]);
+  
+  if (showBack) {
+    buttons.push([Markup.button.callback('⬅️ Назад', 'profile:back')]);
+  }
+  
   return Markup.inlineKeyboard(buttons);
 }
 
 async function showSpecialtySelection(ctx, isChange = false) {
   const title = isChange 
     ? '🎓 *Изменение специальности*\n\nВыберите новую специальность:' 
-    : '🎓 *Добро пожаловать!*\n\nДля начала выберите вашу специальность:';
+    : '🎓 Добро пожаловать!\n\nДля начала выберите вашу специальность:';
   
   if (ctx.callbackQuery) {
     await ctx.editMessageText(title, {
       parse_mode: 'Markdown',
-      ...getSpecialtyKeyboard()
+      ...getSpecialtyKeyboard(isChange)
     });
   } else {
     await ctx.reply(title, {
       parse_mode: 'Markdown',
-      ...getSpecialtyKeyboard()
+      ...getSpecialtyKeyboard(isChange)
     });
   }
 }
