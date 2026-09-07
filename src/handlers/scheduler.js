@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
+const { LOG_FILE } = require('../utils/logger');
 
 function register(bot) {
   // 🌟 Ежедневная отправка файлов в 9:00 по Москве
@@ -12,6 +13,7 @@ function register(bot) {
       { name: 'catalog.json', path: path.join(dataDir, 'catalog.json') },
       { name: 'loyalty.json', path: path.join(dataDir, 'loyalty.json') },
       { name: 'orders.json', path: path.join(dataDir, 'orders.json') },
+      { name: 'bot_events.jsonl', path: LOG_FILE },
     ];
 
     console.log(`⏰ [${new Date().toLocaleString('ru-RU')}] Начинаю отправку бэкапов...`);
@@ -42,7 +44,7 @@ function register(bot) {
       console.error('  ❌ Ошибка отправки бэкапа:', err.message);
     }
   }, {
-    timezone: 'Europe/Moscow' // 🌟 Важно: время по Москве
+    timezone: 'Europe/Moscow'
   });
 
   console.log('⏰ Планировщик бэкапов запущен (ежедневно в 9:00 МСК)');

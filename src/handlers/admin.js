@@ -2362,7 +2362,7 @@ function register(bot) {
         '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
         '• **Экспорт заказов и скидок** — 2 листа (заказы + лояльность)\n' +
         '• **Экспорт логов** — 2 листа (взаимодействия + ошибки/события)\n' +
-        '• **Экспорт файлов БД** — отправка orders.json, loyalty.json и catalog.json в группу бэкапов',
+        '• **Экспорт файлов БД** — отправка orders.json, loyalty.json, catalog.json и логов в группу бэкапов',
         { parse_mode: 'Markdown', ...keyboard }
       );
     }
@@ -2423,6 +2423,7 @@ function register(bot) {
           { name: 'orders.json', path: path.join(dataDir, 'orders.json') },
           { name: 'loyalty.json', path: path.join(dataDir, 'loyalty.json') },
           { name: 'catalog.json', path: path.join(dataDir, 'catalog.json') },
+          { name: 'bot_events.jsonl', path: logger.LOG_FILE },
         ];
 
         // Заголовок с информацией, кто запросил бэкап
