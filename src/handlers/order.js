@@ -924,7 +924,7 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
     const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
     if (!chatData || chatData.customerUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'waiting_customer_message';
-    await ctx.editMessageText(`✏️ *Напишите сообщение исполнителю:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(`✏️ *Напишите сообщение исполнителю:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -932,7 +932,7 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
     const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
     if (!chatData || chatData.customerUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'waiting_customer_file';
-    await ctx.editMessageText(`📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(`📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -949,7 +949,7 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
     const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
     if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'waiting_executor_message';
-    await ctx.editMessageText(`✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(`✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -970,7 +970,7 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
   chatData.status = 'waiting_executor_message';
   await ctx.editMessageText(
     `✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
   );
   await ctx.answerCbQuery();
 });
@@ -990,17 +990,16 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
   chatData.status = 'waiting_executor_file';
   await ctx.editMessageText(
     `📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
   );
   await ctx.answerCbQuery();
-});
-
+  });
 
   bot.action(/^esf:(.+)$/, async (ctx) => {
     const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
     if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
     chatData.status = 'waiting_executor_file';
-    await ctx.editMessageText(`📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(`📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1011,6 +1010,21 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     await ctx.telegram.sendMessage(chatData.customerUserId, `❌ *Исполнитель завершил чат по этому заказу.*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.answerCbQuery('Чат завершён');
+  });
+
+  // 🌟 Отмена режима ожидания сообщения/файла в чате заказчик-исполнитель
+  bot.action(/^cancel_chat_mode:(.+)$/, async (ctx) => {
+    const chatId = ctx.match[1];
+    const chatData = activeChats.get(chatId);
+    if (!chatData) return ctx.answerCbQuery('❌ Чат не найден');
+    // Проверяем, что пользователь — участник этого чата
+    if (chatData.customerUserId !== ctx.from.id && chatData.executorUserId !== ctx.from.id) {
+      return ctx.answerCbQuery('❌ У вас нет доступа к этому чату');
+    }
+    // Сбрасываем статус чата в нейтральное состояние
+    chatData.status = 'idle';
+    await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+    await ctx.answerCbQuery('Отменено');
   });
 
     // 🌟 Заказчик отвечает исполнителю (текст) — session-based
@@ -1027,12 +1041,11 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.customerReplyChatId = order ? `order_${ctx.from.id}_${order.workId}` : null;
     await ctx.editMessageText(
     `✏️ *Напишите ответ исполнителю:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
-
-    // 🌟 Заказчик отправляет файл исполнителю — session-based
+ // 🌟 Заказчик отправляет файл исполнителю — session-based
     bot.action(/^customer_reply_file:(\d+)_(.+)$/, async (ctx) => {
     const executorId = ctx.match[1];
     const orderNumber = ctx.match[2];
@@ -1046,7 +1059,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.customerReplyChatId = order ? `order_${ctx.from.id}_${order.workId}` : null;
     await ctx.editMessageText(
     `📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
@@ -1064,7 +1077,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.executorReplyOrderId = order ? order.id : null;
     await ctx.editMessageText(
     `✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
@@ -1082,7 +1095,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.executorReplyOrderId = order ? order.id : null;
     await ctx.editMessageText(
     `📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
@@ -1104,11 +1117,33 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       ctx.session.customerReplyToAdminOrderTitle = orderTitle;
       await ctx.editMessageText(
         `✏️ *Режим ответа администратору*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено администратору.`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
       );
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
     });
 
+    // 🌟 Отмена сессионных режимов ожидания (сообщение/файл)
+    bot.action('cancel_session_reply', async (ctx) => {
+      ctx.session = ctx.session || {};
+      // Очищаем все возможные сессионные флаги ожидания
+      ctx.session.customerReplyToExecutorId = null;
+      ctx.session.customerReplyOrderNumber = null;
+      ctx.session.customerReplyOrderTitle = null;
+      ctx.session.customerReplyOrderDate = null;
+      ctx.session.customerReplyOrderId = null;
+      ctx.session.customerReplyChatId = null;
+      ctx.session.executorReplyToCustomerId = null;
+      ctx.session.executorReplyOrderNumber = null;
+      ctx.session.executorReplyOrderTitle = null;
+      ctx.session.executorReplyOrderDate = null;
+      ctx.session.executorReplyOrderId = null;
+      ctx.session.customerReplyToAdminId = null;
+      ctx.session.customerReplyToAdminOrderId = null;
+      ctx.session.customerReplyToAdminOrderNumber = null;
+      ctx.session.customerReplyToAdminOrderTitle = null;
+      await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+      await ctx.answerCbQuery('Отменено');
+    });
 
   function findExecutorChat(userId) {
     for (const chatData of activeChats.values()) {

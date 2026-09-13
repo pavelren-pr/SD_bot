@@ -315,12 +315,16 @@ bot.hears('📚 Заказать работу', async (ctx) => {
   bot.action(/^orders:admin:view:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
-    
     if (!order) {
       await ctx.answerCbQuery('❌ Заказ не найден');
       return;
     }
-    
+    // 🌟 Очищаем сессионные флаги режима ответа (если пользователь нажал "Отмена")
+    ctx.session = ctx.session || {};
+    ctx.session.adminReplyToCustomerId = null;
+    ctx.session.adminReplyOrderId = null;
+    ctx.session.adminReplyOrderTitle = null;
+    ctx.session.adminReplyOrderDate = null;
     const text = formatOrderCard(order, 'admin');
     
     const buttons = [
@@ -377,7 +381,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     ctx.session.adminReplyOrderDate = order.createdAt;
     
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('❌ Отмена', `orders:admin:view:${orderId}`)]
+      [Markup.button.callback('↩️ Назад', `orders:admin:view:${orderId}`)]
     ]);
     
     await ctx.editMessageText(
@@ -571,6 +575,14 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
       await ctx.answerCbQuery('❌ Заказ не найден');
       return;
     }
+    // 🌟 Очищаем сессионные флаги режима ответа (если пользователь нажал "Отмена")
+    ctx.session = ctx.session || {};
+    ctx.session.customerReplyToExecutorId = null;
+    ctx.session.customerReplyOrderId = null;
+    ctx.session.customerReplyOrderTitle = null;
+    ctx.session.customerReplyOrderDate = null;
+    ctx.session.customerReplyOrderNumber = null;
+    ctx.session.customerReplyChatId = null;
     const text = formatOrderCard(order, 'customer');
     const buttons = [];
 
@@ -777,9 +789,16 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
     if (!order || String(order.executorId) !== String(ctx.from.id)) {
-      await ctx.answerCbQuery('❌ Заказ не найден');
-      return;
+    await ctx.answerCbQuery('❌ Заказ не найден');
+    return;
     }
+    // 🌟 Очищаем сессионные флаги режима ответа (если пользователь нажал "Отмена")
+    ctx.session = ctx.session || {};
+    ctx.session.executorReplyToCustomerId = null;
+    ctx.session.executorReplyOrderId = null;
+    ctx.session.executorReplyOrderTitle = null;
+    ctx.session.executorReplyOrderDate = null;
+    ctx.session.executorReplyOrderNumber = null;
     const text = formatOrderCard(order, 'executor');
     const buttons = [];
 

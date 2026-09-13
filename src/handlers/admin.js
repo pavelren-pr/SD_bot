@@ -99,6 +99,18 @@ function getBackToAdminMenu() {
   ]);
 }
 
+// 🌟 Очистка режимов ожидания сообщения от админа заказчику
+function clearAdminReplySession(ctx) {
+  ctx.session = ctx.session || {};
+
+  ctx.session.adminReplyToCustomerId = null;
+  ctx.session.adminReplyOrderId = null;
+  ctx.session.adminReplyOrderNumber = null;
+  ctx.session.adminReplyOrderTitle = null;
+  ctx.session.adminReplyOrderDate = null;
+  ctx.session.adminReplyAdminId = null;
+}
+
 // ==========================================
 // КЛАВИАТУРЫ КАТАЛОГА (специальность → курс → предмет → работа)
 // ==========================================
@@ -1596,12 +1608,21 @@ function register(bot) {
       ctx.session.adminReplyOrderDate = order ? order.createdAt : new Date().toLocaleString('ru-RU');
       ctx.session.adminReplyAdminId = ctx.from.id;
 
+const backCallback = order ? `admin:order_view:${orderId}` : 'admin:orders';
+
+const backKeyboard = Markup.inlineKeyboard([
+  [Markup.button.callback('↩️ Назад', backCallback)]
+]);
+
       await ctx.reply(
         `💬 *Режим ответа заказчику*\n\n` +
         `🆔 *Номер заказа:* №${orderNumber}\n` +
         `📚 *Заказ:* ${escapeMarkdown(orderTitle)}\n\n` +
         `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.`,
-        { parse_mode: 'Markdown' }
+        { 
+          parse_mode: 'Markdown',
+          reply_markup: backKeyboard.reply_markup
+        }
       );
 
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
@@ -1621,7 +1642,12 @@ function register(bot) {
     // --- ГЛАВНОЕ МЕНЮ ---
     if (action === 'main') {
       ctx.session.adminState = null;
-      await ctx.editMessageText('🛠 *Панель управления*', { parse_mode: 'Markdown', ...getAdminMainMenu() });
+      clearAdminReplySession(ctx);
+
+      await ctx.editMessageText('🛠 *Панель управления*', { 
+        parse_mode: 'Markdown', 
+        ...getAdminMainMenu() 
+      });
     }
 
     // --- КАТАЛОГ: Навигация (специальность → курс → предмет → работа) ---
@@ -2029,7 +2055,15 @@ function register(bot) {
     else if (action.startsWith('order_view:')) {
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
-      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+      if (!order) { 
+        await ctx.answerCbQuery('❌ Заказ не найден'); 
+        return; 
+      }
+
+      // 🌟 Если админ нажал "Назад"/"Отмена" из режима ввода сообщения — сбрасываем режим
+      ctx.session.adminState = null;
+      clearAdminReplySession(ctx);
+
       const text = formatOrderCard(order, 'admin');
       const buttons = [
         [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
@@ -2292,7 +2326,7 @@ function register(bot) {
       ctx.session.adminReplyAdminId = ctx.from.id;
       
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('❌ Отмена', `admin:order_view:${orderId}`)]
+        [Markup.button.callback('↩️ Назад', `admin:order_view:${orderId}`)]
       ]);
       
       await ctx.editMessageText(
@@ -2673,6 +2707,8 @@ function register(bot) {
     // --- БАЗА ЗАКАЗЧИКОВ ---
     else if (action === 'customers') {
       ctx.session.adminState = null;
+      clearAdminReplySession(ctx);
+
       const allOrders = ordersDb.getAllOrders().filter(o => !o._meta);
       const loyaltyData = loyalty.loadData();
       const customerMap = new Map();
@@ -2780,6 +2816,9 @@ function register(bot) {
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('customer_view:')) {
+      ctx.session.adminState = null;
+      clearAdminReplySession(ctx);
+
       const customerId = action.split(':')[1];
       const customers = ctx.session.customersList || [];
       const customer = customers.find(c => String(c.id) === String(customerId));
@@ -2834,12 +2873,33 @@ function register(bot) {
         return;
       }
       ctx.session.adminState = `send_message_to_customer:${orderId}`;
-      await ctx.editMessageText(`💬 Отправка сообщения заказчику\n\nЗаказ №${order.orderNumber}\nЗаказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\nВведите текст сообщения:`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', `admin:order_view:${orderId}`)]]) });
+      await ctx.editMessageText(
+        `💬 Отправка сообщения заказчику\n\n` +
+        `Заказ №${order.orderNumber}\n` +
+        `Заказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\n` +
+        `Введите текст сообщения:`,
+        { 
+          parse_mode: 'Markdown', 
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', `admin:order_view:${orderId}`)]
+          ])  
+        }
+      );
     }
     else if (action.startsWith('send_msg_customer_by_id:')) {
       const customerId = action.split(':')[1];
       ctx.session.adminState = `send_message_to_customer_by_id:${customerId}`;
-      await ctx.editMessageText(`💬 Отправка сообщения заказчику\n\nID заказчика: \`${customerId}\`\n\nВведите текст сообщения:`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'admin:customers')]]) });
+      await ctx.editMessageText(
+        `💬 Отправка сообщения заказчику\n\n` +
+        `ID заказчика: \`${customerId}\`\n\n` +
+        `Введите текст сообщения:`,
+        { 
+          parse_mode: 'Markdown', 
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'admin:customers')]
+          ]) 
+        }
+      );
     }
 
     await ctx.answerCbQuery();

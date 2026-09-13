@@ -516,6 +516,24 @@ bot.action(/^custom_back:(\d+)$/, async (ctx) => {
   await ctx.answerCbQuery();
 });
 
+// 🌟 Универсальная кнопка «Назад» для отмены режимов ожидания (сообщение/файл/оплата)
+bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
+  ctx.session = ctx.session || {};
+  const orderNumber = parseInt(ctx.match[1]);
+  
+  // Очищаем ВСЕ возможные флаги ожидания
+  ctx.session.waitingCustomPrice = null;
+  ctx.session.waitingCustomMessageToCustomer = null;
+  ctx.session.waitingCustomFileToCustomer = null;
+  ctx.session.waitingCustomReplyToExecutor = null;
+  ctx.session.waitingCustomReplyFileToExecutor = null;
+  ctx.session.waitingCustomPayment = null;
+  ctx.session.waitingCustomWriteToExecutor = null;
+  
+  await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+  await ctx.answerCbQuery('Отменено');
+});
+
   // Обработка введённой цены
   bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
@@ -633,7 +651,8 @@ bot.action(/^custom_write_customer:(\d+)$/, async (ctx) => {
     `🆔 *Номер заказа:* №${orderNumber}\n\n` +
     `Отправьте ваше сообщение:`;
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('📎 Отправить файл', `custom_write_customer_file:${orderNumber}`)]
+    [Markup.button.callback('📎 Отправить файл', `custom_write_customer_file:${orderNumber}`)],
+    [Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]
   ]).reply_markup;
   
   // 🌟 Проверяем: текстовое сообщение или медиа
@@ -665,7 +684,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     `📎 *Отправить файл заказчику*\n\n` +
     `🆔 *Номер заказа:* №${orderNumber}\n\n` +
     `Прикрепите файл или фото:`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
   );
   ctx.session.waitingCustomFileToCustomer = { orderNumber };
   await ctx.answerCbQuery();
@@ -796,7 +815,8 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       `🆔 *Номер заказа:* №${orderNumber}\n\n` +
       `Отправьте ваше сообщение:`;
     const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)]
+      [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)],
+      [Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]
     ]).reply_markup;
     
     // 🌟 Проверяем: текстовое сообщение или медиа
@@ -818,13 +838,13 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     if (!orderRecord) {
       return ctx.answerCbQuery('❌ Заказ не найден');
     }
-    await ctx.editMessageText(
-      `📎 *Отправить файл исполнителю*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n\n` +
-      `Прикрепите файл или фото:`,
-      { parse_mode: 'Markdown' }
-    );
-    ctx.session.waitingCustomReplyFileToExecutor = { orderNumber };
+  await ctx.editMessageText(
+    `📎 *Отправить файл исполнителю*\n\n` +
+    `🆔 *Номер заказа:* №${orderNumber}\n\n` +
+    `Прикрепите файл или фото:`,
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
+  );
+  ctx.session.waitingCustomReplyFileToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -996,8 +1016,8 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     `💵 *Стоимость выполнения:* ${paymentAmount} ₽\n\n` +
     `Переведите сумму на карту:\n` +
     `\`${paymentValue}\`\n\n` +
-    `📸 *После оплаты отправьте скриншот чека в этот чат.*`,
-    { parse_mode: 'Markdown' }
+    `📸 После оплаты отправьте скриншот чека в этот чат.`,
+    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
   );
   ctx.session.waitingCustomPayment = { orderNumber };
   await ctx.answerCbQuery();
@@ -1115,9 +1135,8 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       `✏️ *Написать исполнителю*\n\n` +
       `🆔 *Номер заказа:* №${orderNumber}\n\n` +
       `Отправьте ваше сообщение:`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
     );
-    
     ctx.session.waitingCustomWriteToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });
