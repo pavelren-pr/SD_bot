@@ -383,7 +383,11 @@ function register(bot) {
         const paidTime = now.toLocaleString('ru-RU');
         let updatedText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
         updatedText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
-        updatedText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
+        const commissionPercent = work.commission || 0;
+        const executorPrice = Math.round(order.finalPrice * (1 - commissionPercent / 100));
+        updatedText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
+        updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+        updatedText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
         if (order.details.text) updatedText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
         if (order.details.files.length > 0) {
           updatedText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
@@ -449,7 +453,11 @@ function register(bot) {
         let updatedOrderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
         updatedOrderText += `🆔 *Номер заказа:* №${newOrder.orderNumber}\n`;
         updatedOrderText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
-        updatedOrderText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
+        const commissionPercent2 = work.commission || 0;
+        const executorPrice2 = Math.round(order.finalPrice * (1 - commissionPercent2 / 100));
+        updatedOrderText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
+        updatedOrderText += `👷 *Исполнитель получит:* ${executorPrice2} ₽ (комиссия ${commissionPercent2}%)\n`;
+        updatedOrderText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
         if (order.details.text) updatedOrderText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
         if (order.details.files.length > 0) {
           updatedOrderText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
@@ -584,7 +592,11 @@ function register(bot) {
     let orderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
     orderText += `🆔 *Номер заказа:* будет присвоен после оплаты\n`;
     orderText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
-    orderText += `💰 *Сумма:* ${pricing.finalPrice} ₽ (скидка ${pricing.discountPercent}%)\n💳 *Оплата на:* \`${paymentDetails}\`\n`;
+    const commissionPercent = work.commission || 0;
+    const executorPrice = Math.round(pricing.finalPrice * (1 - commissionPercent / 100));
+    orderText += `💰 *Сумма:* ${pricing.finalPrice} ₽ (скидка ${pricing.discountPercent}%)\n`;
+    orderText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+    orderText += `💳 *Оплата на:* \`${paymentDetails}\`\n`;
     if (order.details.text) orderText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
     if (order.details.files.length > 0) {
       orderText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
