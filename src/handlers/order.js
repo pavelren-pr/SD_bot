@@ -9,6 +9,50 @@ const { Markup } = require('telegraf');
 const mediaBuffer = {};
 const activeChats = new Map();
 
+// 🌟 Функция восстановления данных чата после перезапуска бота
+function restoreChatData(chatId) {
+  if (activeChats.has(chatId)) return activeChats.get(chatId);
+
+  // 1. Ищем заказ в БД по сохраненному chatId (если он там есть)
+  const allOrders = orders.getAllOrders();
+  let order = allOrders.find(o => o.chatId === chatId && o.executorId);
+
+  // 2. Если не нашли по chatId, пытаемся восстановить его из формата: order_customerId_workId_timestamp
+  if (!order) {
+    const parts = chatId.split('_');
+    if (parts[0] === 'order' && parts.length >= 3) {
+      const customerUserId = parseInt(parts[1]);
+      const lastPart = parts[parts.length - 1];
+      const workId = (!isNaN(lastPart) && lastPart.length >= 10) ? parts.slice(2, -1).join('_') : parts.slice(2).join('_');
+
+      const userOrders = orders.getUserOrders(customerUserId);
+      // Ищем заказы с нужной работой, у которых уже есть исполнитель
+      const matchingOrders = userOrders.filter(o => o.workId === workId && o.executorId);
+      if (matchingOrders.length > 0) {
+        order = matchingOrders[matchingOrders.length - 1]; // Берем самый свежий
+      }
+    }
+  }
+
+  if (!order) return null; // Если заказ так и не найден, возвращаем null
+
+  // Создаём объект чата заново и сохраняем его обратно в activeChats
+  const chatData = {
+    chatId: chatId,
+    customerUserId: parseInt(order.customerId),
+    executorUserId: parseInt(order.executorId),
+    workId: order.workId,
+    workTitle: order.workTitle,
+    orderId: order.id,
+    orderNumber: order.orderNumber || '—',
+    status: 'idle',
+    createdAt: Date.now()
+  };
+
+  activeChats.set(chatId, chatData);
+  return chatData;
+}
+
 // 🌟 Функция формирования текста сообщения в группе исполнителей
 function buildGroupOrderText(order, status) {
     let header;
@@ -745,10 +789,11 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
     // Предварительно обновляем данные в БД, чтобы buildGroupOrderText видел исполнителя
     const executorUser = await ctx.telegram.getChat(executorUserId);
     orders.updateOrder(activeOrder.id, {
-        executorId: executorUserId,
-        executorUsername: executorUser.username || null,
-        status: 'active',
-        acceptedAt: new Date().toLocaleString('ru-RU')
+      executorId: executorUserId,
+      executorUsername: executorUser.username || null,
+      status: 'active',
+      acceptedAt: new Date().toLocaleString('ru-RU'),
+      chatId: chatId
     });
     
     // Перечитываем заказ из БД для формирования текста
@@ -816,9 +861,12 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
 
   bot.action(/^oc:(.+)$/, async (ctx) => {
     const chatId = ctx.match[1];
-    const chatData = activeChats.get(chatId);
-    if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
-    
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId);
+    if (!chatData || chatData.executorUserId !== ctx.from.id) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery();
+    }
     chatData.status = 'completed';
     if (chatData.orderId) {
         orders.updateOrder(chatData.orderId, {
@@ -921,24 +969,42 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
   }
 
   bot.action(/^cr:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
-    if (!chatData || chatData.customerUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
+    const chatId = ctx.match[1];
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId); // <--- попытка восстановления
+    
+    if (!chatData || chatData.customerUserId !== ctx.from.id) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
+    }
     chatData.status = 'waiting_customer_message';
     await ctx.editMessageText(`✏️ *Напишите сообщение исполнителю:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
   bot.action(/^csf:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
-    if (!chatData || chatData.customerUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
+    const chatId = ctx.match[1]; 
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId); // <--- попытка восстановления
+
+    if (!chatData || chatData.customerUserId !== ctx.from.id) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
+    }
     chatData.status = 'waiting_customer_file';
     await ctx.editMessageText(`📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
   bot.action(/^ccc:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
-    if (!chatData || chatData.customerUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
+    const chatId = ctx.match[1]; 
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId); // <--- попытка восстановления
+
+    if (!chatData || chatData.customerUserId !== ctx.from.id) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
+    }
     chatData.status = 'closed';
     await ctx.telegram.sendMessage(chatData.executorUserId, `❌ *Заказчик завершил чат*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
@@ -946,8 +1012,13 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
   });
 
   bot.action(/^er:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
-    if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
+    const chatId = ctx.match[1];
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId);
+    if (!chatData || chatData.executorUserId !== ctx.from.id) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery();
+    }
     chatData.status = 'waiting_executor_message';
     await ctx.editMessageText(`✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
@@ -955,9 +1026,12 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
 
   bot.action(/^erm:(.+)$/, async (ctx) => {
   const chatId = ctx.match[1]; 
-  const chatData = activeChats.get(chatId);
+  let chatData = activeChats.get(chatId);
   
   // 🌟 Упрощённая проверка: если чат существует
+  if (!chatData) {
+    chatData = restoreChatData(chatId);
+  }
   if (!chatData) {
     return ctx.answerCbQuery('❌ Чат не найден или был завершён');
   }
@@ -977,10 +1051,13 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
 
 bot.action(/^erf:(.+)$/, async (ctx) => {
   const chatId = ctx.match[1]; 
-  const chatData = activeChats.get(chatId);
+  let chatData = activeChats.get(chatId);
   
   if (!chatData) {
-    return ctx.answerCbQuery('❌ Чат не найден или был завершён');
+    chatData = restoreChatData(chatId);
+  }
+  if (!chatData) {
+    return ctx.answerCbQuery('❌ Чат не найден или был завершён');  
   }
   
   if (chatData.executorUserId !== ctx.from.id) {
@@ -996,16 +1073,26 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
   });
 
   bot.action(/^esf:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
-    if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
+    const chatId = ctx.match[1];
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId);
+    if (!chatData || chatData.executorUserId !== ctx.from.id) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery();
+    }
     chatData.status = 'waiting_executor_file';
     await ctx.editMessageText(`📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
   bot.action(/^ecc:(.+)$/, async (ctx) => {
-    const chatId = ctx.match[1]; const chatData = activeChats.get(chatId);
-    if (!chatData || chatData.executorUserId !== ctx.from.id) return ctx.answerCbQuery('❌ Чат не найден');
+    const chatId = ctx.match[1];
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId);
+    if (!chatData || chatData.executorUserId !== ctx.from.id) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery();
+    }
     chatData.status = 'closed';
     await ctx.telegram.sendMessage(chatData.customerUserId, `❌ *Исполнитель завершил чат по этому заказу.*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
     await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
@@ -1015,12 +1102,16 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
   // 🌟 Отмена режима ожидания сообщения/файла в чате заказчик-исполнитель
   bot.action(/^cancel_chat_mode:(.+)$/, async (ctx) => {
     const chatId = ctx.match[1];
-    const chatData = activeChats.get(chatId);
-    if (!chatData) return ctx.answerCbQuery('❌ Чат не найден');
+    let chatData = activeChats.get(chatId);
+    if (!chatData) chatData = restoreChatData(chatId);
+    if (!chatData) {
+      await ctx.reply('❌ Чат не найден.\n\nПопробуйте зайти в меню профиль и связаться с исполнителем через раздел История заказов');
+      return ctx.answerCbQuery();
+    }
     // Проверяем, что пользователь — участник этого чата
     if (chatData.customerUserId !== ctx.from.id && chatData.executorUserId !== ctx.from.id) {
-      return ctx.answerCbQuery('❌ У вас нет доступа к этому чату');
-    }
+    return ctx.answerCbQuery('❌ У вас нет доступа к этому чату');
+    } 
     // Сбрасываем статус чата в нейтральное состояние
     chatData.status = 'idle';
 
@@ -1242,11 +1333,12 @@ async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignmen
   });
   
   // Обновляем заказ в БД
-  ordersDb.updateOrder(order.id, {
+    ordersDb.updateOrder(order.id, {
     executorId: executorUserId,
     executorUsername: executorUser.username || null,
     status: 'active',
-    acceptedAt: new Date().toLocaleString('ru-RU')
+    acceptedAt: new Date().toLocaleString('ru-RU'),
+    chatId: chatId
   });
   
   // Клавиатура для исполнителя (с сокращёнными префиксами!)
@@ -1327,12 +1419,23 @@ async function unassignExecutorFromOrder(orderId, bot) {
   }
 }
 
-  function findChatByOrderId(orderId) {
-    for (const [chatId, chatData] of activeChats) {
-      if (chatData.orderId === orderId) return { chatId, chatData };
-    }
-    return null;
+function findChatByOrderId(orderId) {
+  // 1. Сначала ищем в оперативной памяти
+  for (const [chatId, chatData] of activeChats) {
+    if (chatData.orderId === orderId) return { chatId, chatData };
   }
+  
+  // 2. Если не нашли — пробуем восстановить чат из БД
+  const order = orders.getOrder(orderId);
+  if (order && order.executorId) {
+    // Используем сохранённый chatId из БД, либо генерируем новый
+    const genericChatId = order.chatId || `order_${order.customerId}_${order.workId || 'custom'}_${Date.now()}`;
+    const chatData = restoreChatData(genericChatId);
+    if (chatData) return { chatId: chatData.chatId, chatData };
+  }
+  
+  return null;
+}
 
 module.exports = { 
   register, 

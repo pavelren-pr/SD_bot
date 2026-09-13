@@ -52,7 +52,7 @@ function getCustomOrderChatId(orderNumber) {
     const executorId = parseInt(orderRecord.executorId);
     customOrderStates.set(orderNumber, {
       orderId: orderRecord.id,
-      managerMessageId: null, // ID сообщения неизвестен после рестарта
+      managerMessageId: orderRecord.managerMessageId || null, // ← из БД
       chatId: executorId
     });
     return executorId;
@@ -320,6 +320,11 @@ async function sendOrderForEvaluation(ctx) {
       chatId: chatId
     });
 
+    orders.updateOrder(orderData.id, {
+      managerMessageId: sentMsg.message_id,
+      managerChatId: chatId
+    });
+
     // 🌟 Отправляем файл только если он есть
     if (customOrder.file) {
       if (customOrder.file.type === "photo") {
@@ -425,6 +430,11 @@ bot.action(/^accept_custom_order:(\d+)$/, async (ctx) => {
     orderId: orderRecord.id,
     managerMessageId: privateMsg.message_id, // Сохраняем ID сообщения в личке
     chatId: ctx.from.id                      // Сохраняем ID лички исполнителя
+  });
+
+  orders.updateOrder(orderRecord.id, {
+    managerMessageId: privateMsg.message_id,
+    managerChatId: ctx.from.id
   });
   
   // Если к заказу был прикреплен файл, пересылаем его в личку исполнителю
