@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const loyalty = require('../data/loyalty');
 const ordersDb = require('../data/orders');
-const { findChatByOrderId } = require('./order');
+const { findChatByOrderId, buildGroupOrderText } = require('./order');
 
 // 🌟 Статусы для категорий (включая custom orders)
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
@@ -904,6 +904,23 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     status: 'completed',
     completedAt: new Date().toLocaleString('ru-RU')
   });
+  
+  // 🌟 Обновляем сообщение в группе исполнителей
+  const updatedOrderForGroup = ordersDb.getOrder(orderId);
+  if (updatedOrderForGroup && updatedOrderForGroup.managerMessageId && updatedOrderForGroup.managerChatId) {
+    const completedText = buildGroupOrderText(updatedOrderForGroup, 'completed');
+    try {
+      await ctx.telegram.editMessageText(
+        updatedOrderForGroup.managerChatId,
+        updatedOrderForGroup.managerMessageId,
+        null,
+        completedText,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (e) {
+      console.log('Не удалось обновить сообщение в группе при завершении:', e.message);
+    }
+  }
   // Для custom orders — уведомляем заказчика
   if (order.isCustomOrder && order.customerId) {
     try {

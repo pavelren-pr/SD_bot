@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { generateExcelExport, generateLogsExport } = require('../utils/export');
 const logger = require('../utils/logger');
-const { assignExecutorToOrder, unassignExecutorFromOrder } = require('./order');
+const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 
 // 🌟 Получение доступных переменных окружения из .env
 function getAvailableEnvVars() {
@@ -2178,6 +2178,28 @@ function register(bot) {
           oldStatus: order.status,
           newStatus: newStatus
         }, ctx);
+        
+        // 🌟 Обновляем сообщение в группе исполнителей при смене статуса
+        const updatedOrderForGroup = ordersDb.getOrder(orderId);
+        if (updatedOrderForGroup && updatedOrderForGroup.managerMessageId && updatedOrderForGroup.managerChatId) {
+          let statusForText;
+          if (newStatus === 'completed') statusForText = 'completed';
+          else if (newStatus === 'active' || newStatus === 'paid') statusForText = 'in_progress';
+          else statusForText = 'new';
+          
+          const updatedGroupText = buildGroupOrderText(updatedOrderForGroup, statusForText);
+          try {
+            await ctx.telegram.editMessageText(
+              updatedOrderForGroup.managerChatId,
+              updatedOrderForGroup.managerMessageId,
+              null,
+              updatedGroupText,
+              { parse_mode: 'Markdown' }
+            );
+          } catch (e) {
+            console.log('Не удалось обновить сообщение в группе при смене статуса:', e.message);
+          }
+        }
       }
       
       await ctx.answerCbQuery('✅ Статус изменён');

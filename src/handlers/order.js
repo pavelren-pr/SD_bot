@@ -9,6 +9,50 @@ const { Markup } = require('telegraf');
 const mediaBuffer = {};
 const activeChats = new Map();
 
+// 🌟 Функция формирования текста сообщения в группе исполнителей
+function buildGroupOrderText(order, status) {
+    let header;
+    if (status === 'new') header = '🔔 *НОВЫЙ ЗАКАЗ!*';
+    else if (status === 'in_progress') header = '🔨 *ЗАКАЗ В РАБОТЕ*';
+    else header = '✅ *ЗАКАЗ ВЫПОЛНЕН*';
+    
+    const commissionPercent = order.commission || 0;
+    const executorPrice = Math.round(order.price * (1 - commissionPercent / 100));
+    const userLink = order.customerUsername 
+        ? `@${order.customerUsername}` 
+        : `[Пользователь](tg://user?id=${order.customerId})`;
+    
+    let text = `${header}\n\n`;
+    text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
+    text += `👤 *Заказчик:* ${userLink}\n`;
+    text += `📚 *Работа:* ${order.workTitle}\n`;
+    text += `💰 *Сумма:* ${order.price} ₽\n`;
+    text += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+    
+    if (order.executorUsername || order.executorId) {
+        const executorDisplay = order.executorUsername 
+            ? `@${order.executorUsername}` 
+            : `ID: ${order.executorId}`;
+        text += `👷 *Исполнитель:* ${executorDisplay}\n`;
+    }
+    
+    text += `\n⏰ *Создан:* ${order.createdAt}`;
+    
+    if (order.acceptedAt) {
+        text += `\n🔨 *Принят:* ${order.acceptedAt}`;
+    }
+    if (order.completedAt) {
+        text += `\n✅ *Выполнен:* ${order.completedAt}`;
+    }
+    
+    // Статус
+    if (status === 'new') text += `\n🟢 *Статус:* ОПЛАЧЕН`;
+    else if (status === 'in_progress') text += `\n🟡 *Статус:* В РАБОТЕ`;
+    else text += `\n🟢 *Статус:* ВЫПОЛНЕН`;
+    
+    return text;
+}
+
 // 🌟 Функция экранирования специальных символов Markdown
 function escapeMarkdown(text) {
   if (!text) return '';
@@ -434,15 +478,17 @@ function register(bot) {
         const course = catalog.getCourse(subject.courseId);
         
         const newOrder = orders.createOrder({
-          workId: work.id,
-          workTitle: work.title,
-          subjectName: subject.name,
-          courseName: course.name,
-          customerId: ctx.from.id,
-          customerUsername: ctx.from.username || null,
-          price: order.finalPrice,
-          commission: work.commission,
-          createdAt: paidTime
+            workId: work.id,
+            workTitle: work.title,
+            subjectName: subject.name,
+            courseName: course.name,
+            customerId: ctx.from.id,
+            customerUsername: ctx.from.username || null,
+            price: order.finalPrice,
+            commission: work.commission,
+            createdAt: paidTime,
+            managerMessageId: order.managerMessageId || null,
+            managerChatId: targetChatId
         });
         
         ctx.session.currentOrderId = newOrder.id;
@@ -694,11 +740,33 @@ const groupChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
 // 🌟 Получаем номер заказа из уже найденного activeOrder
 const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
     
-    await ctx.telegram.sendMessage(
-      groupChatId, 
-      `✅ *Исполнитель ${executorName} принял заказ!*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Работа:* ${work.title}\n👤 *Заказчик:* ${customerUsername || `ID: ${customerUserId}`}`, 
-      { parse_mode: 'Markdown' }
-    );
+// 🌟 Редактируем исходное сообщение в группе вместо отправки нового
+if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
+    // Предварительно обновляем данные в БД, чтобы buildGroupOrderText видел исполнителя
+    const executorUser = await ctx.telegram.getChat(executorUserId);
+    orders.updateOrder(activeOrder.id, {
+        executorId: executorUserId,
+        executorUsername: executorUser.username || null,
+        status: 'active',
+        acceptedAt: new Date().toLocaleString('ru-RU')
+    });
+    
+    // Перечитываем заказ из БД для формирования текста
+    const updatedOrder = orders.getOrder(activeOrder.id);
+    const updatedText = buildGroupOrderText(updatedOrder, 'in_progress');
+    
+    try {
+        await ctx.telegram.editMessageText(
+            activeOrder.managerChatId,
+            activeOrder.managerMessageId,
+            null,
+            updatedText,
+            { parse_mode: 'Markdown' }
+        );
+    } catch (e) {
+        console.log('Не удалось обновить сообщение в группе:', e.message);
+    }
+}
     
     activeChats.set(chatId, { chatId, customerUserId, executorUserId, workId, workTitle: work.title, orderId: activeOrder ? activeOrder.id : null, orderNumber: orderNumber, status: 'idle', createdAt: Date.now() });
 
@@ -753,10 +821,27 @@ const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
     
     chatData.status = 'completed';
     if (chatData.orderId) {
-      orders.updateOrder(chatData.orderId, {
-        status: 'completed',
-        completedAt: new Date().toLocaleString('ru-RU')
-      });
+        orders.updateOrder(chatData.orderId, {
+            status: 'completed',
+            completedAt: new Date().toLocaleString('ru-RU')
+        });
+        
+        // 🌟 Обновляем сообщение в группе исполнителей
+        const updatedOrder = orders.getOrder(chatData.orderId);
+        if (updatedOrder && updatedOrder.managerMessageId && updatedOrder.managerChatId) {
+            const completedText = buildGroupOrderText(updatedOrder, 'completed');
+            try {
+                await ctx.telegram.editMessageText(
+                    updatedOrder.managerChatId,
+                    updatedOrder.managerMessageId,
+                    null,
+                    completedText,
+                    { parse_mode: 'Markdown' }
+                );
+            } catch (e) {
+                console.log('Не удалось обновить сообщение в группе при завершении:', e.message);
+            }
+        }
     }
 
     await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'Markdown' });
@@ -1178,5 +1263,6 @@ module.exports = {
   register, 
   findChatByOrderId, 
   assignExecutorToOrder, 
-  unassignExecutorFromOrder 
+  unassignExecutorFromOrder,
+  buildGroupOrderText
 };
