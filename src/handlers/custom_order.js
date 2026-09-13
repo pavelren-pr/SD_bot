@@ -529,10 +529,24 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   ctx.session.waitingCustomReplyFileToExecutor = null;
   ctx.session.waitingCustomPayment = null;
   ctx.session.waitingCustomWriteToExecutor = null;
-  
-  await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+
+  // 🌟 Восстанавливаем исходное сообщение, если оно было сохранено
+  if (ctx.session.customCancelOriginalText) {
+      try {
+          await ctx.editMessageText(ctx.session.customCancelOriginalText, {
+              parse_mode: 'Markdown',
+              reply_markup: ctx.session.customCancelOriginalKeyboard
+          });
+      } catch (e) {
+          await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+      }
+      ctx.session.customCancelOriginalText = null;
+      ctx.session.customCancelOriginalKeyboard = null;
+  } else {
+      await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+  }
   await ctx.answerCbQuery('Отменено');
-});
+  });
 
   // Обработка введённой цены
   bot.on('text', async (ctx, next) => {
@@ -662,6 +676,10 @@ bot.action(/^custom_write_customer:(\d+)$/, async (ctx) => {
     await ctx.reply(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
   }
   
+  // 🌟 Сохраняем исходное сообщение для возможности возврата
+  ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+  ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
+
   ctx.session.waitingCustomMessageToCustomer = { orderNumber };
   await ctx.answerCbQuery();
 });
@@ -685,10 +703,13 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     `🆔 *Номер заказа:* №${orderNumber}\n\n` +
     `Прикрепите файл или фото:`,
     { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
-  );
-  ctx.session.waitingCustomFileToCustomer = { orderNumber };
-  await ctx.answerCbQuery();
-});
+    );
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
+    ctx.session.waitingCustomFileToCustomer = { orderNumber };
+    await ctx.answerCbQuery();
+  });
 
   // Обработка сообщения исполнителя заказчику
   bot.on('text', async (ctx, next) => {
@@ -826,6 +847,9 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       await ctx.reply(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
     }
     
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     ctx.session.waitingCustomReplyToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });
@@ -843,8 +867,11 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     `🆔 *Номер заказа:* №${orderNumber}\n\n` +
     `Прикрепите файл или фото:`,
     { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
-  );
-  ctx.session.waitingCustomReplyFileToExecutor = { orderNumber };
+    );
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
+    ctx.session.waitingCustomReplyFileToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -1015,12 +1042,14 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     `🆔 *Номер заказа:* №${orderNumber}\n` +
     `💵 *Стоимость выполнения:* ${paymentAmount} ₽\n\n` +
     `Переведите сумму на карту:\n` +
-    `\`${paymentValue}\`\n\n` +
-    `📸 После оплаты отправьте скриншот чека в этот чат.`,
+    `\`${paymentValue}\`\n\n` + `📸 После оплаты отправьте скриншот чека в этот чат.`,
     { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
-  );
-  ctx.session.waitingCustomPayment = { orderNumber };
-  await ctx.answerCbQuery();
+    );
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
+    ctx.session.waitingCustomPayment = { orderNumber };
+    await ctx.answerCbQuery();
   });
 
   // Обработка скриншота оплаты
@@ -1136,7 +1165,10 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       `🆔 *Номер заказа:* №${orderNumber}\n\n` +
       `Отправьте ваше сообщение:`,
       { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
-    );
+      );
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     ctx.session.waitingCustomWriteToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });

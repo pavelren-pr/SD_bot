@@ -1023,7 +1023,17 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     }
     // Сбрасываем статус чата в нейтральное состояние
     chatData.status = 'idle';
-    await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+
+    // 🌟 Определяем, кто нажал кнопку — заказчик или исполнитель
+    const isCustomer = chatData.customerUserId === ctx.from.id;
+    const returnText = isCustomer 
+        ? `💬 *Чат с исполнителем*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || '—'}\n📚 *Заказ:* ${chatData.workTitle}\n\nВыберите действие:`
+        : `💬 *Чат с заказчиком*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || '—'}\n📚 *Заказ:* ${chatData.workTitle}\n\nВыберите действие:`;
+
+    await ctx.editMessageText(returnText, { 
+        parse_mode: 'Markdown', 
+        reply_markup: getChatKeyboard(chatId, isCustomer) 
+    });
     await ctx.answerCbQuery('Отменено');
   });
 
@@ -1039,6 +1049,9 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.customerReplyOrderDate = order ? order.createdAt : '—';
     ctx.session.customerReplyOrderId = order ? order.id : null;
     ctx.session.customerReplyChatId = order ? `order_${ctx.from.id}_${order.workId}` : null;
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `✏️ *Напишите ответ исполнителю:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
     { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
@@ -1057,6 +1070,9 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.customerReplyOrderDate = order ? order.createdAt : '—';
     ctx.session.customerReplyOrderId = order ? order.id : null;
     ctx.session.customerReplyChatId = order ? `order_${ctx.from.id}_${order.workId}` : null;
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
     { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
@@ -1075,6 +1091,9 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.executorReplyOrderTitle = order ? order.workTitle : 'Заказ';
     ctx.session.executorReplyOrderDate = order ? order.createdAt : '—';
     ctx.session.executorReplyOrderId = order ? order.id : null;
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
     { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
@@ -1093,6 +1112,9 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.executorReplyOrderTitle = order ? order.workTitle : 'Заказ';
     ctx.session.executorReplyOrderDate = order ? order.createdAt : '—';
     ctx.session.executorReplyOrderId = order ? order.id : null;
+    // 🌟 Сохраняем исходное сообщение для возможности возврата
+    ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+    ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
     { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
@@ -1115,6 +1137,9 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       ctx.session.customerReplyToAdminOrderId = orderId;
       ctx.session.customerReplyToAdminOrderNumber = orderNumber;
       ctx.session.customerReplyToAdminOrderTitle = orderTitle;
+      // 🌟 Сохраняем исходное сообщение для возможности возврата
+      ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
+      ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
       await ctx.editMessageText(
         `✏️ *Режим ответа администратору*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено администратору.`,
         { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
@@ -1141,7 +1166,22 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       ctx.session.customerReplyToAdminOrderId = null;
       ctx.session.customerReplyToAdminOrderNumber = null;
       ctx.session.customerReplyToAdminOrderTitle = null;
-      await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+      
+      // 🌟 Восстанавливаем исходное сообщение, если оно было сохранено
+      if (ctx.session.cancelReplyOriginalText) {
+          try {
+              await ctx.editMessageText(ctx.session.cancelReplyOriginalText, { 
+                  parse_mode: 'Markdown', 
+                  reply_markup: ctx.session.cancelReplyOriginalKeyboard 
+              });
+          } catch (e) {
+              await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+          }
+          ctx.session.cancelReplyOriginalText = null;
+          ctx.session.cancelReplyOriginalKeyboard = null;
+      } else {
+          await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+      }
       await ctx.answerCbQuery('Отменено');
     });
 
