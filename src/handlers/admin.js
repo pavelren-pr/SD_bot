@@ -442,6 +442,47 @@ function register(bot) {
       return;
     }
 
+    // --- ПРИВЯЗКА ЗАКАЗА К ЧАТУ ---
+    if (state.startsWith('order_bind_chat:')) {
+      const orderId = state.split(':')[1];
+      const chatEnv = text.trim();
+      const chatId = process.env[chatEnv];
+
+      if (!chatId) {
+        return ctx.reply(`❌ Переменная \`${chatEnv}\` не найдена в .env или не имеет значения.`);
+      }
+
+      const order = ordersDb.getOrder(orderId);
+      if (!order) {
+        ctx.session.adminState = null;
+        return ctx.reply('❌ Заказ не найден.');
+      }
+
+      ordersDb.updateOrder(orderId, {
+        managerChatId: chatId,
+        managerChatEnv: chatEnv
+      });
+
+      logger.logAdminAction('order_bound_to_chat', {
+        orderId: orderId,
+        orderNumber: order.orderNumber,
+        chatEnv: chatEnv,
+        chatId: chatId
+      }, ctx);
+
+      await ctx.reply(
+        `✅ *Заказ привязан к чату!*\n\n` +
+        `📦 *Заказ:* №${order.orderNumber}\n` +
+        `💬 *Чат:* \`${chatEnv}\` (ID: ${chatId})`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К заказу', `admin:order_view:${orderId}`)]])
+        }
+      );
+      ctx.session.adminState = null;
+      return;
+    }
+
     if (state === 'awaiting_specialty_emoji') {
       const name = ctx.session.tempSpecialtyName;
       const emoji = text.trim();
@@ -1543,6 +1584,29 @@ function register(bot) {
     if (state === 'add_order:commission') {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
       ctx.session.newOrder.commission = parseInt(text);
+      ctx.session.adminState = 'add_order:chat';
+      const envVars = getAvailableEnvVars();
+      let message = '💬 *Шаг 9: Чат исполнителей*\n\n';
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nОтправьте имя переменной чата (или \`нет\`, если не требуется):`;
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      return;
+    }
+    if (state === 'add_order:chat') {
+      let chatEnv = null;
+      let managerChatId = null;
+
+      if (text.toLowerCase() !== 'нет') {
+        chatEnv = text.trim();
+        managerChatId = process.env[chatEnv];
+        if (!managerChatId) {
+          return ctx.reply(`❌ Переменная \`${chatEnv}\` не найдена в .env. Попробуйте другое имя или отправьте \`нет\`.`);
+        }
+      }
+
+      ctx.session.newOrder.managerChatEnv = chatEnv;
+      ctx.session.newOrder.managerChatId = managerChatId;
+
       const newOrder = ctx.session.newOrder;
       let confirmText = `📋 *Подтверждение нового заказа*\n\n`;
       confirmText += `👤 *Заказчик ID:* ${newOrder.customerId}\n`;
@@ -1552,14 +1616,53 @@ function register(bot) {
       confirmText += `🎓 *Курс:* ${newOrder.courseName}\n`;
       confirmText += `💰 *Цена:* ${newOrder.price} ₽\n`;
       confirmText += `📊 *Комиссия:* ${newOrder.commission}%\n`;
+      confirmText += `💬 *Чат:* ${chatEnv ? `\`${chatEnv}\`` : '_не назначен_'}\n`;
       if (newOrder.description) confirmText += `📝 *Описание:* ${newOrder.description.substring(0, 100)}...\n`;
       confirmText += `\nСоздать заказ?`;
+
       const confirmKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Создать заказ', 'admin:add_order_confirm')],
         [Markup.button.callback('❌ Отмена', 'admin:orders')]
       ]);
       await ctx.reply(confirmText, { parse_mode: 'Markdown', ...confirmKeyboard });
-      ctx.session.adminState = null; return;
+      ctx.session.adminState = null;
+      return;
+    }
+    if (state === 'add_order:chat') {
+      let chatEnv = null;
+      let managerChatId = null;
+
+      if (text.toLowerCase() !== 'нет') {
+        chatEnv = text.trim();
+        managerChatId = process.env[chatEnv];
+        if (!managerChatId) {
+          return ctx.reply(`❌ Переменная \`${chatEnv}\` не найдена в .env. Попробуйте другое имя или отправьте \`нет\`.`);
+        }
+      }
+
+      ctx.session.newOrder.managerChatEnv = chatEnv;
+      ctx.session.newOrder.managerChatId = managerChatId;
+
+      const newOrder = ctx.session.newOrder;
+      let confirmText = `📋 *Подтверждение нового заказа*\n\n`;
+      confirmText += `👤 *Заказчик ID:* ${newOrder.customerId}\n`;
+      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} *Тип:* ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
+      confirmText += `📚 *Работа:* ${newOrder.workTitle}\n`;
+      confirmText += `📖 *Предмет:* ${newOrder.subjectName}\n`;
+      confirmText += `🎓 *Курс:* ${newOrder.courseName}\n`;
+      confirmText += `💰 *Цена:* ${newOrder.price} ₽\n`;
+      confirmText += `📊 *Комиссия:* ${newOrder.commission}%\n`;
+      confirmText += `💬 *Чат:* ${chatEnv ? `\`${chatEnv}\`` : '_не назначен_'}\n`;
+      if (newOrder.description) confirmText += `📝 *Описание:* ${newOrder.description.substring(0, 100)}...\n`;
+      confirmText += `\nСоздать заказ?`;
+
+      const confirmKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Создать заказ', 'admin:add_order_confirm')],
+        [Markup.button.callback('❌ Отмена', 'admin:orders')]
+      ]);
+      await ctx.reply(confirmText, { parse_mode: 'Markdown', ...confirmKeyboard });
+      ctx.session.adminState = null;
+      return;
     }
     // ==========================================
     // 🌟 ДОБАВЛЕНИЕ ЗАКАЗЧИКА ВРУЧНУЮ
@@ -2541,6 +2644,10 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
         [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]
       ];
+      // 🌟 Кнопка привязки к чату (если у заказа нет чата)
+      if (!order.managerChatId) {
+        buttons.push([Markup.button.callback('🏢 Привязать к чату', `admin:order_bind_chat:${orderId}`)]);
+      }
       if (order.customerUsername) buttons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${order.customerUsername}`)]);
       // 🌟 Разные кнопки статусов для разных типов заказов
       if (order.isCustomOrder) {
@@ -2594,6 +2701,24 @@ const backKeyboard = Markup.inlineKeyboard([
         `✏️ *Редактирование заказа №${order.orderNumber}*\n${typeLabel}\n\nВыберите поле для изменения:`,
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard(keyboardButtons) }
       );
+    }
+    // --- ПРИВЯЗКА ЗАКАЗА К ЧАТУ (АДМИН) ---
+    else if (action.startsWith('order_bind_chat:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const envVars = getAvailableEnvVars();
+      let message = `🏢 *Привязка заказа к чату*\n\n`;
+      message += `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n`;
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nОтправьте имя переменной чата:`;
+
+      ctx.session.adminState = `order_bind_chat:${orderId}`;
+      await ctx.editMessageText(message, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:order_view:${orderId}`)]])
+      });
     }
     else if (action.startsWith('order_field:')) {
       const parts = action.split(':');
@@ -2843,7 +2968,9 @@ const backKeyboard = Markup.inlineKeyboard([
         commission: newOrder.commission || 20,
         description: newOrder.description || null,
         isCustomOrder: newOrder.isCustomOrder || false,
-        status: status
+        status: status,
+        managerChatId: newOrder.managerChatId || null,
+        managerChatEnv: newOrder.managerChatEnv || null
       });
       ctx.session.newOrder = null;
       await ctx.answerCbQuery('✅ Заказ создан');
@@ -3046,17 +3173,18 @@ const backKeyboard = Markup.inlineKeyboard([
         let text = `🛠 *Управление рангами*\n\n`;
         text += `👑 *Админы (Посейдон):* ${admins.length}\n`;
         if (admins.length === 0) text += `  • нет\n`;
-        
-        // 🌟 ИСПРАВЛЕНИЕ: Экранируем спецсимволы в username, чтобы бот не падал
         admins.forEach(a => {
           const usernameDisplay = a.username !== 'N/A' ? '@' + escapeMarkdown(a.username) : 'без username';
           text += `  • ${a.id} (${usernameDisplay})\n`;
         });
-        
+        // 🌟 ИСПРАВЛЕНО: сначала выводим заголовок И список исполнителей
         text += `\n🔥 *Исполнители (Прометей):* ${executors.length}\n`;
         if (executors.length === 0) text += `  • нет\n`;
-        
-        // 🌟 НОВОЕ: Управляющие отделами
+        executors.forEach(e => {
+          const usernameDisplay = e.username !== 'N/A' ? '@' + escapeMarkdown(e.username) : 'без username';
+          text += `  • ${e.id} (${usernameDisplay})\n`;
+        });
+        // 🌟 ИСПРАВЛЕНО: затем выводим заголовок И список управляющих
         text += `\n👁️ *Управляющие отделами (Циклоп):* ${managers.length}\n`;
         if (managers.length === 0) text += `  • нет\n`;
         managers.forEach(m => {
@@ -3115,28 +3243,24 @@ const backKeyboard = Markup.inlineKeyboard([
     // Управление пользователями с рангами
     else if (action === 'set_user_rank:manage') {
       const loyaltyData = loyalty.loadData();
-      
       const rankedUsers = [];
       for (const [userId, userData] of Object.entries(loyaltyData)) {
-        if (userData.rank === 'Посейдон' || userData.rank === 'Прометей') {
+        // 🌟 ИСПРАВЛЕНО: добавлен Циклоп
+        if (userData.rank === 'Посейдон' || userData.rank === 'Прометей' || userData.rank === 'Циклоп') {
           rankedUsers.push({ id: userId, username: userData.username || 'N/A', rank: userData.rank });
         }
       }
-      
       let text = `📋 *Управление пользователями с рангами*\n\nВыберите пользователя:\n`;
-      
       const buttons = rankedUsers.map(u => {
-        const rankEmoji = u.rank === 'Посейдон' ? '👑' : '🔥';
+        // 🌟 ИСПРАВЛЕНО: эмодзи для Циклопа
+        const rankEmoji = u.rank === 'Посейдон' ? '👑' : (u.rank === 'Циклоп' ? '👁️' : '🔥');
         const display = u.username !== 'N/A' ? `${u.id} (@${u.username})` : u.id;
         return [Markup.button.callback(`${rankEmoji} ${display}`, `admin:set_user_rank:user:${u.id}`)];
       });
-      
       if (rankedUsers.length === 0) {
         text += `_Пользователей с рангами не найдено_\n`;
       }
-      
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:set_user_rank')]);
-      
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
     // Действия над конкретным пользователем
@@ -3150,7 +3274,7 @@ const backKeyboard = Markup.inlineKeyboard([
         return;
       }
 
-      const rankEmoji = userData.rank === 'Посейдон' ? '👑' : '🔥';
+      const rankEmoji = userData.rank === 'Посейдон' ? '👑' : (userData.rank === 'Циклоп' ? '👁️' : '🔥');
       let text = `👤 *Пользователь:* \`${userId}\`\n`;
       text += `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
       text += `${rankEmoji} *Текущий ранг:* ${userData.rank}\n\n`;
@@ -3216,7 +3340,7 @@ const backKeyboard = Markup.inlineKeyboard([
       }
 
       const currentRank = userData.rank;
-      const rankEmoji = currentRank === 'Посейдон' ? '👑' : '🔥';
+      const rankEmoji = currentRank === 'Посейдон' ? '👑' : (currentRank === 'Циклоп' ? '👁️' : '🔥');
 
       let text = `🔄 *Изменение ранга*\n\n`;
       text += `👤 *Пользователь:* \`${userId}\`\n`;
@@ -3359,7 +3483,7 @@ const backKeyboard = Markup.inlineKeyboard([
         return;
       }
 
-      const rankEmoji = userData.rank === 'Посейдон' ? '👑' : '🔥';
+      const rankEmoji = userData.rank === 'Посейдон' ? '👑' : (userData.rank === 'Циклоп' ? '👁️' : '🔥');
 
       let text = `✏️ *Изменение данных пользователя*\n\n`;
       text += `👤 *Текущий ID:* \`${userId}\`\n`;

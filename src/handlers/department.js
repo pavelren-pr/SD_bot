@@ -117,6 +117,11 @@ async function showOrderCard(ctx, orderId) {
   // Написать заказчику
   buttons.push([Markup.button.callback('💬 Написать заказчику', `dept:msg:${orderId}`)]);
 
+  // 🌟 Кнопка привязки к отделу (если у заказа нет чата)
+  if (!order.managerChatId) {
+    buttons.push([Markup.button.callback('🏢 Привязать к отделу', `dept:bind_chat:${orderId}`)]);
+  }
+
   // Кнопки статусов (аналогично админ-панели, но БЕЗ редактирования и удаления)
   if (order.isCustomOrder) {
     if (order.status !== 'completed') {
@@ -358,6 +363,73 @@ function register(bot) {
         ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `dept:view:${orderId}`)]])
       }
     );
+  });
+
+  // --- ПРИВЯЗКА К ОТДЕЛУ: запрос выбора чата ---
+  bot.action(/^dept:bind_chat:(.+)$/, async (ctx) => {
+    if (!isManager(ctx.from.id)) {
+      await ctx.answerCbQuery('❌ У вас нет прав');
+      return;
+    }
+    const orderId = ctx.match[1];
+    const order = ordersDb.getOrder(orderId);
+    if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+    const chats = loyalty.getManagedChats(ctx.from.id);
+    if (chats.length === 0) {
+      await ctx.answerCbQuery('❌ Вам не назначены чаты отделов');
+      return;
+    }
+
+    let text = `🏢 *Привязка заказа к отделу*\n\n`;
+    text += `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n`;
+    text += `Выберите отдел:`;
+
+    const buttons = chats.map((c, idx) => [
+      Markup.button.callback(`🏢 ${c.name}`, `dept:bind_chat_set:${orderId}:${idx}`)
+    ]);
+    buttons.push([Markup.button.callback('⬅️ Назад', `dept:view:${orderId}`)]);
+
+    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+  });
+
+  // --- ПРИВЯЗКА К ОТДЕЛУ: установка чата ---
+  bot.action(/^dept:bind_chat_set:(.+):(\d+)$/, async (ctx) => {
+    if (!isManager(ctx.from.id)) {
+      await ctx.answerCbQuery('❌ У вас нет прав');
+      return;
+    }
+    const orderId = ctx.match[1];
+    const chatIdx = parseInt(ctx.match[2]);
+    const order = ordersDb.getOrder(orderId);
+    if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+    const chats = loyalty.getManagedChats(ctx.from.id);
+    if (!chats[chatIdx]) { await ctx.answerCbQuery('❌ Отдел не найден'); return; }
+
+    const chatEnv = chats[chatIdx].chatEnv;
+    const chatId = process.env[chatEnv];
+    if (!chatId) {
+      await ctx.answerCbQuery('❌ Переменная окружения не настроена в .env');
+      return;
+    }
+
+    // Обновляем заказ: привязываем к чату
+    ordersDb.updateOrder(orderId, {
+      managerChatId: chatId,
+      managerChatEnv: chatEnv  // сохраняем имя переменной для надёжности
+    });
+
+    logger.logAdminAction('dept_order_bound_to_chat', {
+      orderId: orderId,
+      orderNumber: order.orderNumber,
+      chatEnv: chatEnv,
+      departmentName: chats[chatIdx].name,
+      managerId: ctx.from.id
+    }, ctx);
+
+    await ctx.answerCbQuery(`✅ Заказ привязан к отделу "${chats[chatIdx].name}"`);
+    await showOrderCard(ctx, orderId);
   });
 
   // ==========================================
