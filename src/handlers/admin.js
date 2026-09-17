@@ -1467,7 +1467,7 @@ function register(bot) {
       ctx.session.newCustomer.username = username;
       ctx.session.adminState = 'add_customer:spent';
       await ctx.reply(
-        '📝 *Шаг 3/3: Введите сумму выкупа заказчика (число в рублях):*',
+        '📝 *Шаг 3/4: Введите сумму выкупа заказчика (число в рублях):*',
         { parse_mode: 'Markdown', ...getBackToAdminMenu() }
       );
       return;
@@ -1475,46 +1475,65 @@ function register(bot) {
 
     if (state === 'add_customer:spent') {
       if (isNaN(text)) return ctx.reply('❌ Сумма должна быть числом.');
-      const totalSpent = parseInt(text);
+      ctx.session.newCustomer.totalSpent = parseInt(text);
+      ctx.session.adminState = 'add_customer:special_discount';
+      await ctx.reply(
+        '🎯 *Шаг 4/4: Специальная скидка*\n\n' +
+        'Введите процент скидки (число от 1 до 100) или отправьте `0`, если специальная скидка не требуется.\n\n' +
+        '⚠️ _Специальная скидка переопределяет скидку по рангу._',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+     // 🌟 НОВЫЙ ШАГ: специальная скидка при добавлении заказчика
+    if (state === 'add_customer:special_discount') {
+      if (isNaN(text)) return ctx.reply('❌ Скидка должна быть числом. Введите число от 0 до 100.');
+      const discountPercent = parseInt(text);
+      if (discountPercent < 0 || discountPercent > 100) {
+        return ctx.reply('❌ Скидка должна быть в диапазоне от 0 до 100.');
+      }
       const newCustomer = ctx.session.newCustomer;
       if (!newCustomer) {
         ctx.session.adminState = null;
         return ctx.reply('❌ Ошибка сессии. Начните заново.');
       }
-
       // 🌟 Сохраняем в loyalty.json
       const loyaltyData = loyalty.loadData();
       loyaltyData[newCustomer.id] = {
         username: newCustomer.username,
-        totalSpent: totalSpent,
-        // 🌟 Сохраняем specialty, если она уже была, иначе null
+        totalSpent: newCustomer.totalSpent,
         specialty: loyaltyData[newCustomer.id] && loyaltyData[newCustomer.id].specialty
           ? loyaltyData[newCustomer.id].specialty
           : null
       };
+      // Устанавливаем спец. скидку (0 = не устанавливать / удалить)
+      if (discountPercent > 0) {
+        loyaltyData[newCustomer.id].specialDiscount = discountPercent;
+      } else {
+        delete loyaltyData[newCustomer.id].specialDiscount;
+      }
       loyalty.saveData(loyaltyData);
-
       // 🌟 Логируем действие админа
       logger.logAdminAction('customer_added_manually', {
         customerId: newCustomer.id,
         username: newCustomer.username,
-        totalSpent: totalSpent
+        totalSpent: newCustomer.totalSpent,
+        specialDiscount: discountPercent > 0 ? discountPercent : null
       }, ctx);
-
-      await ctx.reply(
-        `✅ *Заказчик успешно добавлен/обновлён!*\n\n` +
-        `👤 *ID:* \`${newCustomer.id}\`\n` +
-        `📛 *Username:* @${newCustomer.username}\n` +
-        `💰 *Сумма выкупа:* ${totalSpent} ₽`,
-        {
-          parse_mode: 'Markdown',
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('👥 К списку заказчиков', 'admin:customers')],
-            [Markup.button.callback('➕ Добавить ещё', 'admin:add_customer_start')]
-          ])
-        }
-      );
-
+      let successMessage = `✅ *Заказчик успешно добавлен/обновлён!*\n\n`;
+      successMessage += `👤 *ID:* \`${newCustomer.id}\`\n`;
+      successMessage += `📛 *Username:* @${newCustomer.username}\n`;
+      successMessage += `💰 *Сумма выкупа:* ${newCustomer.totalSpent} ₽\n`;
+      if (discountPercent > 0) {
+        successMessage += `🎯 *Специальная скидка:* ${discountPercent}%\n`;
+      }
+      await ctx.reply(successMessage, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('👥 К списку заказчиков', 'admin:customers')],
+          [Markup.button.callback('➕ Добавить ещё', 'admin:add_customer_start')]
+        ])
+      });
       ctx.session.adminState = null;
       ctx.session.newCustomer = null;
       return;
@@ -1607,6 +1626,10 @@ function register(bot) {
       textMsg += `Сумма выкупа: ${loyaltyInfo.totalSpent} ₽\n`;
       textMsg += `Количество заказов: ${foundCustomer.orderCount}\n\n`;
       
+      if (loyaltyInfo.specialDiscount !== null) {
+        textMsg += `\n🎯 *Специальная скидка:* ${loyaltyInfo.specialDiscount}% _(переопределяет ранговую)_\n`;
+      }
+
       if (customerOrders.length > 0) {
         textMsg += `📦 *Последние заказы:*\n`;
         customerOrders.slice(0, 5).forEach((o, i) => {
@@ -1616,6 +1639,10 @@ function register(bot) {
       
       const buttons = [
         [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${foundCustomer.id}`)],
+        [Markup.button.callback(
+          loyaltyInfo.specialDiscount !== null ? '🎯 Изменить спец. скидку' : '🎯 Установить спец. скидку',
+          `admin:customer_edit_special_discount:${foundCustomer.id}`
+        )],
         [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${foundCustomer.id}`)],
         [Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]
       ];
@@ -3306,49 +3333,43 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action.startsWith('customer_view:')) {
       ctx.session.adminState = null;
       clearAdminReplySession(ctx);
-
       const customerId = action.split(':')[1];
       const customers = ctx.session.customersList || [];
       const customer = customers.find(c => String(c.id) === String(customerId));
-      
       if (!customer) {
         await ctx.answerCbQuery('❌ Заказчик не найден');
         return;
       }
-      
       const allOrders = ordersDb.getAllOrders();
       const customerOrders = allOrders.filter(o => String(o.customerId) === String(customerId));
-      
       let text = `👤 Информация о заказчике\n\n`;
       text += `ID: \`${customer.id}\`\n`;
       text += `Username: ${safeUsername(customer.username)}\n`;
       text += `Сумма выкупа: ${customer.totalSpent} ₽\n`;
       text += `Количество заказов: ${customer.orderCount}\n\n`;
-      
       if (customerOrders.length > 0) {
         text += `📦 Последние заказы:\n`;
         customerOrders.slice(0, 5).forEach((o, i) => {
           text += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}\n`;
         });
       }
-
       // 🌟 Получаем информацию о специальной скидке
       const loyaltyInfo = loyalty.getLoyaltyInfo(customer.id);
       const specialDiscount = loyaltyInfo.specialDiscount;
-
       // 🌟 Добавляем строку со специальной скидкой в текст карточки
       if (specialDiscount !== null) {
         text += `\n🎯 *Специальная скидка:* ${specialDiscount}% _(переопределяет ранговую)_\n`;
       }
-      
       const buttons = [
         [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${customerId}`)],
-        [Markup.button.callback(specialDiscount !== null ? '🎯 Изменить спец. скидку' : '🎯 Установить спец. скидку',
-          `admin:customer_edit_special_discount:${customerId}`)],
+        // 🌟 НОВАЯ КНОПКА: Установка/изменение специальной скидки
+        [Markup.button.callback(
+          specialDiscount !== null ? '🎯 Изменить спец. скидку' : '🎯 Установить спец. скидку',
+          `admin:customer_edit_special_discount:${customerId}`
+        )],
         [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${customerId}`)],
         [Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]
       ];
-      
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('customer_edit_spent:')) {
@@ -3397,7 +3418,7 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'add_customer_start') {
       ctx.session.adminState = 'add_customer:id';
       await ctx.editMessageText(
-        '✏️ *Добавление нового заказчика*\n\n📝 *Шаг 1/3: Введите Telegram ID заказчика (число):*',
+        '✏️ *Добавление нового заказчика*\n\n📝 *Шаг 1/4: Введите Telegram ID заказчика (число):*',
         { parse_mode: 'Markdown', ...getBackToAdminMenu() }
       );
     }
@@ -3405,7 +3426,7 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'add_customer:overwrite_yes') {
       ctx.session.adminState = 'add_customer:username';
       await ctx.editMessageText(
-        '📝 *Шаг 2/3: Введите username заказчика (без @):*',
+        '📝 *Шаг 2/4: Введите username заказчика (без @):*',
         { parse_mode: 'Markdown', ...getBackToAdminMenu() }
       );
     }
