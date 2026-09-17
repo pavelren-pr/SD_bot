@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Telegraf, session } = require('telegraf');
 const { logMessage, logButton, logError } = require('./utils/logger');
+const loyalty = require('./data/loyalty');
 
 // 🌟 Настройка Telegram API
 const telegramOptions = {};
@@ -16,6 +17,14 @@ const bot = new Telegraf(process.env.BOT_TOKEN, {
 });
 
 bot.use(session());
+
+// 🌟 Middleware: сохраняем/обновляем username при любом обращении
+bot.use((ctx, next) => {
+  if (ctx.from && ctx.from.username) {
+    loyalty.updateUsername(ctx.from.id, ctx.from.username);
+  }
+  return next();
+});
 
 // 🌟 Middleware: логируем все входящие сообщения
 bot.use((ctx, next) => {

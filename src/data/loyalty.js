@@ -29,20 +29,21 @@ const RANKS = [
 function getLoyaltyInfo(userId) {
   const data = loadData();
   const user = data[userId];
-  
+
   if (!user) {
-    return { 
-      rank: RANKS[0], 
-      discountPercent: 0, 
-      isLoyal: false, 
-      totalSpent: 0, 
-      hasExecutorAccess: false, 
-      hasFullAccess: false, 
+    return {
+      rank: RANKS[0],
+      discountPercent: 0,
+      isLoyal: false,
+      totalSpent: 0,
+      hasExecutorAccess: false,
+      hasFullAccess: false,
       progressToNext: null,
-      specialty: null
+      specialty: null,
+      specialDiscount: null // 🌟 НОВОЕ ПОЛЕ
     };
   }
-  
+
   // Если у пользователя явно указан ранг — используем его
   let currentRank = RANKS[0];
   if (user.rank) {
@@ -58,7 +59,7 @@ function getLoyaltyInfo(userId) {
       }
     }
   }
-  
+
   let progressToNext = null;
   if (!currentRank.secret) {
     let nextPublicRank = null;
@@ -69,7 +70,6 @@ function getLoyaltyInfo(userId) {
         break;
       }
     }
-    
     if (nextPublicRank) {
       progressToNext = {
         nextName: nextPublicRank.name,
@@ -77,16 +77,23 @@ function getLoyaltyInfo(userId) {
       };
     }
   }
-  
+
+  // 🌟 Специальная скидка переопределяет ранговую
+  const specialDiscount = user.specialDiscount !== undefined && user.specialDiscount !== null 
+    ? user.specialDiscount 
+    : null;
+  const discountPercent = specialDiscount !== null ? specialDiscount : currentRank.discount;
+
   return {
     rank: currentRank,
-    discountPercent: currentRank.discount,
+    discountPercent: discountPercent,
     isLoyal: (user.totalSpent || 0) > 0,
     totalSpent: user.totalSpent || 0,
     progressToNext,
     hasExecutorAccess: currentRank.executorAccess || false,
     hasFullAccess: currentRank.fullAccess || false,
-    specialty: user.specialty || null
+    specialty: user.specialty || null,
+    specialDiscount: specialDiscount // 🌟 НОВОЕ ПОЛЕ
   };
 }
 
@@ -172,6 +179,59 @@ function getRanksDescription(loyaltyDocLink) {
   return msg;
 }
 
+// 🌟 Обновление username при любом обращении
+function updateUsername(userId, username) {
+  if (!userId) return;
+  const data = loadData();
+  
+  const currentUsername = username || '';
+  
+  if (!data[userId]) {
+    // Создаем запись, если пользователя нет
+    data[userId] = { 
+      username: currentUsername, 
+      totalSpent: 0,
+      specialty: null 
+    };
+    saveData(data);
+  } else if (data[userId].username !== currentUsername) {
+    // Обновляем, если username изменился
+    data[userId].username = currentUsername;
+    saveData(data);
+  }
+}
+
+// 🌟 Установить специальную скидку (переопределяет скидку по рангу)
+function setSpecialDiscount(userId, discountPercent) {
+  const data = loadData();
+  if (!data[userId]) {
+    data[userId] = {
+      username: '',
+      totalSpent: 0,
+      specialty: null
+    };
+  }
+  // Если discountPercent === null или 0 — удаляем спец. скидку (возврат к ранговой)
+  if (discountPercent === null || discountPercent === 0) {
+    delete data[userId].specialDiscount;
+  } else {
+    // Ограничиваем скидку диапазоном 1-100%
+    data[userId].specialDiscount = Math.max(1, Math.min(100, parseInt(discountPercent)));
+  }
+  saveData(data);
+  return true;
+}
+
+// 🌟 Получить специальную скидку (null если не установлена)
+function getSpecialDiscount(userId) {
+  const data = loadData();
+  const user = data[userId];
+  if (!user || user.specialDiscount === undefined) {
+    return null;
+  }
+  return user.specialDiscount;
+}
+
 module.exports = { 
   getLoyaltyInfo, 
   calculatePrice, 
@@ -184,4 +244,7 @@ module.exports = {
   setUserSpecialty,
   getSpecialties,
   getSpecialtyById,
+  updateUsername,
+  setSpecialDiscount,
+  getSpecialDiscount
 };

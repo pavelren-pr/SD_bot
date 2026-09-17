@@ -124,6 +124,7 @@ function getCatalogSpecialtiesMenu() {
   buttons.push([Markup.button.callback('➕ Добавить специальность', 'admin:add_specialty')]);
   buttons.push([Markup.button.callback('✏️ Изменить специальность', 'admin:edit_specialty')]);
   buttons.push([Markup.button.callback('🗑 Удалить специальность', 'admin:delete_specialty')]);
+  buttons.push([Markup.button.callback('➕ Добавить заказчика', 'admin:add_customer_start')]);
   buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -1111,32 +1112,241 @@ function register(bot) {
       ctx.session.adminState = null; return;
     }
 
-    // --- РАНГИ ---
-    if (state === 'awaiting_user_id_for_rank') {
-      if (isNaN(text)) return ctx.reply('❌ ID пользователя должен быть числом.');
-      ctx.session.tempRankUserId = text;
-      ctx.session.adminState = 'awaiting_rank_name';
-      await ctx.reply('🏅 *Введите название ранга:*\n\n• Прометей\n• Посейдон', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
-    }
-    if (state === 'awaiting_rank_name') {
-      const userId = ctx.session.tempRankUserId;
-      const rankName = text.trim();
-      const validRank = loyalty.RANKS.find(r => r.name === rankName);
-      if (!validRank) return ctx.reply(`❌ Ранг не найден.\n\nДоступные:\n${loyalty.RANKS.map(r => `• ${r.name}`).join('\n')}`, { ...getBackToAdminMenu() });
+    // ==========================================
+    // 🌟 УСТАНОВКА СПЕЦИАЛЬНОЙ СКИДКИ
+    // ==========================================
+    if (state.startsWith('edit_special_discount:')) {
+      const customerId = state.split(':')[1];
+      
+      if (isNaN(text)) {
+        return ctx.reply('❌ Скидка должна быть числом. Введите число от 0 до 100.');
+      }
+      
+      const discountPercent = parseInt(text);
+      
+      if (discountPercent < 0 || discountPercent > 100) {
+        return ctx.reply('❌ Скидка должна быть в диапазоне от 0 до 100.');
+      }
+      
+      // Устанавливаем специальную скидку
+      loyalty.setSpecialDiscount(customerId, discountPercent);
+      
+      // 🌟 Логируем действие админа
+      logger.logAdminAction('special_discount_set', {
+        customerId: customerId,
+        discountPercent: discountPercent
+      }, ctx);
+      
+      // Получаем обновлённую информацию о пользователе
+      const updatedLoyalty = loyalty.getLoyaltyInfo(customerId);
       const loyaltyData = loyalty.loadData();
-      if (!loyaltyData[userId]) loyaltyData[userId] = { username: '', totalSpent: 0 };
-      loyaltyData[userId].rank = rankName;
+      const userData = loyaltyData[customerId] || {};
+      
+      let successMessage = `✅ *Специальная скидка успешно ${discountPercent === 0 ? 'отменена' : 'установлена'}!*\n\n`;
+      successMessage += `👤 *Заказчик:* \`${customerId}\`\n`;
+      successMessage += `📛 *Username:* ${safeUsername(userData.username)}\n\n`;
+      
+      if (discountPercent === 0) {
+        successMessage += `🏅 *Возврат к ранговой скидке:* ${updatedLoyalty.discountPercent}% (${updatedLoyalty.rank.name})\n`;
+      } else {
+        successMessage += `🎯 *Специальная скидка:* ${discountPercent}%\n`;
+        successMessage += `⚠️ *Переопределяет ранговую скидку*\n`;
+      }
+      
+      await ctx.reply(successMessage, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('⬅️ Вернуться к карточке заказчика', `admin:customer_view:${customerId}`)],
+          [Markup.button.callback('👥 К списку заказчиков', 'admin:customers')]
+        ])
+      });
+      
+      ctx.session.adminState = null;
+      return;
+    }
+
+    // ==========================================
+    // 🌟 ДОБАВЛЕНИЕ НОВОГО ИСПОЛНИТЕЛЯ (Прометей)
+    // ==========================================
+    if (state === 'awaiting_new_executor_id') {
+      if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
+      ctx.session.tempRankUserId = text;
+      ctx.session.adminState = 'awaiting_new_executor_username';
+      await ctx.reply(
+        '🔥 *Назначение исполнителя (Прометей)*\n\n' +
+        `👤 *ID:* \`${text}\`\n\n` +
+        '📝 *Шаг 2/2: Введите username пользователя (без @):*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+
+    if (state === 'awaiting_new_executor_username') {
+      const userId = ctx.session.tempRankUserId;
+      const username = text.replace('@', '').trim();
+
+      const loyaltyData = loyalty.loadData();
+      if (!loyaltyData[userId]) {
+        loyaltyData[userId] = { username: '', totalSpent: 0 };
+      }
+      loyaltyData[userId].rank = 'Прометей';
+      loyaltyData[userId].username = username;
       loyalty.saveData(loyaltyData);
 
       // 🌟 Логируем назначение ранга
       logger.logAdminAction('rank_assigned', {
         targetUserId: userId,
-        rankName: rankName
+        username: username,
+        rankName: 'Прометей'
       }, ctx);
 
-      const rankEmoji = rankName === 'Посейдон' ? '👑' : '🔥';
-      await ctx.reply(`${rankEmoji} Ранг пользователя \`${userId}\` изменён на "${rankName}"`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) });
-      ctx.session.adminState = null; ctx.session.tempRankUserId = null; return;
+      await ctx.reply(
+        `🔥 *Исполнитель назначен!*\n\n` +
+        `👤 *ID:* \`${userId}\`\n` +
+        `📛 *Username:* @${username}\n` +
+        `🏅 *Ранг:* Прометей (исполнитель)`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) }
+      );
+
+      ctx.session.adminState = null;
+      ctx.session.tempRankUserId = null;
+      return;
+    }
+
+    // ==========================================
+    // 🌟 ДОБАВЛЕНИЕ НОВОГО АДМИНИСТРАТОРА (Посейдон)
+    // ==========================================
+    if (state === 'awaiting_new_admin_id') {
+      if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
+      ctx.session.tempRankUserId = text;
+      ctx.session.adminState = 'awaiting_new_admin_username';
+      await ctx.reply(
+        '👑 *Назначение администратора (Посейдон)*\n\n' +
+        `👤 *ID:* \`${text}\`\n\n` +
+        '📝 *Шаг 2/2: Введите username пользователя (без @):*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+
+    if (state === 'awaiting_new_admin_username') {
+      const userId = ctx.session.tempRankUserId;
+      const username = text.replace('@', '').trim();
+
+      const loyaltyData = loyalty.loadData();
+      if (!loyaltyData[userId]) {
+        loyaltyData[userId] = { username: '', totalSpent: 0 };
+      }
+      loyaltyData[userId].rank = 'Посейдон';
+      loyaltyData[userId].username = username;
+      loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем назначение ранга
+      logger.logAdminAction('rank_assigned', {
+        targetUserId: userId,
+        username: username,
+        rankName: 'Посейдон'
+      }, ctx);
+
+      await ctx.reply(
+        `👑 *Администратор назначен!*\n\n` +
+        `👤 *ID:* \`${userId}\`\n` +
+        `📛 *Username:* @${username}\n` +
+        `🏅 *Ранг:* Посейдон (администратор)`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) }
+      );
+
+      ctx.session.adminState = null;
+      ctx.session.tempRankUserId = null;
+      return;
+    }
+
+    // ==========================================
+    // 🌟 ИЗМЕНЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ (ID / USERNAME)
+    // ==========================================
+    if (state.startsWith('edit_rank_user_id:')) {
+      const oldUserId = state.split(':')[1];
+
+      if (isNaN(text)) return ctx.reply('❌ Новый ID должен быть числом.');
+      const newUserId = text.trim();
+
+      const loyaltyData = loyalty.loadData();
+
+      // Проверяем, не занят ли новый ID
+      if (loyaltyData[newUserId]) {
+        return ctx.reply(
+          `❌ Пользователь с ID \`${newUserId}\` уже существует в базе!\n` +
+          `Выберите другой ID или сначала удалите существующего пользователя.`
+        );
+      }
+
+      // Переносим данные со старого ключа на новый
+      const userData = loyaltyData[oldUserId];
+      if (!userData) {
+        return ctx.reply('❌ Пользователь не найден.');
+      }
+
+      // Сохраняем данные под новым ключом
+      loyaltyData[newUserId] = { ...userData };
+
+      // Удаляем старый ключ
+      delete loyaltyData[oldUserId];
+
+      loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем изменение ID
+      logger.logAdminAction('rank_user_id_changed', {
+        oldUserId: oldUserId,
+        newUserId: newUserId,
+        username: userData.username || null
+      }, ctx);
+
+      await ctx.reply(
+        `✅ *ID пользователя изменён!*\n\n` +
+        `👤 *Старый ID:* \`${oldUserId}\`\n` +
+        `👤 *Новый ID:* \`${newUserId}\`\n` +
+        `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n` +
+        `🏅 *Ранг:* ${userData.rank}`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${newUserId}`)]]) }
+      );
+
+      ctx.session.adminState = null;
+      return;
+    }
+
+    if (state.startsWith('edit_rank_user_username:')) {
+      const userId = state.split(':')[1];
+      const newUsername = text.replace('@', '').trim();
+
+      if (!newUsername) return ctx.reply('❌ Username не может быть пустым.');
+
+      const loyaltyData = loyalty.loadData();
+      if (!loyaltyData[userId]) {
+        return ctx.reply('❌ Пользователь не найден.');
+      }
+
+      const oldUsername = loyaltyData[userId].username;
+      loyaltyData[userId].username = newUsername;
+      loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем изменение username
+      logger.logAdminAction('rank_user_username_changed', {
+        userId: userId,
+        oldUsername: oldUsername || null,
+        newUsername: newUsername
+      }, ctx);
+
+      await ctx.reply(
+        `✅ *Username пользователя изменён!*\n\n` +
+        `👤 *ID:* \`${userId}\`\n` +
+        `📛 *Старый username:* ${oldUsername ? '@' + oldUsername : 'не указан'}\n` +
+        `📛 *Новый username:* @${newUsername}\n` +
+        `🏅 *Ранг:* ${loyaltyData[userId].rank}`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${userId}`)]]) }
+      );
+
+      ctx.session.adminState = null;
+      return;
     }
 
     // --- ДОБАВЛЕНИЕ ЗАКАЗА ---
@@ -1212,6 +1422,103 @@ function register(bot) {
       ]);
       await ctx.reply(confirmText, { parse_mode: 'Markdown', ...confirmKeyboard });
       ctx.session.adminState = null; return;
+    }
+    // ==========================================
+    // 🌟 ДОБАВЛЕНИЕ ЗАКАЗЧИКА ВРУЧНУЮ
+    // ==========================================
+    if (state === 'add_customer:id') {
+      if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
+      const id = parseInt(text);
+      const loyaltyData = loyalty.loadData();
+
+      // 🌟 Проверка: существует ли уже такой заказчик?
+      if (loyaltyData[id]) {
+        const existing = loyaltyData[id];
+        ctx.session.newCustomer = { id: id };
+        ctx.session.adminState = 'add_customer:confirm_overwrite';
+        await ctx.reply(
+          `⚠️ *Заказчик с ID \`${id}\` уже существует!*\n\n` +
+          `📛 Username: ${existing.username ? '@' + existing.username : 'не указан'}\n` +
+          `💰 Сумма выкупа: ${existing.totalSpent || 0} ₽\n` +
+          `${existing.specialty ? '🎓 Специальность: ' + (loyalty.getSpecialtyById(existing.specialty)?.name || existing.specialty) + '\n' : ''}\n` +
+          `Продолжить и перезаписать данные?`,
+          {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('✅ Да, перезаписать', 'admin:add_customer:overwrite_yes')],
+              [Markup.button.callback('❌ Отмена', 'admin:customers')]
+            ])
+          }
+        );
+        return;
+      }
+
+      ctx.session.newCustomer = { id: id };
+      ctx.session.adminState = 'add_customer:username';
+      await ctx.reply(
+        '📝 *Шаг 2/3: Введите username заказчика (без @):*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+
+    if (state === 'add_customer:username') {
+      const username = text.replace('@', '').trim();
+      if (!username) return ctx.reply('❌ Username не может быть пустым.');
+      ctx.session.newCustomer.username = username;
+      ctx.session.adminState = 'add_customer:spent';
+      await ctx.reply(
+        '📝 *Шаг 3/3: Введите сумму выкупа заказчика (число в рублях):*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+
+    if (state === 'add_customer:spent') {
+      if (isNaN(text)) return ctx.reply('❌ Сумма должна быть числом.');
+      const totalSpent = parseInt(text);
+      const newCustomer = ctx.session.newCustomer;
+      if (!newCustomer) {
+        ctx.session.adminState = null;
+        return ctx.reply('❌ Ошибка сессии. Начните заново.');
+      }
+
+      // 🌟 Сохраняем в loyalty.json
+      const loyaltyData = loyalty.loadData();
+      loyaltyData[newCustomer.id] = {
+        username: newCustomer.username,
+        totalSpent: totalSpent,
+        // 🌟 Сохраняем specialty, если она уже была, иначе null
+        specialty: loyaltyData[newCustomer.id] && loyaltyData[newCustomer.id].specialty
+          ? loyaltyData[newCustomer.id].specialty
+          : null
+      };
+      loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем действие админа
+      logger.logAdminAction('customer_added_manually', {
+        customerId: newCustomer.id,
+        username: newCustomer.username,
+        totalSpent: totalSpent
+      }, ctx);
+
+      await ctx.reply(
+        `✅ *Заказчик успешно добавлен/обновлён!*\n\n` +
+        `👤 *ID:* \`${newCustomer.id}\`\n` +
+        `📛 *Username:* @${newCustomer.username}\n` +
+        `💰 *Сумма выкупа:* ${totalSpent} ₽`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('👥 К списку заказчиков', 'admin:customers')],
+            [Markup.button.callback('➕ Добавить ещё', 'admin:add_customer_start')]
+          ])
+        }
+      );
+
+      ctx.session.adminState = null;
+      ctx.session.newCustomer = null;
+      return;
     }
     // --- ПОИСК ЗАКАЗА ПО НОМЕРУ ---
     if (state === 'search_order_prompt') {
@@ -2556,11 +2863,9 @@ const backKeyboard = Markup.inlineKeyboard([
     // --- РАНГИ ---
     else if (action === 'set_user_rank') {
       const loyaltyData = loyalty.loadData();
-      
       // Собираем пользователей по рангам
       const admins = [];
       const executors = [];
-      
       for (const [userId, userData] of Object.entries(loyaltyData)) {
         if (userData.rank === 'Посейдон') {
           admins.push({ id: userId, username: userData.username || 'N/A' });
@@ -2568,31 +2873,45 @@ const backKeyboard = Markup.inlineKeyboard([
           executors.push({ id: userId, username: userData.username || 'N/A' });
         }
       }
-      
+
       let text = `🛠 *Управление рангами*\n\n`;
       text += `👑 *Админы (Посейдон):* ${admins.length}\n`;
       if (admins.length === 0) text += `  • нет\n`;
       admins.forEach(a => {
         text += `  • ${a.id} (${a.username !== 'N/A' ? '@' + a.username : 'без username'})\n`;
       });
+
       text += `\n🔥 *Исполнители (Прометей):* ${executors.length}\n`;
       if (executors.length === 0) text += `  • нет\n`;
       executors.forEach(e => {
         text += `  • ${e.id} (${e.username !== 'N/A' ? '@' + e.username : 'без username'})\n`;
       });
-      
+
+      // 🌟 НОВАЯ КЛАВИАТУРА: две отдельные кнопки вместо одной
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('➕ Назначить ранг', 'admin:set_user_rank:new')],
+        [Markup.button.callback('🔥 Назначить исполнителя', 'admin:set_user_rank:new:executor')],
+        [Markup.button.callback('👑 Назначить администратора', 'admin:set_user_rank:new:admin')],
         [Markup.button.callback('📋 Управление пользователями', 'admin:set_user_rank:manage')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
-      
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
     }
-    // Назначить новый ранг
-    else if (action === 'set_user_rank:new') {
-      ctx.session.adminState = 'awaiting_user_id_for_rank';
-      await ctx.editMessageText('👤 *Введите ID пользователя:*\n\n(Например: 1012758149)', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:set_user_rank')]]) });
+    // 🌟 Назначить нового исполнителя (Прометей)
+    else if (action === 'set_user_rank:new:executor') {
+      ctx.session.adminState = 'awaiting_new_executor_id';
+      await ctx.editMessageText(
+        '🔥 *Назначение исполнителя (Прометей)*\n\n👤 *Шаг 1/2: Введите Telegram ID пользователя:*',
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
+      );
+    }
+
+    // 🌟 Назначить нового администратора (Посейдон)
+    else if (action === 'set_user_rank:new:admin') {
+      ctx.session.adminState = 'awaiting_new_admin_id';
+      await ctx.editMessageText(
+        '👑 *Назначение администратора (Посейдон)*\n\n👤 *Шаг 1/2: Введите Telegram ID пользователя:*',
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
+      );
     }
     // Управление пользователями с рангами
     else if (action === 'set_user_rank:manage') {
@@ -2626,29 +2945,30 @@ const backKeyboard = Markup.inlineKeyboard([
       const userId = action.split(':')[2];
       const loyaltyData = loyalty.loadData();
       const userData = loyaltyData[userId];
-      
+
       if (!userData || !userData.rank) {
         await ctx.answerCbQuery('❌ Пользователь не найден или не имеет ранга');
         return;
       }
-      
+
       const rankEmoji = userData.rank === 'Посейдон' ? '👑' : '🔥';
       let text = `👤 *Пользователь:* \`${userId}\`\n`;
       text += `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
       text += `${rankEmoji} *Текущий ранг:* ${userData.rank}\n\n`;
       text += `Выберите действие:`;
-      
+
       const buttons = [];
-      
-      // Если админ — можно понизить до исполнителя
-      if (userData.rank === 'Посейдон') {
-        buttons.push([Markup.button.callback('⬇️ Понизить до Прометей', `admin:set_user_rank:lower:${userId}`)]);
-      }
-      
+
+      // 🌟 НОВАЯ КНОПКА: Изменить ранг
+      buttons.push([Markup.button.callback('🔄 Изменить ранг', `admin:set_user_rank:change_rank:${userId}`)]);
+
+      // 🌟 НОВАЯ КНОПКА: Изменить данные
+      buttons.push([Markup.button.callback('✏️ Изменить данные (ID/username)', `admin:set_user_rank:edit_data:${userId}`)]);
+
       // Разжаловать (снять ранг)
       buttons.push([Markup.button.callback('🗑 Разжаловать (снять ранг)', `admin:set_user_rank:demote:${userId}`)]);
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:set_user_rank:manage')]);
-      
+
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
     // Понизить админа до исполнителя
@@ -2677,6 +2997,163 @@ const backKeyboard = Markup.inlineKeyboard([
       ];
       
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    // ==========================================
+    // 🌟 ИЗМЕНЕНИЕ РАНГА СУЩЕСТВУЮЩЕГО ПОЛЬЗОВАТЕЛЯ
+    // ==========================================
+    else if (action.startsWith('set_user_rank:change_rank:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+      const userData = loyaltyData[userId];
+
+      if (!userData) {
+        await ctx.answerCbQuery('❌ Пользователь не найден');
+        return;
+      }
+
+      const currentRank = userData.rank;
+      const rankEmoji = currentRank === 'Посейдон' ? '👑' : '🔥';
+
+      let text = `🔄 *Изменение ранга*\n\n`;
+      text += `👤 *Пользователь:* \`${userId}\`\n`;
+      text += `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
+      text += `${rankEmoji} *Текущий ранг:* ${currentRank}\n\n`;
+      text += `Выберите новый ранг:`;
+
+      const buttons = [];
+
+      if (currentRank === 'Посейдон') {
+        buttons.push([Markup.button.callback('🔥 Понизить до Прометей (исполнитель)', `admin:set_user_rank:set_rank:executor:${userId}`)]);
+      } else if (currentRank === 'Прометей') {
+        buttons.push([Markup.button.callback('👑 Повысить до Посейдон (администратор)', `admin:set_user_rank:set_rank:admin:${userId}`)]);
+      }
+
+      buttons.push([Markup.button.callback('⬅️ Назад', `admin:set_user_rank:user:${userId}`)]);
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 🌟 Установить ранг Прометей (исполнитель)
+    else if (action.startsWith('set_user_rank:set_rank:executor:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+
+      if (!loyaltyData[userId]) {
+        await ctx.answerCbQuery('❌ Пользователь не найден');
+        return;
+      }
+
+      const oldRank = loyaltyData[userId].rank;
+      loyaltyData[userId].rank = 'Прометей';
+      loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем изменение ранга
+      logger.logAdminAction('rank_changed', {
+        targetUserId: userId,
+        oldRank: oldRank,
+        newRank: 'Прометей'
+      }, ctx);
+
+      await ctx.answerCbQuery('✅ Ранг изменён на Прометей');
+
+      let text = `👤 *Пользователь:* \`${userId}\`\n`;
+      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
+      text += `🔥 *Текущий ранг:* Прометей (исполнитель)\n\n`;
+      text += `✅ Ранг успешно изменён с "${oldRank}" на "Прометей"`;
+
+      const buttons = [
+        [Markup.button.callback('👑 Изменить на Посейдон', `admin:set_user_rank:set_rank:admin:${userId}`)],
+        [Markup.button.callback('⬅️ Назад к карточке', `admin:set_user_rank:user:${userId}`)]
+      ];
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 🌟 Установить ранг Посейдон (администратор)
+    else if (action.startsWith('set_user_rank:set_rank:admin:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+
+      if (!loyaltyData[userId]) {
+        await ctx.answerCbQuery('❌ Пользователь не найден');
+        return;
+      }
+
+      const oldRank = loyaltyData[userId].rank;
+      loyaltyData[userId].rank = 'Посейдон';
+      loyalty.saveData(loyaltyData);
+
+      // 🌟 Логируем изменение ранга
+      logger.logAdminAction('rank_changed', {
+        targetUserId: userId,
+        oldRank: oldRank,
+        newRank: 'Посейдон'
+      }, ctx);
+
+      await ctx.answerCbQuery('✅ Ранг изменён на Посейдон');
+
+      let text = `👤 *Пользователь:* \`${userId}\`\n`;
+      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
+      text += `👑 *Текущий ранг:* Посейдон (администратор)\n\n`;
+      text += `✅ Ранг успешно изменён с "${oldRank}" на "Посейдон"`;
+
+      const buttons = [
+        [Markup.button.callback('🔥 Изменить на Прометей', `admin:set_user_rank:set_rank:executor:${userId}`)],
+        [Markup.button.callback('⬅️ Назад к карточке', `admin:set_user_rank:user:${userId}`)]
+      ];
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // ==========================================
+    // 🌟 ИЗМЕНЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ (ID / USERNAME)
+    // ==========================================
+    else if (action.startsWith('set_user_rank:edit_data:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+      const userData = loyaltyData[userId];
+
+      if (!userData) {
+        await ctx.answerCbQuery('❌ Пользователь не найден');
+        return;
+      }
+
+      const rankEmoji = userData.rank === 'Посейдон' ? '👑' : '🔥';
+
+      let text = `✏️ *Изменение данных пользователя*\n\n`;
+      text += `👤 *Текущий ID:* \`${userId}\`\n`;
+      text += `📛 *Текущий username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
+      text += `${rankEmoji} *Ранг:* ${userData.rank}\n\n`;
+      text += `Выберите, что изменить:`;
+
+      const buttons = [
+        [Markup.button.callback('🔢 Изменить ID', `admin:set_user_rank:edit_id:${userId}`)],
+        [Markup.button.callback('📛 Изменить username', `admin:set_user_rank:edit_username:${userId}`)],
+        [Markup.button.callback('⬅️ Назад', `admin:set_user_rank:user:${userId}`)]
+      ];
+
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 🌟 Изменить ID пользователя
+    else if (action.startsWith('set_user_rank:edit_id:')) {
+      const userId = action.split(':')[2];
+      ctx.session.adminState = `edit_rank_user_id:${userId}`;
+      await ctx.editMessageText(
+        `🔢 *Изменение ID пользователя*\n\n` +
+        `👤 *Текущий ID:* \`${userId}\`\n\n` +
+        `Введите новый Telegram ID (число):`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]]) }
+      );
+    }
+
+    // 🌟 Изменить username пользователя
+    else if (action.startsWith('set_user_rank:edit_username:')) {
+      const userId = action.split(':')[2];
+      ctx.session.adminState = `edit_rank_user_username:${userId}`;
+      await ctx.editMessageText(
+        `📛 *Изменение username пользователя*\n\n` +
+        `👤 *ID:* \`${userId}\`\n\n` +
+        `Введите новый username (без @):`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]]) }
+      );
     }
     // Разжаловать (снять ранг полностью)
     else if (action.startsWith('set_user_rank:demote:')) {
@@ -2843,9 +3320,20 @@ const backKeyboard = Markup.inlineKeyboard([
           text += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}\n`;
         });
       }
+
+      // 🌟 Получаем информацию о специальной скидке
+      const loyaltyInfo = loyalty.getLoyaltyInfo(customer.id);
+      const specialDiscount = loyaltyInfo.specialDiscount;
+
+      // 🌟 Добавляем строку со специальной скидкой в текст карточки
+      if (specialDiscount !== null) {
+        text += `\n🎯 *Специальная скидка:* ${specialDiscount}% _(переопределяет ранговую)_\n`;
+      }
       
       const buttons = [
         [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${customerId}`)],
+        [Markup.button.callback(specialDiscount !== null ? '🎯 Изменить спец. скидку' : '🎯 Установить спец. скидку',
+          `admin:customer_edit_special_discount:${customerId}`)],
         [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${customerId}`)],
         [Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]
       ];
@@ -2864,6 +3352,51 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'search_customer_prompt') {
       ctx.session.adminState = 'search_customer_prompt';
       await ctx.editMessageText('🔍 Поиск заказчика\n\nВведите Telegram ID или @username (без @):', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:customers')]]) });
+    }
+    // 🌟 Установка/изменение специальной скидки
+    else if (action.startsWith('customer_edit_special_discount:')) {
+      const customerId = action.split(':')[1];
+      const loyaltyData = loyalty.loadData();
+      const userData = loyaltyData[customerId] || { totalSpent: 0 };
+      const currentDiscount = userData.specialDiscount || null;
+      const currentLoyalty = loyalty.getLoyaltyInfo(customerId);
+      
+      let message = `🎯 *Установка специальной скидки*\n\n`;
+      message += `👤 *Заказчик:* \`${customerId}\`\n`;
+      message += `📛 *Username:* ${safeUsername(userData.username)}\n\n`;
+      
+      if (currentDiscount !== null) {
+        message += `🎯 *Текущая спец. скидка:* ${currentDiscount}%\n`;
+      } else {
+        message += `🏅 *Ранговая скидка:* ${currentLoyalty.discountPercent}% (${currentLoyalty.rank.name})\n`;
+      }
+      
+      message += `\nВведите процент скидки (число от 1 до 100) или \`0\` для отмены специальной скидки:\n\n`;
+      message += `⚠️ *Внимание:* Специальная скидка переопределяет скидку по рангу.`;
+      
+      ctx.session.adminState = `edit_special_discount:${customerId}`;
+      await ctx.editMessageText(message, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('❌ Отмена', `admin:customer_view:${customerId}`)]
+        ])
+      });
+    }
+    // 🌟 ДОБАВЛЕНИЕ ЗАКАЗЧИКА ВРУЧНУЮ — запуск
+    else if (action === 'add_customer_start') {
+      ctx.session.adminState = 'add_customer:id';
+      await ctx.editMessageText(
+        '✏️ *Добавление нового заказчика*\n\n📝 *Шаг 1/3: Введите Telegram ID заказчика (число):*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+    }
+    // 🌟 Подтверждение перезаписи существующего заказчика
+    else if (action === 'add_customer:overwrite_yes') {
+      ctx.session.adminState = 'add_customer:username';
+      await ctx.editMessageText(
+        '📝 *Шаг 2/3: Введите username заказчика (без @):*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
     }
     else if (action.startsWith('send_msg_customer:')) {
       const orderId = action.split(':')[1];
