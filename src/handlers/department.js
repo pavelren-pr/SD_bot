@@ -96,7 +96,15 @@ async function showDepartmentOrders(ctx, chatEnv, deptIdx, filter, page) {
   }
   buttons.push([Markup.button.callback('🔙 Назад в профиль', 'profile:back')]);
 
-  await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    // 🌟 Оборачиваем в try-catch, чтобы не падать при повторном нажатии той же кнопки
+  try {
+    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+  } catch (e) {
+    // Игнорируем ошибку "сообщение не изменено" — она возникает при нажатии на уже активный раздел
+    if (!e.message || !e.message.includes('message is not modified')) {
+      console.error('Ошибка обновления списка заказов отдела:', e.message);
+    }
+  }
 }
 
 // ==========================================
@@ -190,7 +198,6 @@ function register(bot) {
     await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
   });
 
-  // --- СПИСОК ЗАКАЗОВ ОТДЕЛА ---
   bot.action(/^dept:list:(\d+):(.+):(\d+)$/, async (ctx) => {
     if (!isManager(ctx.from.id)) {
       await ctx.answerCbQuery('❌ У вас нет прав');
@@ -199,13 +206,13 @@ function register(bot) {
     const deptIdx = parseInt(ctx.match[1]);
     const filter = ctx.match[2];
     const page = parseInt(ctx.match[3]) || 0;
-
     const chats = loyalty.getManagedChats(ctx.from.id);
     if (!chats[deptIdx]) {
       await ctx.answerCbQuery('❌ Отдел не найден');
       return;
     }
     await showDepartmentOrders(ctx, chats[deptIdx].chatEnv, deptIdx, filter, page);
+    await ctx.answerCbQuery(); // 🌟 Добавляем, чтобы закрыть "часики"
   });
 
   // --- КАРТОЧКА ЗАКАЗА ---
@@ -308,13 +315,19 @@ function register(bot) {
     const order = ordersDb.getOrder(orderId);
     if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
 
-    // Список исполнителей (Прометей)
+    // Список исполнителей, админов и управляющих
     const loyaltyData = loyalty.loadData();
     let availableUsersText = '';
     const executors = [];
+    const admins = [];       // 🌟 НОВОЕ
+    const managers = [];     // 🌟 НОВОЕ
     for (const [userId, userData] of Object.entries(loyaltyData)) {
       if (userData.rank === 'Прометей') {
         executors.push({ id: userId, username: userData.username || null });
+      } else if (userData.rank === 'Посейдон') {    // 🌟 НОВОЕ
+        admins.push({ id: userId, username: userData.username || null });
+      } else if (userData.rank === 'Циклоп') {      // 🌟 НОВОЕ
+        managers.push({ id: userId, username: userData.username || null });
       }
     }
     if (executors.length > 0) {
@@ -325,20 +338,20 @@ function register(bot) {
     } else {
       availableUsersText += `🔥 *Исполнители:* _нет назначенных рангов_\n`;
     }
-
-    ctx.session = ctx.session || {};
-    ctx.session.deptState = `dept_executor_id:${orderId}`;
-    await ctx.editMessageText(
-      `👷 *Назначение исполнителя*\n\n` +
-      `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n` +
-      `Введите Telegram ID исполнителя (число):\n\n` +
-      `${availableUsersText}\n` +
-      `_Или введите ID любого пользователя вручную_`,
-      {
-        parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `dept:view:${orderId}`)]])
-      }
-    );
+    // 🌟 НОВОЕ: Управляющие (Циклоп)
+    if (managers.length > 0) {
+      availableUsersText += `\n👁️ *Управляющие отделами (Циклоп):*\n`;
+      managers.forEach(m => {
+        availableUsersText += `• \`${m.id}\`${m.username ? ` (\`@${m.username}\`)` : ''}\n`;
+      });
+    }
+    // 🌟 НОВОЕ: Администраторы (Посейдон)
+    if (admins.length > 0) {
+      availableUsersText += `\n👑 *Администраторы (Посейдон):*\n`;
+      admins.forEach(a => {
+        availableUsersText += `• \`${a.id}\`${a.username ? ` (\`@${a.username}\`)` : ''}\n`;
+      });
+    }
   });
 
   // --- НАПИСАТЬ ЗАКАЗЧИКУ: запрос текста ---

@@ -2742,21 +2742,22 @@ const backKeyboard = Markup.inlineKeyboard([
       const order = ordersDb.getOrder(orderId);
       if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
       
-      // 🌟 Получаем список исполнителей и администраторов из базы рангов
+      // 🌟 Получаем список исполнителей, администраторов и управляющих из базы рангов
       const loyaltyData = loyalty.loadData();
       const admins = [];
       const executors = [];
+      const managers = []; // 🌟 НОВОЕ: Управляющие (Циклоп)
       for (const [userId, userData] of Object.entries(loyaltyData)) {
         if (userData.rank === 'Посейдон') {
           admins.push({ id: userId, username: userData.username || null });
         } else if (userData.rank === 'Прометей') {
           executors.push({ id: userId, username: userData.username || null });
+        } else if (userData.rank === 'Циклоп') { // 🌟 НОВОЕ
+          managers.push({ id: userId, username: userData.username || null });
         }
       }
-      
       // 🌟 Формируем текст со списком доступных пользователей
       let availableUsersText = '';
-      
       if (executors.length > 0) {
         availableUsersText += `🔥 *Исполнители (Прометей):*\n`;
         executors.forEach(e => {
@@ -2765,7 +2766,13 @@ const backKeyboard = Markup.inlineKeyboard([
       } else {
         availableUsersText += `🔥 *Исполнители:* _нет назначенных рангов_\n`;
       }
-      
+      // 🌟 НОВОЕ: Управляющие (Циклоп)
+      if (managers.length > 0) {
+        availableUsersText += `\n👁️ *Управляющие отделами (Циклоп):*\n`;
+        managers.forEach(m => {
+          availableUsersText += `• \`${m.id}\`${m.username ? ` (\`@${m.username}\`)` : ''}\n`;
+        });
+      }
       if (admins.length > 0) {
         availableUsersText += `\n👑 *Администраторы (Посейдон):*\n`;
         admins.forEach(a => {
