@@ -113,7 +113,12 @@ async function showDepartmentOrders(ctx, chatEnv, deptIdx, filter, page) {
 async function showOrderCard(ctx, orderId) {
   const order = ordersDb.getOrder(orderId);
   if (!order) {
-    await ctx.answerCbQuery('❌ Заказ не найден');
+    // 🌟 Если нет заказа: кнопка → answerCbQuery, текст → reply
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery('❌ Заказ не найден');
+    } else {
+      await ctx.reply('❌ Заказ не найден');
+    }
     return;
   }
   ctx.session = ctx.session || {};
@@ -125,7 +130,7 @@ async function showOrderCard(ctx, orderId) {
   // Написать заказчику
   buttons.push([Markup.button.callback('💬 Написать заказчику', `dept:msg:${orderId}`)]);
 
-  // 🌟 Кнопка привязки к отделу (если у заказа нет чата)
+  // Кнопка привязки к отделу (если у заказа нет чата)
   if (!order.managerChatId) {
     buttons.push([Markup.button.callback('🏢 Привязать к отделу', `dept:bind_chat:${orderId}`)]);
   }
@@ -159,7 +164,15 @@ async function showOrderCard(ctx, orderId) {
   }
   buttons.push([Markup.button.callback('⬅️ Назад к списку', 'dept:main')]);
 
-  await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+  const keyboard = Markup.inlineKeyboard(buttons);
+
+  // 🌟 ИСПРАВЛЕНИЕ: если это нажатие кнопки — редактируем сообщение,
+  // если текстовый ввод — отправляем новое сообщение
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+  } else {
+    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+  }
 }
 
 // ==========================================
