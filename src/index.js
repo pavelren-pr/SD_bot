@@ -10,6 +10,7 @@ const admin = require('./handlers/admin');
 const treasure = require('./handlers/treasure');
 const customOrder = require('./handlers/custom_order');
 const scheduler = require('./handlers/scheduler');
+const department = require('./handlers/department');
 
 menu.register(bot);
 commands.register(bot);
@@ -19,6 +20,7 @@ order.register(bot);
 admin.register(bot);
 treasure.register(bot);
 scheduler.register(bot);
+department.register(bot);
 
 bot.launch();
 console.log('✅ Бот успешно запущен!');

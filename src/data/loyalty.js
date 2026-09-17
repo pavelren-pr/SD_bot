@@ -23,6 +23,7 @@ const RANKS = [
   { name: 'Мудрый Аполон', minSpent: 10000, discount: 10, emoji: '👑' },
   // Секретные звания (не отображаются в публичном описании)
   { name: 'Прометей', minSpent: 999999, discount: 15, emoji: '🔥', secret: true, executorAccess: true },
+  { name: 'Циклоп', minSpent: 999999, discount: 0, emoji: '👁️', secret: true, managerAccess: true },
   { name: 'Посейдон', minSpent: 999999, discount: 20, emoji: '🔱', secret: true, fullAccess: true }
 ];
 
@@ -40,7 +41,9 @@ function getLoyaltyInfo(userId) {
       hasFullAccess: false,
       progressToNext: null,
       specialty: null,
-      specialDiscount: null // 🌟 НОВОЕ ПОЛЕ
+      specialDiscount: null,
+      hasManagerAccess: false,  // ✅ ИСПРАВЛЕНО: фиксированное значение
+      managedChats: []          // ✅ ИСПРАВЛЕНО: пустой массив
     };
   }
 
@@ -79,8 +82,8 @@ function getLoyaltyInfo(userId) {
   }
 
   // 🌟 Специальная скидка переопределяет ранговую
-  const specialDiscount = user.specialDiscount !== undefined && user.specialDiscount !== null 
-    ? user.specialDiscount 
+  const specialDiscount = user.specialDiscount !== undefined && user.specialDiscount !== null
+    ? user.specialDiscount
     : null;
   const discountPercent = specialDiscount !== null ? specialDiscount : currentRank.discount;
 
@@ -93,7 +96,10 @@ function getLoyaltyInfo(userId) {
     hasExecutorAccess: currentRank.executorAccess || false,
     hasFullAccess: currentRank.fullAccess || false,
     specialty: user.specialty || null,
-    specialDiscount: specialDiscount // 🌟 НОВОЕ ПОЛЕ
+    specialDiscount: specialDiscount,
+    // ✅ ДОБАВЛЕНО: поля для ранга Циклоп
+    hasManagerAccess: currentRank.managerAccess || false,
+    managedChats: user.managedChats || []
   };
 }
 
@@ -232,6 +238,25 @@ function getSpecialDiscount(userId) {
   return user.specialDiscount;
 }
 
+// 🌟 Установить чаты отделов для управляющего (Циклоп)
+function setManagedChats(userId, chats) {
+  const data = loadData();
+  if (!data[userId]) {
+    data[userId] = { username: '', totalSpent: 0 };
+  }
+  data[userId].managedChats = chats;
+  saveData(data);
+  return true;
+}
+
+// 🌟 Получить чаты отделов управляющего
+function getManagedChats(userId) {
+  const data = loadData();
+  const user = data[userId];
+  if (!user || !Array.isArray(user.managedChats)) return [];
+  return user.managedChats;
+}
+
 module.exports = { 
   getLoyaltyInfo, 
   calculatePrice, 
@@ -246,5 +271,7 @@ module.exports = {
   getSpecialtyById,
   updateUsername,
   setSpecialDiscount,
-  getSpecialDiscount
+  getSpecialDiscount,
+  setManagedChats,
+  getManagedChats
 };

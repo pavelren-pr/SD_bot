@@ -1122,6 +1122,10 @@ async function showProfile(ctx) {
   if (loyaltyInfo.hasExecutorAccess || loyaltyInfo.hasFullAccess) {
     profileButtons.push([Markup.button.callback('📋 Мои заказы (Исполнитель)', 'profile:my_orders')]);
   }
+
+  if (loyaltyInfo.hasManagerAccess) {
+    profileButtons.push([Markup.button.callback('📦 Заказы моего отдела', 'dept:main')]);
+  }
   
   if (loyaltyInfo.hasFullAccess) {
     profileButtons.push([Markup.button.callback('🛠 Админ панель', 'profile:edit_works')]);

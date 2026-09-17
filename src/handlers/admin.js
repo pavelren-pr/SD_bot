@@ -64,6 +64,23 @@ function safeUsername(username) {
   return '@' + String(username).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
 }
 
+// 🌟 Парсинг чатов отделов из строки "Название=ПЕРЕМЕННАЯ, Название2=ПЕРЕМЕННАЯ2"
+function parseManagedChats(text) {
+  const chats = [];
+  const parts = text.split(',').map(s => s.trim()).filter(s => s);
+  for (const part of parts) {
+    if (part.includes('=')) {
+      const [name, chatEnv] = part.split('=').map(s => s.trim());
+      if (name && chatEnv) {
+        chats.push({ name: name, chatEnv: chatEnv });
+      }
+    } else {
+      chats.push({ name: part, chatEnv: part });
+    }
+  }
+  return chats;
+}
+
 // 🌟 Статусы для категорий (включая custom orders)
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
 const ACTIVE_STATUSES = ['active', 'paid'];
@@ -1257,6 +1274,128 @@ function register(bot) {
 
       ctx.session.adminState = null;
       ctx.session.tempRankUserId = null;
+      return;
+    }
+
+    // ==========================================
+    // 🌟 ДОБАВЛЕНИЕ НОВОГО УПРАВЛЯЮЩЕГО ОТДЕЛОМ (Циклоп)
+    // ==========================================
+    if (state === 'awaiting_new_manager_id') {
+      if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
+      ctx.session.tempRankUserId = text;
+      ctx.session.adminState = 'awaiting_new_manager_username';
+      await ctx.reply(
+        '👁️ *Назначение управляющего отделом (Циклоп)*\n\n' +
+        `👤 *ID:* \`${text}\`\n\n` +
+        '📝 *Шаг 2/3: Введите username пользователя (без @):*',
+        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+
+    if (state === 'awaiting_new_manager_username') {
+      const username = text.replace('@', '').trim();
+      ctx.session.tempRankUsername = username;
+      ctx.session.adminState = 'awaiting_new_manager_chats';
+
+      const envVars = getAvailableEnvVars();
+      let message = '🏢 *Шаг 3/3: Чаты отделов*\n\n';
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nВведите отделы в формате \`Название=ПЕРЕМЕННАЯ\` через запятую:\n`;
+      message += `Пример: \`Математика=EXEC_MATH, Физика=EXEC_PHYS\`\n\n`;
+      message += `Или отправьте \`нет\`, чтобы назначить без чатов (добавите позже).`;
+      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      return;
+    }
+
+    if (state === 'awaiting_new_manager_chats') {
+      const userId = ctx.session.tempRankUserId;
+      const username = ctx.session.tempRankUsername;
+
+      let managedChats = [];
+      if (text.toLowerCase() !== 'нет') {
+        managedChats = parseManagedChats(text);
+      }
+
+      const loyaltyData = loyalty.loadData();
+      if (!loyaltyData[userId]) {
+        loyaltyData[userId] = { username: '', totalSpent: 0 };
+      }
+      loyaltyData[userId].rank = 'Циклоп';
+      loyaltyData[userId].username = username;
+      loyaltyData[userId].managedChats = managedChats;
+      loyalty.saveData(loyaltyData);
+
+      logger.logAdminAction('rank_assigned', {
+        targetUserId: userId,
+        username: username,
+        rankName: 'Циклоп',
+        managedChats: managedChats
+      }, ctx);
+
+      let successMsg = `👁️ *Управляющий отделом назначен!*\n\n`;
+      successMsg += `👤 *ID:* \`${userId}\`\n`;
+      successMsg += `📛 *Username:* @${username}\n`;
+      successMsg += `🏅 *Ранг:* Циклоп (управляющий отделом)\n`;
+      if (managedChats.length > 0) {
+        successMsg += `🏢 *Отделы:*\n`;
+        managedChats.forEach(c => {
+          successMsg += `  • ${c.name} (\`${c.chatEnv}\`)\n`;
+        });
+      } else {
+        successMsg += `\n⚠️ Чаты отделов не назначены. Добавьте их через "Управление пользователями".`;
+      }
+
+      await ctx.reply(successMsg, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]])
+      });
+
+      ctx.session.adminState = null;
+      ctx.session.tempRankUserId = null;
+      ctx.session.tempRankUsername = null;
+      return;
+    }
+
+    // ==========================================
+    // 🌟 ИЗМЕНЕНИЕ ЧАТОВ ОТДЕЛА УПРАВЛЯЮЩЕГО
+    // ==========================================
+    if (state.startsWith('edit_rank_user_chats:')) {
+      const userId = state.split(':')[1];
+      let managedChats = [];
+      if (text.toLowerCase() !== 'нет') {
+        managedChats = parseManagedChats(text);
+      }
+
+      const loyaltyData = loyalty.loadData();
+      if (!loyaltyData[userId]) {
+        return ctx.reply('❌ Пользователь не найден.');
+      }
+      loyaltyData[userId].managedChats = managedChats;
+      loyalty.saveData(loyaltyData);
+
+      logger.logAdminAction('manager_chats_changed', {
+        userId: userId,
+        managedChats: managedChats
+      }, ctx);
+
+      let successMsg = `✅ *Чаты отделов обновлены!*\n\n`;
+      successMsg += `👤 *Пользователь:* \`${userId}\`\n`;
+      if (managedChats.length > 0) {
+        successMsg += `🏢 *Отделы:*\n`;
+        managedChats.forEach(c => {
+          successMsg += `  • ${c.name} (\`${c.chatEnv}\`)\n`;
+        });
+      } else {
+        successMsg += `⚠️ Все чаты отделов удалены.`;
+      }
+
+      await ctx.reply(successMsg, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${userId}`)]])
+      });
+
+      ctx.session.adminState = null;
       return;
     }
 
@@ -2898,6 +3037,8 @@ const backKeyboard = Markup.inlineKeyboard([
             admins.push({ id: userId, username: userData.username || 'N/A' });
           } else if (userData.rank === 'Прометей') {
             executors.push({ id: userId, username: userData.username || 'N/A' });
+          } else if (userData.rank === 'Циклоп') {
+            managers.push({ id: userId, username: userData.username || 'N/A' });
           }
         }
         
@@ -2914,6 +3055,14 @@ const backKeyboard = Markup.inlineKeyboard([
         text += `\n🔥 *Исполнители (Прометей):* ${executors.length}\n`;
         if (executors.length === 0) text += `  • нет\n`;
         
+        // 🌟 НОВОЕ: Управляющие отделами
+        text += `\n👁️ *Управляющие отделами (Циклоп):* ${managers.length}\n`;
+        if (managers.length === 0) text += `  • нет\n`;
+        managers.forEach(m => {
+          const usernameDisplay = m.username !== 'N/A' ? '@' + escapeMarkdown(m.username) : 'без username';
+          text += `  • ${m.id} (${usernameDisplay})\n`;
+        });
+
         // 🌟 ИСПРАВЛЕНИЕ: Экранируем спецсимволы в username, чтобы бот не падал
         executors.forEach(e => {
           const usernameDisplay = e.username !== 'N/A' ? '@' + escapeMarkdown(e.username) : 'без username';
@@ -2924,6 +3073,7 @@ const backKeyboard = Markup.inlineKeyboard([
         const keyboard = Markup.inlineKeyboard([
           [Markup.button.callback('🔥 Назначить исполнителя', 'admin:set_user_rank:new:executor')],
           [Markup.button.callback('👑 Назначить администратора', 'admin:set_user_rank:new:admin')],
+          [Markup.button.callback('👁️ Назначить управляющего (Циклоп)', 'admin:set_user_rank:new:manager')],
           [Markup.button.callback('📋 Управление пользователями', 'admin:set_user_rank:manage')],
           [Markup.button.callback('⬅️ Назад', 'admin:main')]
         ]);
@@ -2951,6 +3101,16 @@ const backKeyboard = Markup.inlineKeyboard([
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
       );
     }
+
+    // 🌟 Назначить нового управляющего отделом (Циклоп)
+    else if (action === 'set_user_rank:new:manager') {
+      ctx.session.adminState = 'awaiting_new_manager_id';
+      await ctx.editMessageText(
+        '👁️ *Назначение управляющего отделом (Циклоп)*\n\n👤 *Шаг 1/3: Введите Telegram ID пользователя:*',
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
+      );
+    }
+    
     // Управление пользователями с рангами
     else if (action === 'set_user_rank:manage') {
       const loyaltyData = loyalty.loadData();
@@ -3002,6 +3162,11 @@ const backKeyboard = Markup.inlineKeyboard([
 
       // 🌟 НОВАЯ КНОПКА: Изменить данные
       buttons.push([Markup.button.callback('✏️ Изменить данные (ID/username)', `admin:set_user_rank:edit_data:${userId}`)]);
+
+      // 🌟 НОВАЯ КНОПКА: Управление чатами отдела (только для Циклопа)
+      if (userData.rank === 'Циклоп') {
+        buttons.push([Markup.button.callback('🏢 Управление чатами отдела', `admin:set_user_rank:edit_chats:${userId}`)]);
+      }
 
       // Разжаловать (снять ранг)
       buttons.push([Markup.button.callback('🗑 Разжаловать (снять ранг)', `admin:set_user_rank:demote:${userId}`)]);
@@ -3059,13 +3224,16 @@ const backKeyboard = Markup.inlineKeyboard([
       text += `Выберите новый ранг:`;
 
       const buttons = [];
-
-      if (currentRank === 'Посейдон') {
-        buttons.push([Markup.button.callback('🔥 Понизить до Прометей (исполнитель)', `admin:set_user_rank:set_rank:executor:${userId}`)]);
-      } else if (currentRank === 'Прометей') {
-        buttons.push([Markup.button.callback('👑 Повысить до Посейдон (администратор)', `admin:set_user_rank:set_rank:admin:${userId}`)]);
+      if (currentRank !== 'Прометей') {
+        buttons.push([Markup.button.callback('🔥 Прометей (исполнитель)', `admin:set_user_rank:set_rank:executor:${userId}`)]);
       }
-
+      if (currentRank !== 'Посейдон') {
+        buttons.push([Markup.button.callback('👑 Посейдон (администратор)', `admin:set_user_rank:set_rank:admin:${userId}`)]);
+      }
+      // 🌟 НОВОЕ: Циклоп
+      if (currentRank !== 'Циклоп') {
+        buttons.push([Markup.button.callback('👁️ Циклоп (управляющий отделом)', `admin:set_user_rank:set_rank:manager:${userId}`)]);
+      }
       buttons.push([Markup.button.callback('⬅️ Назад', `admin:set_user_rank:user:${userId}`)]);
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
@@ -3140,6 +3308,43 @@ const backKeyboard = Markup.inlineKeyboard([
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
     }
 
+    // 🌟 Установить ранг Циклоп (управляющий отделом)
+    else if (action.startsWith('set_user_rank:set_rank:manager:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+      if (!loyaltyData[userId]) {
+        await ctx.answerCbQuery('❌ Пользователь не найден');
+        return;
+      }
+      const oldRank = loyaltyData[userId].rank;
+      loyaltyData[userId].rank = 'Циклоп';
+      // Инициализируем пустой массив чатов, если его нет
+      if (!loyaltyData[userId].managedChats) {
+        loyaltyData[userId].managedChats = [];
+      }
+      loyalty.saveData(loyaltyData);
+
+      logger.logAdminAction('rank_changed', {
+        targetUserId: userId,
+        oldRank: oldRank,
+        newRank: 'Циклоп'
+      }, ctx);
+
+      await ctx.answerCbQuery('✅ Ранг изменён на Циклоп');
+
+      let text = `👤 *Пользователь:* \`${userId}\`\n`;
+      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
+      text += `👁️ *Текущий ранг:* Циклоп (управляющий отделом)\n\n`;
+      text += `✅ Ранг успешно изменён с "${oldRank}" на "Циклоп"\n\n`;
+      text += `⚠️ Не забудьте назначить чаты отделов через "Управление чатами отдела".`;
+
+      const buttons = [
+        [Markup.button.callback('🏢 Управление чатами отдела', `admin:set_user_rank:edit_chats:${userId}`)],
+        [Markup.button.callback('⬅️ Назад к карточке', `admin:set_user_rank:user:${userId}`)]
+      ];
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+
     // ==========================================
     // 🌟 ИЗМЕНЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ (ID / USERNAME)
     // ==========================================
@@ -3193,6 +3398,41 @@ const backKeyboard = Markup.inlineKeyboard([
         { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]]) }
       );
     }
+
+    // 🌟 Управление чатами отдела (Циклоп)
+    else if (action.startsWith('set_user_rank:edit_chats:')) {
+      const userId = action.split(':')[2];
+      const loyaltyData = loyalty.loadData();
+      const userData = loyaltyData[userId];
+      if (!userData) { await ctx.answerCbQuery('❌ Пользователь не найден'); return; }
+
+      const envVars = getAvailableEnvVars();
+      let message = `🏢 *Управление чатами отдела*\n\n`;
+      message += `👤 *Пользователь:* \`${userId}\`\n`;
+      message += `📛 *Username:* ${safeUsername(userData.username)}\n\n`;
+
+      if (userData.managedChats && userData.managedChats.length > 0) {
+        message += `🏢 *Текущие отделы:*\n`;
+        userData.managedChats.forEach(c => {
+          message += `  • ${escapeMarkdown(c.name)} (\`${c.chatEnv}\`)\n`;
+        });
+        message += `\n`;
+      } else {
+        message += `⚠️ Чаты отделов не назначены.\n\n`;
+      }
+
+      message += formatEnvVarsList(envVars.chatVars, 'chat');
+      message += `\nВведите отделы в формате \`Название=ПЕРЕМЕННАЯ\` через запятую:\n`;
+      message += `Пример: \`Математика=EXEC_MATH, Физика=EXEC_PHYS\`\n\n`;
+      message += `Или отправьте \`нет\`, чтобы удалить все чаты.`;
+
+      ctx.session.adminState = `edit_rank_user_chats:${userId}`;
+      await ctx.editMessageText(message, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]])
+      });
+    }
+
     // Разжаловать (снять ранг полностью)
     else if (action.startsWith('set_user_rank:demote:')) {
       const userId = action.split(':')[2];
