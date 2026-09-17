@@ -1119,10 +1119,11 @@ async function showProfile(ctx) {
     [Markup.button.callback('🎓 Изменить специальность', 'specialty:change')]
   ];
   
-  if (loyaltyInfo.hasExecutorAccess || loyaltyInfo.hasFullAccess) {
+  // 🌟 Добавлен hasManagerAccess — Управляющий тоже видит "Мои заказы"
+  if (loyaltyInfo.hasExecutorAccess || loyaltyInfo.hasFullAccess || loyaltyInfo.hasManagerAccess) {
     profileButtons.push([Markup.button.callback('📋 Мои заказы (Исполнитель)', 'profile:my_orders')]);
   }
-
+  // 🌟 Кнопка "Заказы моего отдела" для Циклопа
   if (loyaltyInfo.hasManagerAccess) {
     profileButtons.push([Markup.button.callback('📦 Заказы моего отдела', 'dept:main')]);
   }
