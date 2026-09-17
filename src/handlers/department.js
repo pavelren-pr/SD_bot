@@ -319,14 +319,14 @@ function register(bot) {
     const loyaltyData = loyalty.loadData();
     let availableUsersText = '';
     const executors = [];
-    const admins = [];       // 🌟 НОВОЕ
-    const managers = [];     // 🌟 НОВОЕ
+    const admins = [];
+    const managers = [];
     for (const [userId, userData] of Object.entries(loyaltyData)) {
       if (userData.rank === 'Прометей') {
         executors.push({ id: userId, username: userData.username || null });
-      } else if (userData.rank === 'Посейдон') {    // 🌟 НОВОЕ
+      } else if (userData.rank === 'Посейдон') {
         admins.push({ id: userId, username: userData.username || null });
-      } else if (userData.rank === 'Циклоп') {      // 🌟 НОВОЕ
+      } else if (userData.rank === 'Циклоп') {
         managers.push({ id: userId, username: userData.username || null });
       }
     }
@@ -338,20 +338,33 @@ function register(bot) {
     } else {
       availableUsersText += `🔥 *Исполнители:* _нет назначенных рангов_\n`;
     }
-    // 🌟 НОВОЕ: Управляющие (Циклоп)
     if (managers.length > 0) {
       availableUsersText += `\n👁️ *Управляющие отделами (Циклоп):*\n`;
       managers.forEach(m => {
         availableUsersText += `• \`${m.id}\`${m.username ? ` (\`@${m.username}\`)` : ''}\n`;
       });
     }
-    // 🌟 НОВОЕ: Администраторы (Посейдон)
     if (admins.length > 0) {
       availableUsersText += `\n👑 *Администраторы (Посейдон):*\n`;
       admins.forEach(a => {
         availableUsersText += `• \`${a.id}\`${a.username ? ` (\`@${a.username}\`)` : ''}\n`;
       });
     }
+
+    // 🌟 ИСПРАВЛЕНИЕ: устанавливаем состояние и показываем запрос
+    ctx.session = ctx.session || {};
+    ctx.session.deptState = `dept_executor_id:${orderId}`;
+    await ctx.editMessageText(
+      `👷 *Назначение исполнителя*\n\n` +
+      `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n` +
+      `Введите Telegram ID исполнителя (число):\n\n` +
+      `${availableUsersText}\n` +
+      `_Или введите ID любого пользователя вручную_`,
+      {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `dept:view:${orderId}`)]])
+      }
+    );
   });
 
   // --- НАПИСАТЬ ЗАКАЗЧИКУ: запрос текста ---
