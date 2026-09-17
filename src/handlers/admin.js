@@ -124,7 +124,6 @@ function getCatalogSpecialtiesMenu() {
   buttons.push([Markup.button.callback('➕ Добавить специальность', 'admin:add_specialty')]);
   buttons.push([Markup.button.callback('✏️ Изменить специальность', 'admin:edit_specialty')]);
   buttons.push([Markup.button.callback('🗑 Удалить специальность', 'admin:delete_specialty')]);
-  buttons.push([Markup.button.callback('➕ Добавить заказчика', 'admin:add_customer_start')]);
   buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
   return Markup.inlineKeyboard(buttons);
 }
@@ -3264,7 +3263,7 @@ const backKeyboard = Markup.inlineKeyboard([
       navRow.push(Markup.button.callback(`${currentPage + 1}/${totalPages}`, 'noop'));
       if (currentPage < totalPages - 1) navRow.push(Markup.button.callback('▶️', `admin:customers_page:${currentPage + 1}`));
       buttons.push(navRow);
-      
+      buttons.push([Markup.button.callback('➕ Добавить заказчика', 'admin:add_customer_start')]);
       buttons.push([Markup.button.callback('🔍 Поиск по ID/username', 'admin:search_customer_prompt')]);
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
       
@@ -3298,7 +3297,7 @@ const backKeyboard = Markup.inlineKeyboard([
       navRow.push(Markup.button.callback(`${currentPage + 1}/${totalPages}`, 'noop'));
       if (currentPage < totalPages - 1) navRow.push(Markup.button.callback('▶️', `admin:customers_page:${currentPage + 1}`));
       buttons.push(navRow);
-      
+      buttons.push([Markup.button.callback('➕ Добавить заказчика', 'admin:add_customer_start')]);
       buttons.push([Markup.button.callback('🔍 Поиск по ID/username', 'admin:search_customer_prompt')]);
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
       
