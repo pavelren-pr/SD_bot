@@ -3032,6 +3032,7 @@ const backKeyboard = Markup.inlineKeyboard([
         // Собираем пользователей по рангам
         const admins = [];
         const executors = [];
+        const managers = [];
         for (const [userId, userData] of Object.entries(loyaltyData)) {
           if (userData.rank === 'Посейдон') {
             admins.push({ id: userId, username: userData.username || 'N/A' });
