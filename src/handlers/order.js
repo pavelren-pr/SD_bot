@@ -142,6 +142,11 @@ function register(bot) {
       await next();
       return;
     }
+    // 🌟 НОВОЕ: Если управляющий (Циклоп) в режиме ввода (исполнитель/сообщение заказчику) — передаём управление department.js
+    if (ctx.session.deptState) {
+      await next();
+      return;
+    }
     // 🌟 0.1 АДМИН ПИШЕТ ЗАКАЗЧИКУ
     if (ctx.session.adminReplyToCustomerId) {
       const targetUserId = ctx.session.adminReplyToCustomerId;
