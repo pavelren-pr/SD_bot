@@ -2862,39 +2862,51 @@ const backKeyboard = Markup.inlineKeyboard([
 
     // --- РАНГИ ---
     else if (action === 'set_user_rank') {
-      const loyaltyData = loyalty.loadData();
-      // Собираем пользователей по рангам
-      const admins = [];
-      const executors = [];
-      for (const [userId, userData] of Object.entries(loyaltyData)) {
-        if (userData.rank === 'Посейдон') {
-          admins.push({ id: userId, username: userData.username || 'N/A' });
-        } else if (userData.rank === 'Прометей') {
-          executors.push({ id: userId, username: userData.username || 'N/A' });
+      try {
+        const loyaltyData = loyalty.loadData();
+        // Собираем пользователей по рангам
+        const admins = [];
+        const executors = [];
+        for (const [userId, userData] of Object.entries(loyaltyData)) {
+          if (userData.rank === 'Посейдон') {
+            admins.push({ id: userId, username: userData.username || 'N/A' });
+          } else if (userData.rank === 'Прометей') {
+            executors.push({ id: userId, username: userData.username || 'N/A' });
+          }
         }
+        
+        let text = `🛠 *Управление рангами*\n\n`;
+        text += `👑 *Админы (Посейдон):* ${admins.length}\n`;
+        if (admins.length === 0) text += `  • нет\n`;
+        
+        // 🌟 ИСПРАВЛЕНИЕ: Экранируем спецсимволы в username, чтобы бот не падал
+        admins.forEach(a => {
+          const usernameDisplay = a.username !== 'N/A' ? '@' + escapeMarkdown(a.username) : 'без username';
+          text += `  • ${a.id} (${usernameDisplay})\n`;
+        });
+        
+        text += `\n🔥 *Исполнители (Прометей):* ${executors.length}\n`;
+        if (executors.length === 0) text += `  • нет\n`;
+        
+        // 🌟 ИСПРАВЛЕНИЕ: Экранируем спецсимволы в username, чтобы бот не падал
+        executors.forEach(e => {
+          const usernameDisplay = e.username !== 'N/A' ? '@' + escapeMarkdown(e.username) : 'без username';
+          text += `  • ${e.id} (${usernameDisplay})\n`;
+        });
+        
+        // 🌟 НОВАЯ КЛАВИАТУРА: две отдельные кнопки вместо одной
+        const keyboard = Markup.inlineKeyboard([
+          [Markup.button.callback('🔥 Назначить исполнителя', 'admin:set_user_rank:new:executor')],
+          [Markup.button.callback('👑 Назначить администратора', 'admin:set_user_rank:new:admin')],
+          [Markup.button.callback('📋 Управление пользователями', 'admin:set_user_rank:manage')],
+          [Markup.button.callback('⬅️ Назад', 'admin:main')]
+        ]);
+        await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+      } catch (error) {
+        console.error('Ошибка при загрузке меню Управление рангами:', error);
+        logger.logError(error, ctx);
+        await ctx.answerCbQuery('❌ Произошла ошибка при загрузке меню.');
       }
-
-      let text = `🛠 *Управление рангами*\n\n`;
-      text += `👑 *Админы (Посейдон):* ${admins.length}\n`;
-      if (admins.length === 0) text += `  • нет\n`;
-      admins.forEach(a => {
-        text += `  • ${a.id} (${a.username !== 'N/A' ? '@' + a.username : 'без username'})\n`;
-      });
-
-      text += `\n🔥 *Исполнители (Прометей):* ${executors.length}\n`;
-      if (executors.length === 0) text += `  • нет\n`;
-      executors.forEach(e => {
-        text += `  • ${e.id} (${e.username !== 'N/A' ? '@' + e.username : 'без username'})\n`;
-      });
-
-      // 🌟 НОВАЯ КЛАВИАТУРА: две отдельные кнопки вместо одной
-      const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('🔥 Назначить исполнителя', 'admin:set_user_rank:new:executor')],
-        [Markup.button.callback('👑 Назначить администратора', 'admin:set_user_rank:new:admin')],
-        [Markup.button.callback('📋 Управление пользователями', 'admin:set_user_rank:manage')],
-        [Markup.button.callback('⬅️ Назад', 'admin:main')]
-      ]);
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
     }
     // 🌟 Назначить нового исполнителя (Прометей)
     else if (action === 'set_user_rank:new:executor') {
