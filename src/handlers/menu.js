@@ -118,39 +118,40 @@ bot.action('specialty:change', async (ctx) => {
 });
 
 bot.hears('📚 Заказать работу', async (ctx) => {
-    const catalog = require('../data/catalog');
-    const { createInlineKeyboard } = require('../utils/keyboard');
-    
-    const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
-    
-    // Если специальность не выбрана — показываем выбор
-    if (!userSpecialty) {
-      await showSpecialtySelection(ctx);
-      return;
-    }
-    
-    // Получаем курсы только для выбранной специальности
-    const courses = catalog.getCourses(userSpecialty);
-    
-    if (!courses || courses.length === 0) {
-      await ctx.reply(
-        `📭 К сожалению, для вашей специальности пока нет работ в каталоге.\n\n` +
-        `Вы можете изменить специальность через Профиль → Изменить специальность.`,
-        { parse_mode: 'Markdown' }
-      );
-      return;
-    }
-    
-    const courseButtons = courses.map(c => [{ text: c.name, callback: `catalog:subject:${c.id}` }]);
-    
+  const catalog = require('../data/catalog');
+  const { createInlineKeyboard } = require('../utils/keyboard');
+  const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
+  // Если специальность не выбрана — показываем выбор
+  if (!userSpecialty) {
+    await showSpecialtySelection(ctx);
+    return;
+  }
+  // Получаем курсы только для выбранной специальности
+  const courses = catalog.getCourses(userSpecialty);
+  // 🌟 НОВОЕ: Получаем общие работы специальности
+  const generalWorks = catalog.getWorksBySpecialty(userSpecialty);
+  // 🌟 НОВОЕ: Если нет ни курсов, ни общих работ — показываем сообщение
+  if ((!courses || courses.length === 0) && (!generalWorks || generalWorks.length === 0)) {
     await ctx.reply(
-      `📚 *Каталог работ*\n\nВыберите курс, чтобы начать:`,
-      { 
-        parse_mode: 'Markdown',
-        reply_markup: createInlineKeyboard(courseButtons).reply_markup
-      }
+      `📭 К сожалению, для вашей специальности пока нет работ в каталоге.\n\n` +
+      `Вы можете изменить специальность через Профиль → Изменить специальность.`,
+      { parse_mode: 'Markdown' }
     );
-  });
+    return;
+  }
+  const courseButtons = courses.map(c => [{ text: c.name, callback: `catalog:subject:${c.id}` }]);
+  // 🌟 НОВОЕ: Добавляем кнопку "Общие работы", если они есть
+  if (generalWorks && generalWorks.length > 0) {
+    courseButtons.push([{ text: `📋 Общие работы`, callback: `catalog:general_works` }]);
+  }
+  await ctx.reply(
+    `📚 *Каталог работ*\n\nВыберите курс, чтобы начать:`,
+    { 
+      parse_mode: 'Markdown',
+      reply_markup: createInlineKeyboard(courseButtons).reply_markup
+    }
+  );
+});
 
   // 🌟 Сокровищница — с правильным синтаксисом клавиатуры
     bot.hears('🏴‍☠️ Морская Сокровищница', async (ctx) => {
