@@ -90,7 +90,7 @@ function buildGroupOrderText(order, status) {
     }
     
     // Статус
-    if (status === 'new') text += `\n🟢 *Статус:* ОПЛАЧЕН`;
+    if (status === 'new') text += `\n🟢 *Статус:* ОПЛАЧЕН — ОЖИДАЕТ ПРИНЯТИЯ`;
     else if (status === 'in_progress') text += `\n🟡 *Статус:* В РАБОТЕ`;
     else text += `\n🟢 *Статус:* ВЫПОЛНЕН`;
     
@@ -484,14 +484,6 @@ function register(bot) {
         updatedText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
         updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
         updatedText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
-        if (order.details.text) {
-          const safeText = order.details.text.replace(/[`\\]/g, '');
-          updatedText += `\n📝 *Данные от пользователя:*\n\`${safeText}\`\n`;
-        }
-        if (order.details.files.length > 0) {
-          updatedText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
-          order.details.files.forEach(file => { updatedText += `• ${escapeMarkdown(file.fileName)}\n`; });
-        }
         updatedText += `\n⏰ *Создан:* ${order.createdAt}\n✅ *Оплачен:* ${paidTime}\n🟢 *Статус:* ОПЛАЧЕН`;
         
         // 🌟 Используем уникальный chatId из сессии, или генерируем новый, если его нет
@@ -550,6 +542,24 @@ function register(bot) {
 
         // 🌟 Логируем создание заказа
         logger.logOrderEvent('created', newOrder, ctx.from.id, ctx.from.username);
+
+        // 🌟 Отправляем исходные данные отдельным сообщением с указателем заказа
+        const customerDisplay = ctx.from.username ? '@' + ctx.from.username : `ID: ${ctx.from.id}`;
+        const dataHeader = 
+          `📋 *Исходные данные к заказу*\n` +
+          `🆔 *Номер заказа:* №${newOrder.orderNumber}\n` +
+          `👤 *Заказчик:* ${customerDisplay}\n` +
+          `📚 *Работа:* ${work.title}\n\n`;
+
+        // Отправляем текстовые данные, если они есть
+        if (order.details.text) {
+          const safeDetailsText = order.details.text.replace(/[`\\]/g, '');
+          await ctx.telegram.sendMessage(
+            targetChatId,
+            dataHeader + `📝 *Данные от пользователя:*\n\`${safeDetailsText}\``,
+            { parse_mode: 'Markdown', reply_to_message_id: order.managerMessageId }
+          );
+        }
         
         let updatedOrderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
         updatedOrderText += `🆔 *Номер заказа:* №${newOrder.orderNumber}\n`;
@@ -559,14 +569,6 @@ function register(bot) {
         updatedOrderText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
         updatedOrderText += `👷 *Исполнитель получит:* ${executorPrice2} ₽ (комиссия ${commissionPercent2}%)\n`;
         updatedOrderText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
-        if (order.details.text) {
-          const safeText = order.details.text.replace(/[`\\]/g, '');
-          updatedOrderText += `\n📝 *Данные от пользователя:*\n\`${safeText}\`\n`;
-        }
-        if (order.details.files.length > 0) {
-          updatedOrderText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
-          order.details.files.forEach(file => { updatedOrderText += `• ${escapeMarkdown(file.fileName)}\n`; });
-        }
         updatedOrderText += `\n⏰ *Создан:* ${order.createdAt}\n✅ *Оплачен:* ${paidTime}\n🟢 *Статус:* ОПЛАЧЕН`;
         
         try {
@@ -713,11 +715,6 @@ function register(bot) {
     orderText += `💰 *Сумма:* ${pricing.finalPrice} ₽ (скидка ${pricing.discountPercent}%)\n`;
     orderText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
     orderText += `💳 *Оплата на:* \`${paymentDetails}\`\n`;
-    if (order.details.text) orderText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
-    if (order.details.files.length > 0) {
-      orderText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
-      order.details.files.forEach(file => { orderText += `• ${escapeMarkdown(file.fileName)}\n`; });
-    }
     orderText += `\n⏰ *Создан:* ${createdAt}\n🟡 *Статус:* ОЖИДАЕТ ОПЛАТЫ`;
 
     const chatId = `order_${ctx.from.id}_${order.workId}`;
@@ -734,6 +731,14 @@ function register(bot) {
       for (const file of order.details.files) {
         if (file.type === 'photo') await ctx.telegram.sendPhoto(targetChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
         else if (file.type === 'document') await ctx.telegram.sendDocument(targetChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
+      }
+      // 🌟 Отправляем текстовые данные отдельным сообщением
+      if (order.details.text) {
+        const safeDetailsText = order.details.text.replace(/[`\\]/g, '');
+        await ctx.telegram.sendMessage(targetChatId, `📝 *Данные от пользователя:*\n\`${safeDetailsText}\``, {
+          parse_mode: 'Markdown',
+          reply_to_message_id: order.managerMessageId
+        });
       }
       order.createdAt = createdAt; order.finalPrice = pricing.finalPrice; order.discountPercent = pricing.discountPercent; order.paymentDetails = paymentDetails; order.step = 'awaiting_payment';
       await ctx.reply(`✅ *Заказ успешно оформлен!*\n\nДля завершения переведите **${pricing.finalPrice} ₽** на карту/телефон:\n\`${paymentDetails}\`\n\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и менеджер сразу приступит к работе! 🚀`, { parse_mode: 'Markdown' });
@@ -754,6 +759,13 @@ function register(bot) {
           for (const file of order.details.files) {
             if (file.type === 'photo') await ctx.telegram.sendPhoto(newChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
             else if (file.type === 'document') await ctx.telegram.sendDocument(newChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
+          }
+          // 🌟 Отправляем текстовые данные отдельным сообщением (в супергруппу)
+          if (order.details.text) {
+            await ctx.telegram.sendMessage(newChatId, `📝 *Данные от пользователя:*\n\`${order.details.text}\``, {
+              parse_mode: 'Markdown',
+              reply_to_message_id: order.managerMessageId
+            });
           }
           order.createdAt = createdAt; order.finalPrice = pricing.finalPrice; order.discountPercent = pricing.discountPercent; order.paymentDetails = paymentDetails; order.step = 'awaiting_payment';
           await ctx.reply(`✅ *Заказ успешно оформлен!*\\n\\nДля завершения переведите **${pricing.finalPrice} ₽** на карту/телефон:\\n\`${paymentDetails}\`\\n\\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и менеджер сразу приступит к работе! 🚀`, { parse_mode: 'Markdown' });
