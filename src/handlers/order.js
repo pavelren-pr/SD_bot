@@ -741,14 +741,6 @@ function register(bot) {
         if (file.type === 'photo') await ctx.telegram.sendPhoto(targetChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
         else if (file.type === 'document') await ctx.telegram.sendDocument(targetChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
       }
-      // 🌟 Отправляем текстовые данные отдельным сообщением
-      if (order.details.text) {
-        const safeDetailsText = order.details.text.replace(/[`\\]/g, '');
-        await ctx.telegram.sendMessage(targetChatId, `📝 *Данные от пользователя:*\n\`${safeDetailsText}\``, {
-          parse_mode: 'Markdown',
-          reply_to_message_id: order.managerMessageId
-        });
-      }
       order.createdAt = createdAt; order.finalPrice = pricing.finalPrice; order.discountPercent = pricing.discountPercent; order.paymentDetails = paymentDetails; order.step = 'awaiting_payment';
       await ctx.reply(`✅ *Заказ успешно оформлен!*\n\nДля завершения переведите **${pricing.finalPrice} ₽** на карту/телефон:\n\`${paymentDetails}\`\n\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и менеджер сразу приступит к работе! 🚀`, { parse_mode: 'Markdown' });
       await ctx.answerCbQuery('✅ Заказ отправлен!');
