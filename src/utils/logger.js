@@ -12,8 +12,18 @@ if (!fs.existsSync(LOG_DIR)) {
 /**
  * Базовая функция записи события в лог (формат JSONL)
  */
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 МБ
+
 function logEvent(entry) {
   try {
+    // 🌟 Ротация: если файл больше 10 МБ — архивируем его
+    if (fs.existsSync(LOG_FILE)) {
+      const stats = fs.statSync(LOG_FILE);
+      if (stats.size > MAX_LOG_SIZE) {
+        const archiveName = `bot_events_${new Date().toISOString().split('T')[0]}.jsonl`;
+        fs.renameSync(LOG_FILE, path.join(LOG_DIR, archiveName));
+      }
+    }
     const record = {
       timestamp: new Date().toISOString(),
       ...entry
@@ -91,16 +101,18 @@ function logButton(ctx) {
  * Логирует ошибку
  */
 function logError(err, ctx) {
+  // 🌟 Защита от некорректных входных данных
+  const errorObj = err instanceof Error ? err : new Error(String(err));
   const entry = {
     type: 'error',
-    errorMessage: err.message,
-    errorStack: err.stack ? err.stack.split('\n').slice(0, 5).join('\n') : null,
-    errorCode: err.code || null
+    errorMessage: errorObj.message,
+    errorStack: errorObj.stack ? errorObj.stack.split('\n').slice(0, 5).join('\n') : null,
+    errorCode: errorObj.code || null
   };
 
-  if (err.response) {
+  if (errorObj.response) {
     try {
-      entry.errorResponse = JSON.stringify(err.response).substring(0, 300);
+      entry.errorResponse = JSON.stringify(errorObj.response).substring(0, 300);
     } catch (e) { /* ignore */ }
   }
 

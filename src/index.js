@@ -11,6 +11,13 @@ const treasure = require('./handlers/treasure');
 const customOrder = require('./handlers/custom_order');
 const scheduler = require('./handlers/scheduler');
 const department = require('./handlers/department');
+const logger = require('./utils/logger');
+
+// 🌟 Глобальный перехватчик всех ошибок в обработчиках бота
+bot.catch((err, ctx) => {
+  logger.logError(err, ctx);
+  console.error('❌ Ошибка в обработчике бота:', err);
+});
 
 menu.register(bot);
 commands.register(bot);

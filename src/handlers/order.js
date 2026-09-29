@@ -469,7 +469,10 @@ function register(bot) {
     if (order && order.step === 'awaiting_payment') {
       const work = catalog.getWork(order.workId);
       const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
-      const userLink = ctx.from.username ? `@${ctx.from.username}` : `[${ctx.from.first_name || 'Пользователь'}](tg://user?id=${ctx.from.id})`;
+      const displayName = (ctx.from.first_name || 'Пользователь').replace(/[_*[]()~`>#+-=|{}.!]/g, '');
+      const userLink = ctx.from.username 
+        ? `@${ctx.from.username}` 
+        : `[${displayName}](tg://user?id=${ctx.from.id})`;
       
       try {
         const now = new Date();
@@ -481,7 +484,10 @@ function register(bot) {
         updatedText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
         updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
         updatedText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
-        if (order.details.text) updatedText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
+        if (order.details.text) {
+          const safeText = order.details.text.replace(/[`\\]/g, '');
+          updatedText += `\n📝 *Данные от пользователя:*\n\`${safeText}\`\n`;
+        }
         if (order.details.files.length > 0) {
           updatedText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
           order.details.files.forEach(file => { updatedText += `• ${escapeMarkdown(file.fileName)}\n`; });
@@ -553,7 +559,10 @@ function register(bot) {
         updatedOrderText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
         updatedOrderText += `👷 *Исполнитель получит:* ${executorPrice2} ₽ (комиссия ${commissionPercent2}%)\n`;
         updatedOrderText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
-        if (order.details.text) updatedOrderText += `\n📝 *Данные от пользователя:*\n\`${order.details.text}\`\n`;
+        if (order.details.text) {
+          const safeText = order.details.text.replace(/[`\\]/g, '');
+          updatedOrderText += `\n📝 *Данные от пользователя:*\n\`${safeText}\`\n`;
+        }
         if (order.details.files.length > 0) {
           updatedOrderText += `\n📎 *Файлы задания:* ${order.details.files.length}\n`;
           order.details.files.forEach(file => { updatedOrderText += `• ${escapeMarkdown(file.fileName)}\n`; });
@@ -590,6 +599,14 @@ function register(bot) {
         );
       } catch (error) {
         console.error('Ошибка обработки оплаты:', error);
+        // 🌟 Логируем ошибку
+        logger.logError(error, ctx);
+        // 🌟 Логируем как событие заказа с контекстом
+        logger.logOrderEvent('payment_error', {
+          workId: order ? order.workId : null,
+          workTitle: order ? (catalog.getWork(order.workId) || {}).title : null,
+          status: 'payment_failed'
+        }, ctx.from.id, ctx.from.username);
         await ctx.reply('❌ Произошла ошибка. Напишите нам напрямую.');
       }
       return;
@@ -611,6 +628,7 @@ function register(bot) {
       await ctx.reply('📩 Сообщение отправлено менеджеру');
     } catch (error) {
       console.error('Ошибка пересылки в поддержку:', error);
+      logger.logError(error, ctx); // 🌟
       await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
     }
   });
@@ -681,7 +699,10 @@ function register(bot) {
     const pricing = loyalty.calculatePrice(work.price, ctx.from.id);
     const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
     const paymentDetails = process.env[work.paymentEnv] || 'Не указан';
-    const userLink = ctx.from.username ? `@${ctx.from.username}` : `[${ctx.from.first_name || 'Пользователь'}](tg://user?id=${ctx.from.id})`;
+    const displayName = (ctx.from.first_name || 'Пользователь').replace(/[_*[]()~`>#+-=|{}.!]/g, '');
+    const userLink = ctx.from.username 
+      ? `@${ctx.from.username}` 
+      : `[${displayName}](tg://user?id=${ctx.from.id})`;
     const createdAt = new Date().toLocaleString('ru-RU');
 
     let orderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
@@ -743,6 +764,7 @@ function register(bot) {
         }
       }
       console.error('Ошибка отправки заказа:', error);
+      logger.logError(error, ctx); // 🌟
       await ctx.reply('❌ Произошла ошибка при отправке заказа.');
     }
   });
