@@ -246,6 +246,62 @@ function clearLogs() {
   }
 }
 
+// 🌟 Уведомление об ошибке в чат поддержки
+async function notifyErrorToSupport(error, ctx, bot, context = {}) {
+  try {
+    const supportChatId = process.env.SUPPORT_CHAT_ID;
+    if (!supportChatId) return;
+
+    const errorMessage = error.message || String(error);
+    const errorStack = error.stack ? error.stack.split('\n').slice(0, 3).join('\n') : '';
+    
+    // Информация о пользователе
+    const userId = ctx?.from?.id || context.userId || null;
+    const username = ctx?.from?.username ? `@${ctx.from.username}` : null;
+    const firstName = ctx?.from?.first_name || null;
+    const userDisplay = username || firstName || (userId ? `ID: ${userId}` : 'Неизвестно');
+
+    // Формируем текст уведомления
+    let text = `🚨 *ОШИБКА В РАБОТЕ БОТА*\n`;
+    text += `📅 *Время:* ${new Date().toLocaleString('ru-RU')}\n\n`;
+    
+    text += `❌ *Ошибка:*\n\`${errorMessage.substring(0, 300)}\`\n`;
+    if (errorStack) {
+      text += `\n📋 *Стек:*\n\`${errorStack.substring(0, 200)}\`\n`;
+    }
+    
+    if (context.action) {
+      text += `\n⚙️ *Действие:* ${context.action}\n`;
+    }
+    if (context.orderNumber) {
+      text += `📦 *Заказ:* №${context.orderNumber}\n`;
+    }
+    if (context.workTitle) {
+      text += `📚 *Работа:* ${context.workTitle}\n`;
+    }
+    
+    text += `\n👤 *Пользователь:* ${userDisplay}\n`;
+    if (userId) {
+      text += `🆔 *ID:* \`${userId}\`\n`;
+    }
+
+    // Формируем кнопку ответа пользователю
+    const buttons = [];
+    if (userId) {
+      buttons.push([
+        { text: `✏️ Ответить ${userDisplay}`, callback_data: `support_reply:${userId}` }
+      ]);
+    }
+
+    await bot.telegram.sendMessage(supportChatId, text, {
+      parse_mode: 'Markdown',
+      reply_markup: buttons.length > 0 ? { inline_keyboard: buttons } : undefined
+    });
+  } catch (notifyError) {
+    console.error('Не удалось отправить уведомление об ошибке в поддержку:', notifyError.message);
+  }
+}
+
 module.exports = {
   logEvent,
   logMessage,
@@ -257,5 +313,6 @@ module.exports = {
   logSystemEvent,
   readAllLogs,
   clearLogs,
+  notifyErrorToSupport,
   LOG_FILE
 };

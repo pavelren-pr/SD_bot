@@ -64,4 +64,33 @@ bot.catch((err, ctx) => {
   }
 });
 
+// 🌟 Глобальный обработчик ошибок бота
+bot.catch(async (err, ctx) => {
+  console.error('❌ Глобальная ошибка в обработчике:', err);
+  
+  // Логируем ошибку
+  const logger = require('./utils/logger');
+  logger.logError(err, ctx);
+  
+  // Уведомляем поддержку
+  try {
+    await logger.notifyErrorToSupport(err, ctx, bot, {
+      action: 'Необработанная ошибка в обработчике'
+    });
+  } catch (notifyErr) {
+    console.error('Не удалось уведомить поддержку:', notifyErr.message);
+  }
+  
+  // Пытаемся ответить пользователю
+  try {
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery('❌ Произошла ошибка. Попробуйте позже.');
+    } else if (ctx.chat && ctx.chat.type === 'private') {
+      await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+    }
+  } catch (replyErr) {
+    console.error('Не удалось ответить пользователю:', replyErr.message);
+  }
+});
+
 module.exports = bot;

@@ -609,6 +609,11 @@ function register(bot) {
           workTitle: order ? (catalog.getWork(order.workId) || {}).title : null,
           status: 'payment_failed'
         }, ctx.from.id, ctx.from.username);
+        // 🌟 Уведомляем поддержку об ошибке
+        await logger.notifyErrorToSupport(error, ctx, bot, {
+          action: 'Обработка оплаты заказа',
+          workTitle: order ? (catalog.getWork(order.workId) || {}).title : null
+        });
         await ctx.reply('❌ Произошла ошибка. Напишите нам напрямую.');
       }
       return;
@@ -631,6 +636,10 @@ function register(bot) {
     } catch (error) {
       console.error('Ошибка пересылки в поддержку:', error);
       logger.logError(error, ctx); // 🌟
+      // 🌟 Уведомляем поддержку об ошибке (без кнопки ответа, чтобы не зациклиться)
+      await logger.notifyErrorToSupport(error, ctx, bot, {
+        action: 'Пересылка сообщения в поддержку'
+      });
       await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
     }
   });
@@ -777,6 +786,11 @@ function register(bot) {
       }
       console.error('Ошибка отправки заказа:', error);
       logger.logError(error, ctx); // 🌟
+      // 🌟 Уведомляем поддержку об ошибке
+      await logger.notifyErrorToSupport(error, ctx, bot, {
+        action: 'Отправка заказа в чат исполнителей',
+        workTitle: work ? work.title : null
+      });
       await ctx.reply('❌ Произошла ошибка при отправке заказа.');
     }
   });

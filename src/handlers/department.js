@@ -563,6 +563,11 @@ function register(bot) {
 
         await showOrderCard(ctx, orderId);
       } catch (err) {
+        // 🌟 Уведомляем поддержку об ошибке
+        await logger.notifyErrorToSupport(err, ctx, bot, {
+          action: 'Назначение исполнителя (Управляющий отделом)',
+          orderNumber: orderNumber
+        });
         await ctx.reply(
           `❌ *Ошибка назначения:*\n\n${err.message}`,
           {

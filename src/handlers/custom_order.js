@@ -352,6 +352,12 @@ async function sendOrderForEvaluation(ctx) {
     ctx.session.customOrder = null;
   } catch (error) {
     console.error("Ошибка отправки индивидуального заказа:", error);
+    // 🌟 Уведомляем поддержку
+    const logger = require('../utils/logger');
+    await logger.notifyErrorToSupport(error, ctx, bot, {
+      action: 'Отправка индивидуального заказа',
+      workTitle: work ? work.title : null
+    });
     await ctx.reply("❌ Произошла ошибка при отправке заказа.");
   }
 }
@@ -1156,6 +1162,12 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       ctx.session.waitingCustomPayment = null;
     } catch (error) {
       console.error('Ошибка обработки оплаты:', error);
+      // 🌟 Уведомляем поддержку
+      const logger = require('../utils/logger');
+      await logger.notifyErrorToSupport(error, ctx, bot, {
+        action: 'Оплата индивидуального заказа',
+        orderNumber: orderNumber
+      });
       await ctx.reply('❌ Произошла ошибка. Напишите менеджеру.');
     }
   });
