@@ -71,7 +71,7 @@ function buildGroupOrderText(order, status) {
     let text = `${header}\n\n`;
     text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
     text += `👤 *Заказчик:* ${userLink}\n`;
-    text += `📚 *Работа:* ${order.workTitle}\n`;
+    text += `📚 *Работа:* ${esc(order.workTitle)}\n`;
     text += `💰 *Сумма:* ${order.price} ₽\n`;
     text += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
     
@@ -108,7 +108,7 @@ function buildExecutorOrderCaption(order) {
   let text = `🔔 *НОВЫЙ ЗАКАЗ!*\n\n`;
   text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
   text += `👤 *Заказчик:* ${userLink}\n`;
-  text += `📚 *Работа:* ${order.workTitle}\n`;
+  text += `📚 *Работа:* ${esc(order.workTitle)}\n`;
   text += `💰 *Сумма:* ${order.price} ₽\n`;
   text += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
   text += `⏰ *Создан:* ${order.createdAt}\n`;
@@ -267,7 +267,29 @@ function register(bot) {
       }
       await ctx.answerCbQuery();
     } catch (e) {
-      await ctx.answerCbQuery('Не удалось обновить сообщение');
+      // Повторяем без Markdown, чтобы гарантированно вернуть кнопки
+      try {
+        if (order.screenshotFileId) {
+          await ctx.telegram.editMessageMedia(
+            order.managerChatId, order.managerMessageId, null,
+            {
+              type: order.screenshotType === 'document' ? 'document' : 'photo',
+              media: order.screenshotFileId,
+              caption: caption,
+              reply_markup: keyboard.reply_markup
+            }
+          );
+        } else {
+          await ctx.telegram.editMessageText(
+            order.managerChatId, order.managerMessageId, null,
+            caption,
+            { reply_markup: keyboard.reply_markup }
+          );
+        }
+        await ctx.answerCbQuery();
+      } catch (e2) {
+        await ctx.answerCbQuery('Не удалось обновить сообщение');
+      }
     }
   });
 
