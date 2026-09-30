@@ -675,9 +675,18 @@ function register(bot) {
         orders.updateOrder(newOrder.id, { managerMessageId: sentMsg.message_id });
       }
 
+      // 🌟 Кнопка связи с менеджером
+      const managerUsername = process.env.MANAGER_USERNAME || 'SmartDealsManager';
+      const waitingKeyboard = Markup.inlineKeyboard([
+        [Markup.button.url('👨‍💼 Связаться с менеджером', `https://t.me/${managerUsername}`)]
+      ]);
       await ctx.reply(
-        `✅ *Заказ оформлен и ожидает назначения исполнителя.*\n\n🆔 *Номер заказа:* №${newOrder.orderNumber}\n\n📚 *Работа:* ${work.title}\n💰 *Сумма:* ${order.finalPrice} ₽\n\nМы уже ищем для вас лучшего специалиста.`,
-        { parse_mode: 'Markdown' }
+        `✅ *Заказ оформлен и ожидает назначения исполнителя.*\n\n` +
+        `🆔 *Номер заказа:* №${newOrder.orderNumber}\n\n` +
+        `📚 *Работа:* ${work.title}\n` +
+        `💰 *Сумма:* ${order.finalPrice} ₽\n\n` +
+        `Мы уже ищем для вас лучшего специалиста.\nЕсли у вас есть срочные вопросы, нажмите кнопку ниже:`,
+        { parse_mode: 'Markdown', reply_markup: waitingKeyboard.reply_markup }
       );
     } catch (error) {
       console.error('Ошибка обработки оплаты:', error);
