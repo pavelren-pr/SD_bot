@@ -116,14 +116,15 @@ function buildExecutorOrderCaption(order) {
   return text;
 }
 
-// 🌟 Клавиатура сообщения-скриншота
 function buildExecutorOrderKeyboard(order, chatId) {
   const buttons = [];
-  if (order.detailsText) {
-    buttons.push([Markup.button.callback('📝 Исходные данные', `order_data:${order.id}`)]);
+  // Проверяем как обычные заказы (detailsText), так и индивидуальные (description)
+  if (order.detailsText || order.description) {
+  buttons.push([Markup.button.callback('📝 Исходные данные', `order_data:${order.id}`)]);
   }
-  if (order.taskFiles && order.taskFiles.length > 0) {
-    buttons.push([Markup.button.callback(`📎 Файлы задания (${order.taskFiles.length})`, `order_files:${order.id}:0`)]);
+  // Проверяем массив файлов или одиночный файл (fileId)
+  if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+  buttons.push([Markup.button.callback(`📎 Файлы задания`, `order_files:${order.id}:0`)]);
   }
   buttons.push([Markup.button.callback('✅ Принять заказ', `ao:${chatId}`)]);
   return Markup.inlineKeyboard(buttons);
@@ -175,7 +176,8 @@ function register(bot) {
     const backKeyboard = Markup.inlineKeyboard([
       [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
     ]);
-    const dataCaption = `📝 *Исходные данные к заказу №${order.orderNumber}*\n\n${order.detailsText || 'Нет данных'}`.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+    const textToShow = order.detailsText || order.description || 'Нет данных';
+    const dataCaption = `📝 *Исходные данные к заказу №${order.orderNumber}*\n\n${textToShow}`.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
 
     try {
       await ctx.telegram.editMessageCaption(
@@ -201,7 +203,11 @@ function register(bot) {
     const fileIdx = parseInt(ctx.match[2]);
     if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
 
-    const files = order.taskFiles || [];
+    let files = order.taskFiles || [];
+    // Fallback для индивидуальных заказов, где файл хранится в другом поле
+    if (files.length === 0 && order.fileId) {
+      files = [{ type: order.fileType || 'document', fileId: order.fileId, fileName: order.fileName || 'Файл задания' }];
+    }
     if (files.length === 0) return ctx.answerCbQuery('📭 Файлов нет');
     const file = files[fileIdx];
 
@@ -835,104 +841,6 @@ function register(bot) {
       { parse_mode: 'Markdown' }
     );
     await ctx.answerCbQuery('✅ Заказ отправлен!');
-  });
-
-  // 🌟 Показать исходные данные (редактируем подпись скриншота)
-  bot.action(/^order_data:(.+)$/, async (ctx) => {
-    const order = orders.getOrder(ctx.match[1]);
-    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
-
-    const backKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
-    ]);
-    const dataCaption = `📝 *Исходные данные к заказу №${order.orderNumber}*\n\n${order.detailsText || 'Нет данных'}`.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
-
-    try {
-      await ctx.telegram.editMessageCaption(
-        order.managerChatId, order.managerMessageId, null,
-        dataCaption,
-        { parse_mode: 'Markdown', reply_markup: backKeyboard.reply_markup }
-      );
-      await ctx.answerCbQuery();
-      } catch (e) {
-        if (e.message && e.message.includes('message is not modified')) {
-          // Ничего не меняем — сообщение уже показывает эти данные
-          return ctx.answerCbQuery();
-        }
-        // Реальная ошибка (лимит подписи и т.д.) — отправляем отдельным сообщением
-        await ctx.telegram.sendMessage(order.managerChatId, dataCaption, { parse_mode: 'Markdown' });
-        await ctx.answerCbQuery('Данные отправлены отдельным сообщением');
-      }
-  });
-
-  // 🌟 Показать файлы задания (заменяем скриншот файлом)
-  bot.action(/^order_files:(.+):(\d+)$/, async (ctx) => {
-    const order = orders.getOrder(ctx.match[1]);
-    const fileIdx = parseInt(ctx.match[2]);
-    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
-
-    const files = order.taskFiles || [];
-    if (files.length === 0) return ctx.answerCbQuery('📭 Файлов нет');
-    const file = files[fileIdx];
-
-    const navRow = [];
-    navRow.push(fileIdx > 0 ? Markup.button.callback('◀️', `order_files:${order.id}:${fileIdx - 1}`) : Markup.button.callback('·', 'noop'));
-    navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
-    navRow.push(fileIdx < files.length - 1 ? Markup.button.callback('▶️', `order_files:${order.id}:${fileIdx + 1}`) : Markup.button.callback('·', 'noop'));
-
-    const keyboard = Markup.inlineKeyboard([
-      navRow,
-      [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
-    ]);
-
-    try {
-      await ctx.telegram.editMessageMedia(
-        order.managerChatId, order.managerMessageId, null,
-        {
-          type: file.type === 'photo' ? 'photo' : 'document',
-          media: file.fileId,
-          caption: `📎 Файл ${fileIdx + 1}/${files.length}: ${(file.fileName || 'Файл задания').replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&')}`,
-          reply_markup: keyboard.reply_markup
-        }
-      );
-      await ctx.answerCbQuery();
-    } catch (e) {
-      console.error('Не удалось показать файл:', e.message);
-      await ctx.answerCbQuery('Не удалось показать файл');
-    }
-  });
-
-  // 🌟 Назад — вернуть скриншот оплаты и исходную подпись
-  bot.action(/^order_back:(.+)$/, async (ctx) => {
-    const order = orders.getOrder(ctx.match[1]);
-    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
-
-    const caption = buildExecutorOrderCaption(order);
-    const keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
-
-    try {
-      if (order.screenshotFileId) {
-        await ctx.telegram.editMessageMedia(
-          order.managerChatId, order.managerMessageId, null,
-          {
-            type: order.screenshotType === 'document' ? 'document' : 'photo',
-            media: order.screenshotFileId,
-            caption: caption,
-            parse_mode: 'Markdown',
-            reply_markup: keyboard.reply_markup
-          }
-        );
-      } else {
-        await ctx.telegram.editMessageText(
-          order.managerChatId, order.managerMessageId, null,
-          caption,
-          { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
-        );
-      }
-      await ctx.answerCbQuery();
-    } catch (e) {
-      await ctx.answerCbQuery('Не удалось обновить сообщение');
-    }
   });
 
   bot.action(/^ao:(.+)$/, async (ctx) => {
