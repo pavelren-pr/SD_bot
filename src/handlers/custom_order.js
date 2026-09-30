@@ -2,6 +2,7 @@ const catalog = require('../data/catalog');
 const orders = require('../data/orders');
 const loyalty = require('../data/loyalty');
 const { createInlineKeyboard } = require('../utils/keyboard');
+const storage = require('../utils/storage');
 const { Markup } = require('telegraf');
 
 // Хранилище состояний для индивидуальных заказов
@@ -324,6 +325,43 @@ async function sendOrderForEvaluation(ctx) {
       managerMessageId: sentMsg.message_id,
       managerChatId: chatId
     });
+
+    // ==========================================
+    // 💾 СОХРАНЕНИЕ ДАННЫХ ИНДИВИДУАЛЬНОГО ЗАКАЗА
+    // ==========================================
+    try {
+      // 1. Метаданные и описание
+      await storage.saveOrderData(orderNumber, {
+        orderNumber: orderNumber,
+        orderId: orderData.id,
+        workId: customOrder.workId,
+        workTitle: orderData.workTitle,
+        subjectName: subjectName,
+        courseName: courseName,
+        customerId: ctx.from.id,
+        customerUsername: ctx.from.username || null,
+        customerName: ctx.from.first_name || null,
+        description: customOrder.description || null,
+        isCustomOrder: true,
+        createdAt: createdAt,
+        savedAt: new Date().toISOString()
+      });
+
+      // 2. Файл задания (один)
+      if (customOrder.file) {
+        const fileResults = await storage.saveOrderFiles(ctx.telegram, orderNumber, [customOrder.file]);
+        orders.updateOrder(orderData.id, {
+          customerDataSaved: true,
+          savedFiles: fileResults.filter(f => f.success).map(f => f.savedAs)
+        });
+      } else {
+        orders.updateOrder(orderData.id, { customerDataSaved: true });
+      }
+
+      console.log(`💾 Данные индивидуального заказа №${orderNumber} сохранены`);
+    } catch (storageError) {
+      console.error(`⚠️ Ошибка сохранения данных инд. заказа №${orderNumber}:`, storageError.message);
+    }
 
     // 🌟 Отправляем файл только если он есть
     if (customOrder.file) {

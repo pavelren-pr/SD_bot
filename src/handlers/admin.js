@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const { generateExcelExport, generateLogsExport } = require('../utils/export');
 const logger = require('../utils/logger');
+const storage = require('../utils/storage');
+const backup = require('../utils/backup');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 
 // 🌟 Получение доступных переменных окружения из .env
@@ -106,6 +108,7 @@ function getAdminMainMenu() {
     [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
     [Markup.button.callback('🏅 Назначить исполнителя/админа', 'admin:set_user_rank')],
     [Markup.button.callback('📊 Экспорт данных', 'admin:export_excel')],
+    [Markup.button.callback('💾 Хранилище данных', 'admin:storage')],
     [Markup.button.callback('🔙 Назад', 'profile:back')]
   ]);
 }
@@ -2868,9 +2871,68 @@ const backKeyboard = Markup.inlineKeyboard([
           buttons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
         }
       }
+      // 💾 Кнопка просмотра сохранённых данных
+      if (order.customerDataSaved) {
+        buttons.push([Markup.button.callback('💾 Исходные данные', `admin:order_data:${orderId}`)]);
+      }
+   buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
       buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    // 💾 Просмотр сохранённых исходных данных заказа
+    else if (action.startsWith('order_data:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const data = storage.readOrderData(order.orderNumber);
+      const files = storage.getOrderFiles(order.orderNumber);
+
+      let text = `💾 *Исходные данные заказа №${order.orderNumber}*\n\n`;
+      if (data) {
+        text += `📝 *Текст задания:*\n\`${data.detailsText || data.description || '—'}\`\n\n`;
+        text += `👤 *Заказчик:* ${data.customerUsername ? '@' + data.customerUsername : data.customerId}\n`;
+        text += `💾 *Сохранено:* ${data.savedAt ? data.savedAt.substring(0, 10) : '—'}\n\n`;
+      } else {
+        text += `⚠️ Метаданные не найдены.\n\n`;
+      }
+
+      if (files.length > 0) {
+        text += `📎 *Файлы (${files.length}):*\n`;
+        files.forEach(f => {
+          const sizeKB = (f.size / 1024).toFixed(1);
+          text += `• ${f.name} (${sizeKB} КБ)\n`;
+        });
+      } else {
+        text += `📎 *Файлы:* отсутствуют`;
+      }
+
+      // Кнопки для отправки файлов
+      const buttons = files.slice(0, 5).map((f, i) => [
+        Markup.button.callback(`📤 ${f.name}`, `admin:order_data_send:${orderId}:${i}`)
+      ]);
+      buttons.push([Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]);
+
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    }
+    // 💾 Отправка сохранённого файла в чат админа
+    else if (action.startsWith('order_data_send:')) {
+      const parts = action.split(':');
+      const orderId = parts[1];
+      const fileIdx = parseInt(parts[2]);
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const files = storage.getOrderFiles(order.orderNumber);
+      const file = files[fileIdx];
+      if (!file) { await ctx.answerCbQuery('❌ Файл не найден'); return; }
+
+      await ctx.answerCbQuery('⏳ Отправляю файл...');
+      await ctx.replyWithDocument({
+        source: fs.createReadStream(file.path),
+        filename: file.name
+      }, { caption: `💾 Файл заказа №${order.orderNumber}` });
     }
     else if (action.startsWith('order_delete:')) {
       const orderId = action.split(':')[1];
@@ -2884,10 +2946,13 @@ const backKeyboard = Markup.inlineKeyboard([
     
     else if (action.startsWith('order_delete_confirm:')) {
       const orderId = action.split(':')[1];
-      
-      // 🌟 Получаем данные заказа ПЕРЕД удалением
       const order = ordersDb.getOrder(orderId);
       
+      // 💾 Удаляем сохранённые данные заказа
+      if (order) {
+        storage.deleteOrderData(order.orderNumber);
+      }
+
       ordersDb.deleteOrder(orderId);
       
       // 🌟 Логируем удаление заказа
@@ -3024,7 +3089,8 @@ const backKeyboard = Markup.inlineKeyboard([
         '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
         '• **Экспорт заказов и скидок** — 2 листа (заказы + лояльность)\n' +
         '• **Экспорт логов** — 2 листа (взаимодействия + ошибки/события)\n' +
-        '• **Экспорт файлов БД** — отправка orders.json, loyalty.json, catalog.json и логов в группу бэкапов',
+        '• **Экспорт файлов БД** — полный бэкап архивом (БД + исходные данные + логи + .env)\n' +
+        '• **Очистить логи** — удалить файл логов',
         { parse_mode: 'Markdown', ...keyboard }
       );
     }
@@ -3066,12 +3132,11 @@ const backKeyboard = Markup.inlineKeyboard([
       }
     }
     // ==========================================
-    // 📁 РУЧНОЙ ЭКСПОРТ ФАЙЛОВ БД В ГРУППУ БЭКАПОВ
+    // 📁 РУЧНОЙ БЭКАП (АРХИВ) В ГРУППУ БЭКАПОВ
     // ==========================================
     else if (action === 'export_db_files') {
       try {
-        await ctx.answerCbQuery('⏳ Отправляю файлы БД...');
-
+        await ctx.answerCbQuery('⏳ Создаю архив бэкапа...');
         const backupChatId = process.env.BACKUP_CHAT_ID;
         if (!backupChatId) {
           await ctx.reply('❌ Переменная окружения `BACKUP_CHAT_ID` не настроена в .env файле.');
@@ -3080,61 +3145,53 @@ const backKeyboard = Markup.inlineKeyboard([
 
         await ctx.replyWithChatAction('upload_document');
 
-        const dataDir = path.join(__dirname, '../data');
-        const files = [
-          { name: 'orders.json', path: path.join(dataDir, 'orders.json') },
-          { name: 'loyalty.json', path: path.join(dataDir, 'loyalty.json') },
-          { name: 'catalog.json', path: path.join(dataDir, 'catalog.json') },
-          { name: 'bot_events.jsonl', path: logger.LOG_FILE },
-        ];
+        // 🌟 Создаём архив
+        const archiveInfo = await backup.createBackupArchive();
+
+        // Проверяем лимит размера (50 МБ для обычных ботов)
+        const sizeMB = archiveInfo.size / (1024 * 1024);
+        if (sizeMB > 49) {
+          fs.unlinkSync(archiveInfo.path);
+          await ctx.reply(`⚠️ Архив слишком большой (${sizeMB.toFixed(1)} МБ). Лимит отправки — 50 МБ.`);
+          return;
+        }
 
         // Заголовок с информацией, кто запросил бэкап
         const requester = ctx.from.username ? `@${ctx.from.username}` : `ID: ${ctx.from.id}`;
         await ctx.telegram.sendMessage(
           backupChatId,
-          `📦 *Ручной экспорт файлов БД*\n📅 ${new Date().toLocaleString('ru-RU')}\n👤 *Запрошен:* ${requester}`,
+          `📦 *Ручной бэкап данных (архив)*\n📅 ${new Date().toLocaleString('ru-RU')}\n👤 *Запрошен:* ${requester}\n💾 *Размер:* ${sizeMB.toFixed(2)} МБ`,
           { parse_mode: 'Markdown' }
         );
 
-        let sentCount = 0;
-        const missingFiles = [];
-
-        for (const file of files) {
-          if (fs.existsSync(file.path)) {
-            const stats = fs.statSync(file.path);
-            const sizeKB = (stats.size / 1024).toFixed(1);
-
-            await ctx.telegram.sendDocument(backupChatId, {
-              source: fs.createReadStream(file.path),
-              filename: file.name
-            }, {
-              caption: `📄 ${file.name} (${sizeKB} КБ)`
-            });
-            sentCount++;
-          } else {
-            missingFiles.push(file.name);
-          }
-        }
+        // 🌟 Отправляем архив
+        await ctx.telegram.sendDocument(
+          backupChatId,
+          { source: fs.createReadStream(archiveInfo.path), filename: archiveInfo.name },
+          { caption: `📁 ${archiveInfo.name}` }
+        );
 
         // Логируем действие админа
-        logger.logAdminAction('export_db_files', { 
-          sentCount, 
-          totalFiles: files.length,
-          missingFiles 
+        logger.logAdminAction('manual_backup_archive', {
+          fileName: archiveInfo.name,
+          sizeMB: sizeMB.toFixed(2),
+          requester: requester
         }, ctx);
 
-        let resultMessage = `✅ *Экспорт файлов БД завершён!*\n\n`;
-        resultMessage += `📁 Отправлено файлов: *${sentCount}* из ${files.length}\n`;
-        resultMessage += `📍 Файлы отправлены в группу бэкапов.`;
-        if (missingFiles.length > 0) {
-          resultMessage += `\n\n⚠️ Не найдены файлы: ${missingFiles.join(', ')}`;
-        }
+        // 🌟 Удаляем временный архив после отправки
+        fs.unlinkSync(archiveInfo.path);
 
-        await ctx.reply(resultMessage, { parse_mode: 'Markdown' });
+        await ctx.reply(
+          `✅ *Бэкап успешно создан и отправлен!*\n\n` +
+          `📁 *Файл:* ${archiveInfo.name}\n` +
+          `💾 *Размер:* ${sizeMB.toFixed(2)} МБ\n` +
+          `📍 *Отправлен в:* группу бэкапов`,
+          { parse_mode: 'Markdown' }
+        );
       } catch (error) {
-        console.error('Ошибка при экспорте файлов БД:', error);
+        console.error('Ошибка при создании бэкапа:', error);
         logger.logError(error, ctx);
-        await ctx.reply(`❌ Произошла ошибка при экспорте файлов БД: ${error.message}`);
+        await ctx.reply(`❌ Произошла ошибка при создании бэкапа: ${error.message}`);
       }
     }
     else if (action === 'clear_logs_confirm') {
@@ -3837,6 +3894,60 @@ const backKeyboard = Markup.inlineKeyboard([
           ]) 
         }
       );
+    }
+
+    // ==========================================
+    // 💾 ХРАНИЛИЩЕ ИСХОДНЫХ ДАННЫХ
+    // ==========================================
+    else if (action === 'storage') {
+      const stats = storage.getStorageStats();
+      let text = `💾 *Хранилище исходных данных*\n\n`;
+      text += `📦 *Сохранено заказов:* ${stats.ordersCount}\n`;
+      text += `📁 *Всего файлов:* ${stats.filesCount}\n`;
+      text += `💾 *Занято данными:* ${stats.totalSizeMB} МБ\n`;
+      text += `💿 *Диск:* ${stats.totalDiskGB} ГБ\n`;
+      text += `🆓 *Свободно:* ${stats.freeDiskGB} ГБ (${(100 - stats.usedPercent).toFixed(1)}%)\n\n`;
+
+      if (parseFloat(stats.freeDiskGB) < 1) {
+        text += `⚠️ *ВНИМАНИЕ:* Свободного места меньше 1 ГБ! Рекомендуется очистить старые данные.\n`;
+      }
+
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🧹 Очистить данные старше 180 дней', 'admin:storage_cleanup')],
+        [Markup.button.callback('🔄 Обновить статистику', 'admin:storage')],
+        [Markup.button.callback('⬅️ Назад', 'admin:main')]
+      ]);
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+    else if (action === 'storage_cleanup') {
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Да, очистить', 'admin:storage_cleanup_confirm')],
+        [Markup.button.callback('❌ Отмена', 'admin:storage')]
+      ]);
+      await ctx.editMessageText(
+        '⚠️ *Подтверждение очистки*\n\n' +
+        'Будут удалены данные заказов, выполненных более 180 дней назад.\n' +
+        'Данные активных заказов НЕ будут удалены.\n\nЭто действие необратимо!',
+        { parse_mode: 'Markdown', ...keyboard }
+      );
+    }
+    else if (action === 'storage_cleanup_confirm') {
+      await ctx.answerCbQuery('⏳ Очищаю...');
+      const result = await storage.cleanupOldOrders(ordersDb, 180);
+      const freedMB = (result.freedBytes / (1024 * 1024)).toFixed(2);
+      logger.logAdminAction('storage_cleanup', result, ctx);
+      await ctx.answerCbQuery(`✅ Удалено заказов: ${result.deletedCount}`);
+      // Возвращаемся к статистике
+      const stats = storage.getStorageStats();
+      let text = `💾 *Очистка завершена!*\n\n`;
+      text += `🗑 *Удалено заказов:* ${result.deletedCount}\n`;
+      text += `💾 *Освобождено:* ${freedMB} МБ\n\n`;
+      text += `🆓 *Свободно сейчас:* ${stats.freeDiskGB} ГБ из ${stats.totalDiskGB} ГБ\n`;
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🔄 Статистика хранилища', 'admin:storage')],
+        [Markup.button.callback('⬅️ Назад в меню', 'admin:main')]
+      ]);
+      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
     }
 
     await ctx.answerCbQuery();

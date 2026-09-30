@@ -4,6 +4,7 @@ const orders = require('../data/orders');
 const ordersDb = require('../data/orders');
 const { createInlineKeyboard } = require('../utils/keyboard');
 const logger = require('../utils/logger');
+const storage = require('../utils/storage');
 const { Markup } = require('telegraf');
 
 const mediaBuffer = {};
@@ -60,6 +61,7 @@ function buildGroupOrderText(order, status) {
     else if (status === 'in_progress') header = '🔨 *ЗАКАЗ В РАБОТЕ*';
     else header = '✅ *ЗАКАЗ ВЫПОЛНЕН*';
     
+    const esc = (s) => s ? String(s).replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&') : '';
     const commissionPercent = order.commission || 0;
     const executorPrice = Math.round(order.price * (1 - commissionPercent / 100));
     const userLink = order.customerUsername 
@@ -95,6 +97,36 @@ function buildGroupOrderText(order, status) {
     else text += `\n🟢 *Статус:* ВЫПОЛНЕН`;
     
     return text;
+}
+
+// 🌟 Подпись сообщения-скриншота в чате исполнителей
+function buildExecutorOrderCaption(order) {
+  const esc = (s) => s ? String(s).replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&') : '';
+  const commissionPercent = order.commission || 0;
+  const executorPrice = Math.round(order.price * (1 - commissionPercent / 100));
+  const userLink = order.customerUsername ? `@${order.customerUsername}` : `[Пользователь](tg://user?id=${order.customerId})`;
+  let text = `🔔 *НОВЫЙ ЗАКАЗ!*\n\n`;
+  text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
+  text += `👤 *Заказчик:* ${userLink}\n`;
+  text += `📚 *Работа:* ${order.workTitle}\n`;
+  text += `💰 *Сумма:* ${order.price} ₽\n`;
+  text += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+  text += `⏰ *Создан:* ${order.createdAt}\n`;
+  text += `🟢 *Статус:* ОПЛАЧЕН — ОЖИДАЕТ ПРИНЯТИЯ`;
+  return text;
+}
+
+// 🌟 Клавиатура сообщения-скриншота
+function buildExecutorOrderKeyboard(order, chatId) {
+  const buttons = [];
+  if (order.detailsText) {
+    buttons.push([Markup.button.callback('📝 Исходные данные', `order_data:${order.id}`)]);
+  }
+  if (order.taskFiles && order.taskFiles.length > 0) {
+    buttons.push([Markup.button.callback(`📎 Файлы задания (${order.taskFiles.length})`, `order_files:${order.id}:0`)]);
+  }
+  buttons.push([Markup.button.callback('✅ Принять заказ', `ao:${chatId}`)]);
+  return Markup.inlineKeyboard(buttons);
 }
 
 // 🌟 Функция экранирования специальных символов Markdown
@@ -133,6 +165,104 @@ function register(bot) {
       message += `\n\n📚 Пример работы и методические указания доступны по [ссылке](${work.exampleUrl})`;
     }
     await ctx.editMessageText(message, { parse_mode: 'Markdown' });
+  });
+
+  // 🌟 Показать исходные данные (редактируем подпись)
+  bot.action(/^order_data:(.+)$/, async (ctx) => {
+    const order = ordersDb.getOrder(ctx.match[1]);
+    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    const backKeyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
+    ]);
+    const dataCaption = `📝 *Исходные данные к заказу №${order.orderNumber}*\n\n${order.detailsText || 'Нет данных'}`.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+
+    try {
+      await ctx.telegram.editMessageCaption(
+        order.managerChatId, order.managerMessageId, null,
+        dataCaption,
+        { parse_mode: 'Markdown', reply_markup: backKeyboard.reply_markup }
+      );
+      await ctx.answerCbQuery();
+      } catch (e) {
+        if (e.message && e.message.includes('message is not modified')) {
+          // Ничего не меняем — сообщение уже показывает эти данные
+          return ctx.answerCbQuery();
+        }
+        // Реальная ошибка (лимит подписи и т.д.) — отправляем отдельным сообщением
+        await ctx.telegram.sendMessage(order.managerChatId, dataCaption, { parse_mode: 'Markdown' });
+        await ctx.answerCbQuery('Данные отправлены отдельным сообщением');
+      }
+  });
+
+  // 🌟 Показать файлы задания (заменяем скриншот файлом)
+  bot.action(/^order_files:(.+):(\d+)$/, async (ctx) => {
+    const order = ordersDb.getOrder(ctx.match[1]);
+    const fileIdx = parseInt(ctx.match[2]);
+    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    const files = order.taskFiles || [];
+    if (files.length === 0) return ctx.answerCbQuery('📭 Файлов нет');
+    const file = files[fileIdx];
+
+    const navRow = [];
+    navRow.push(fileIdx > 0 ? Markup.button.callback('◀️', `order_files:${order.id}:${fileIdx - 1}`) : Markup.button.callback('·', 'noop'));
+    navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
+    navRow.push(fileIdx < files.length - 1 ? Markup.button.callback('▶️', `order_files:${order.id}:${fileIdx + 1}`) : Markup.button.callback('·', 'noop'));
+
+    const keyboard = Markup.inlineKeyboard([
+      navRow,
+      [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
+    ]);
+
+    try {
+      await ctx.telegram.editMessageMedia(
+        order.managerChatId, order.managerMessageId, null,
+        {
+          type: file.type === 'photo' ? 'photo' : 'document',
+          media: file.fileId,
+          caption: `📎 Файл ${fileIdx + 1}/${files.length}: ${(file.fileName || 'Файл задания').replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&')}`,
+          reply_markup: keyboard.reply_markup
+        }
+      );
+      await ctx.answerCbQuery();
+    } catch (e) {
+      console.error('Не удалось показать файл:', e.message);
+      await ctx.answerCbQuery('Не удалось показать файл');
+    }
+  });
+
+  // 🌟 Назад — вернуть скриншот оплаты и исходную подпись
+  bot.action(/^order_back:(.+)$/, async (ctx) => {
+    const order = ordersDb.getOrder(ctx.match[1]);
+    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    const caption = buildExecutorOrderCaption(order);
+    const keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
+
+    try {
+      if (order.screenshotFileId) {
+        await ctx.telegram.editMessageMedia(
+          order.managerChatId, order.managerMessageId, null,
+          {
+            type: order.screenshotType === 'document' ? 'document' : 'photo',
+            media: order.screenshotFileId,
+            caption: caption,
+            parse_mode: 'Markdown',
+            reply_markup: keyboard.reply_markup
+          }
+        );
+      } else {
+        await ctx.telegram.editMessageText(
+          order.managerChatId, order.managerMessageId, null,
+          caption,
+          { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
+        );
+      }
+      await ctx.answerCbQuery();
+    } catch (e) {
+      await ctx.answerCbQuery('Не удалось обновить сообщение');
+    }
   });
 
   bot.on(['text', 'photo', 'document'], async (ctx, next) => {
@@ -466,158 +596,90 @@ function register(bot) {
     return;
   }
 
-    if (order && order.step === 'awaiting_payment') {
-      const work = catalog.getWork(order.workId);
-      const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
-      const displayName = (ctx.from.first_name || 'Пользователь').replace(/[_*[]()~`>#+-=|{}.!]/g, '');
-      const userLink = ctx.from.username 
-        ? `@${ctx.from.username}` 
-        : `[${displayName}](tg://user?id=${ctx.from.id})`;
-      
-      try {
-        const now = new Date();
-        const paidTime = now.toLocaleString('ru-RU');
-        let updatedText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
-        updatedText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
-        const commissionPercent = work.commission || 0;
-        const executorPrice = Math.round(order.finalPrice * (1 - commissionPercent / 100));
-        updatedText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
-        updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
-        updatedText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
-        updatedText += `\n⏰ *Создан:* ${order.createdAt}\n✅ *Оплачен:* ${paidTime}\n🟢 *Статус:* ОПЛАЧЕН`;
-        
-        // 🌟 Используем уникальный chatId из сессии, или генерируем новый, если его нет
-        const chatId = ctx.session.order.chatId || `order_${ctx.from.id}_${order.workId}_${Date.now()}`;
-        const executorKeyboard = createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `ao:${chatId}` }]]);
-        
-        try {
-          await ctx.telegram.editMessageText(targetChatId, order.managerMessageId, null, updatedText, { 
-            parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
-          });
-        } catch (e) {
-          // 🌟 Обработка ошибки миграции группы в супергруппу при обновлении сообщения
-          if (e.response && e.response.parameters && e.response.parameters.migrate_to_chat_id) {
-            const newChatId = e.response.parameters.migrate_to_chat_id;
-            console.log(`⚠️ Группа обновлена до супергруппы при обновлении сообщения. Новый chat_id: ${newChatId}`);
-            try {
-              await ctx.telegram.sendMessage(newChatId, updatedText, { 
-                parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
-              });
-              order.managerMessageId = null; // Сбрасываем ID, так как сообщение теперь в новом чате
-            } catch (retryError) {
-              console.log('Не удалось отправить сообщение в супергруппу:', retryError.message);
-            }
-          } else {
-            console.log('Не удалось обновить сообщение менеджера:', e.message);
-          }
-        }
-        
-        if (ctx.message.photo || ctx.message.document) {
-          const fileToSend = ctx.message.photo ? ctx.message.photo[ctx.message.photo.length - 1].file_id : ctx.message.document.file_id;
-          if (ctx.message.photo) await ctx.telegram.sendPhoto(targetChatId, fileToSend, { caption: '💳 Скриншот оплаты', reply_to_message_id: order.managerMessageId });
-          else await ctx.telegram.sendDocument(targetChatId, fileToSend, { caption: '💳 Скриншот оплаты', reply_to_message_id: order.managerMessageId });
-        }
-        
-        order.status = 'paid'; order.paidAt = paidTime; order.step = 'completed';
-        loyalty.addToTotal(ctx.from.id, ctx.from.username, order.finalPrice);
-        
-        const subject = catalog.getSubject(work.subjectId);
-        const course = catalog.getCourse(subject.courseId);
-        
-        const newOrder = orders.createOrder({
-            workId: work.id,
-            workTitle: work.title,
-            subjectName: subject.name,
-            courseName: course.name,
-            customerId: ctx.from.id,
-            customerUsername: ctx.from.username || null,
-            price: order.finalPrice,
-            commission: work.commission,
-            createdAt: paidTime,
-            managerMessageId: order.managerMessageId || null,
-            managerChatId: targetChatId
+  if (order && order.step === 'awaiting_payment') {
+    const work = catalog.getWork(order.workId);
+    const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
+    const displayName = (ctx.from.first_name || 'Пользователь').replace(/[_*[]()~`>#+-=|{}.!]/g, '');
+    const userLink = ctx.from.username ? `@${ctx.from.username}` : `[${displayName}](tg://user?id=${ctx.from.id})`;
+
+    try {
+      const now = new Date();
+      const paidTime = now.toLocaleString('ru-RU');
+      order.status = 'paid'; order.paidAt = paidTime; order.step = 'completed';
+      loyalty.addToTotal(ctx.from.id, ctx.from.username, order.finalPrice);
+
+      const subject = catalog.getSubject(work.subjectId);
+      const course = catalog.getCourse(subject.courseId);
+      const chatId = ctx.session.order.chatId || `order_${ctx.from.id}_${order.workId}_${Date.now()}`;
+
+      // 🌟 Сначала создаём заказ в БД, чтобы получить orderNumber
+      const newOrder = orders.createOrder({
+        workId: work.id,
+        workTitle: work.title,
+        subjectName: subject.name,
+        courseName: course.name,
+        customerId: ctx.from.id,
+        customerUsername: ctx.from.username || null,
+        price: order.finalPrice,
+        commission: work.commission,
+        createdAt: paidTime,
+        managerChatId: targetChatId,
+        // 🌟 Сохраняем данные для кнопок
+        detailsText: order.details.text || null,
+        taskFiles: order.details.files || [],
+        chatId: chatId
+      });
+      ctx.session.currentOrderId = newOrder.id;
+      logger.logOrderEvent('created', newOrder, ctx.from.id, ctx.from.username);
+
+      const commissionPercent = work.commission || 0;
+      const executorPrice = Math.round(order.finalPrice * (1 - commissionPercent / 100));
+
+      // 🌟 Подпись сообщения (информация о заказе)
+      const caption = buildExecutorOrderCaption(newOrder);
+
+      // 🌟 Клавиатура с кнопками просмотра
+      const keyboard = buildExecutorOrderKeyboard(newOrder, chatId);
+
+      // 🌟 Отправляем СООБЩЕНИЕ-СКРИНШОТ в чат исполнителей
+      let sentMsg;
+      const screenshotPhoto = ctx.message.photo ? ctx.message.photo[ctx.message.photo.length - 1].file_id : null;
+      const screenshotDoc = ctx.message.document ? ctx.message.document.file_id : null;
+
+      if (screenshotPhoto) {
+        sentMsg = await ctx.telegram.sendPhoto(targetChatId, screenshotPhoto, {
+          caption: caption,
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup
         });
-        
-        ctx.session.currentOrderId = newOrder.id;
-
-        // 🌟 Логируем создание заказа
-        logger.logOrderEvent('created', newOrder, ctx.from.id, ctx.from.username);
-
-        // 🌟 Отправляем исходные данные отдельным сообщением с указателем заказа
-        const customerDisplay = ctx.from.username ? '@' + ctx.from.username : `ID: ${ctx.from.id}`;
-        const dataHeader = 
-          `📋 *Исходные данные к заказу*\n` +
-          `🆔 *Номер заказа:* №${newOrder.orderNumber}\n` +
-          `👤 *Заказчик:* ${customerDisplay}\n` +
-          `📚 *Работа:* ${work.title}\n\n`;
-
-        // Отправляем текстовые данные, если они есть
-        if (order.details.text) {
-          const safeDetailsText = order.details.text.replace(/[`\\]/g, '');
-          await ctx.telegram.sendMessage(
-            targetChatId,
-            dataHeader + `📝 *Данные от пользователя:*\n\`${safeDetailsText}\``,
-            { parse_mode: 'Markdown', reply_to_message_id: order.managerMessageId }
-          );
-        }
-        
-        let updatedOrderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
-        updatedOrderText += `🆔 *Номер заказа:* №${newOrder.orderNumber}\n`;
-        updatedOrderText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
-        const commissionPercent2 = work.commission || 0;
-        const executorPrice2 = Math.round(order.finalPrice * (1 - commissionPercent2 / 100));
-        updatedOrderText += `💰 *Сумма:* ${order.finalPrice} ₽ (скидка ${order.discountPercent}%)\n`;
-        updatedOrderText += `👷 *Исполнитель получит:* ${executorPrice2} ₽ (комиссия ${commissionPercent2}%)\n`;
-        updatedOrderText += `💳 *Оплата на:* \`${order.paymentDetails}\`\n`;
-        updatedOrderText += `\n⏰ *Создан:* ${order.createdAt}\n✅ *Оплачен:* ${paidTime}\n🟢 *Статус:* ОПЛАЧЕН`;
-        
-        try {
-          await ctx.telegram.editMessageText(targetChatId, order.managerMessageId, null, updatedOrderText, { 
-            parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
-          });
-        } catch (e) {
-          // 🌟 Обработка ошибки миграции группы в супергруппу при обновлении сообщения
-          if (e.response && e.response.parameters && e.response.parameters.migrate_to_chat_id) {
-            const newChatId = e.response.parameters.migrate_to_chat_id;
-            console.log(`⚠️ Группа обновлена до супергруппы при обновлении сообщения. Новый chat_id: ${newChatId}`);
-            try {
-              await ctx.telegram.sendMessage(newChatId, updatedOrderText, { 
-                parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup 
-              });
-            } catch (retryError) {
-              console.log('Не удалось отправить сообщение в супергруппу:', retryError.message);
-            }
-          } else {
-            console.log('Не удалось обновить сообщение менеджера с номером:', e.message);
-          }
-        }
-        
-        const managerUrl = 'https://t.me/SmartDealsManager';
-        const waitingKeyboard = Markup.inlineKeyboard([[Markup.button.url('👨‍💼 Связаться с менеджером', managerUrl)]]);
-        
-        await ctx.reply(
-          `✅ *Заказ оформлен и ожидает назначения исполнителя.*\n\n🆔 *Номер заказа:* №${newOrder.orderNumber}\n\n📚 *Работа:* ${work.title}\n💰 *Сумма:* ${order.finalPrice} ₽\n\nМы уже ищем для вас лучшего специалиста. Если у вас есть срочные вопросы, нажмите кнопку ниже:`,
-          { parse_mode: 'Markdown', reply_markup: waitingKeyboard.reply_markup }
-        );
-      } catch (error) {
-        console.error('Ошибка обработки оплаты:', error);
-        // 🌟 Логируем ошибку
-        logger.logError(error, ctx);
-        // 🌟 Логируем как событие заказа с контекстом
-        logger.logOrderEvent('payment_error', {
-          workId: order ? order.workId : null,
-          workTitle: order ? (catalog.getWork(order.workId) || {}).title : null,
-          status: 'payment_failed'
-        }, ctx.from.id, ctx.from.username);
-        // 🌟 Уведомляем поддержку об ошибке
-        await logger.notifyErrorToSupport(error, ctx, bot, {
-          action: 'Обработка оплаты заказа',
-          workTitle: order ? (catalog.getWork(order.workId) || {}).title : null
+        orders.updateOrder(newOrder.id, { screenshotFileId: screenshotPhoto, screenshotType: 'photo', managerMessageId: sentMsg.message_id });
+      } else if (screenshotDoc) {
+        sentMsg = await ctx.telegram.sendDocument(targetChatId, screenshotDoc, {
+          caption: caption,
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup
         });
-        await ctx.reply('❌ Произошла ошибка. Напишите нам напрямую.');
+        orders.updateOrder(newOrder.id, { screenshotFileId: screenshotDoc, screenshotType: 'document', managerMessageId: sentMsg.message_id });
+      } else {
+        // Скриншота нет — отправляем обычное текстовое сообщение
+        sentMsg = await ctx.telegram.sendMessage(targetChatId, caption, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard.reply_markup
+        });
+        orders.updateOrder(newOrder.id, { managerMessageId: sentMsg.message_id });
       }
-      return;
+
+      await ctx.reply(
+        `✅ *Заказ оформлен и ожидает назначения исполнителя.*\n\n🆔 *Номер заказа:* №${newOrder.orderNumber}\n\n📚 *Работа:* ${work.title}\n💰 *Сумма:* ${order.finalPrice} ₽\n\nМы уже ищем для вас лучшего специалиста.`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      console.error('Ошибка обработки оплаты:', error);
+      logger.logError(error, ctx);
+      await ctx.reply('❌ Произошла ошибка. Напишите нам напрямую.');
     }
+    return;
+  }
 
     const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
     const userLink = ctx.from.username ? `@${ctx.from.username}` : `ID: ${ctx.from.id}`;
@@ -708,82 +770,153 @@ function register(bot) {
     if (!order) return ctx.answerCbQuery('❌ Заказ не найден.');
     const work = catalog.getWork(order.workId);
     const pricing = loyalty.calculatePrice(work.price, ctx.from.id);
-    const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
     const paymentDetails = process.env[work.paymentEnv] || 'Не указан';
-    const displayName = (ctx.from.first_name || 'Пользователь').replace(/[_*[]()~`>#+-=|{}.!]/g, '');
-    const userLink = ctx.from.username 
-      ? `@${ctx.from.username}` 
-      : `[${displayName}](tg://user?id=${ctx.from.id})`;
     const createdAt = new Date().toLocaleString('ru-RU');
 
-    let orderText = '🔔 *НОВЫЙ ЗАКАЗ!*\n\n';
-    orderText += `🆔 *Номер заказа:* будет присвоен после оплаты\n`;
-    orderText += `👤 *Заказчик:* ${userLink}\n📚 *Работа:* ${work.title}\n`;
-    const commissionPercent = work.commission || 0;
-    const executorPrice = Math.round(pricing.finalPrice * (1 - commissionPercent / 100));
-    orderText += `💰 *Сумма:* ${pricing.finalPrice} ₽ (скидка ${pricing.discountPercent}%)\n`;
-    orderText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
-    orderText += `💳 *Оплата на:* \`${paymentDetails}\`\n`;
-    orderText += `\n⏰ *Создан:* ${createdAt}\n🟡 *Статус:* ОЖИДАЕТ ОПЛАТЫ`;
+    // 🌟 Уведомление ТОЛЬКО в поддержку (не в чат исполнителей)
+    const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
+    const subject = catalog.getSubject(work.subjectId);
+    const course = catalog.getCourse(subject.courseId);
+    const userDisplay = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name || 'Пользователь';
 
-    const chatId = `order_${ctx.from.id}_${order.workId}`;
-    // 🌟 Делаем chatId уникальным, добавляя timestamp, чтобы избежать коллизий при повторных заказах
-    const uniqueChatId = `order_${ctx.from.id}_${order.workId}_${Date.now()}`;
-    ctx.session.order.chatId = uniqueChatId; // 🌟 Сохраняем в сессии для этапа оплаты
+    let supportText = `🔔 *НОВЫЙ ЗАКАЗ (ожидает оплаты)*\n\n`;
+    supportText += `🎓 *Курс:* ${course.name}\n`;
+    supportText += `📖 *Предмет:* ${subject.name}\n`;
+    supportText += `📚 *Работа:* ${work.title}\n`;
+    supportText += `👤 *Заказчик:* ${userDisplay}\n`;
+    supportText += `🆔 *ID:* \`${ctx.from.id}\`\n`;
+    supportText += `💰 *Сумма:* ${pricing.finalPrice} ₽\n`;
+    supportText += `⏰ *Создан:* ${createdAt}\n`;
+    supportText += `🟡 *Статус:* ОЖИДАЕТ ОПЛАТЫ`;
+
+    const supportButtons = [];
+    if (ctx.from.username) {
+      supportButtons.push([Markup.button.url('💬 Написать заказчику', `https://t.me/${ctx.from.username}`)]);
+    }
+    supportButtons.push([Markup.button.callback('✏️ Ответить заказчику', `support_reply:${ctx.from.id}`)]);
 
     try {
-      const sentMsg = await ctx.telegram.sendMessage(targetChatId, orderText, {
+      await ctx.telegram.sendMessage(supportChatId, supportText, {
         parse_mode: 'Markdown',
-        reply_markup: createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `ao:${uniqueChatId}` }]]).reply_markup
+        reply_markup: Markup.inlineKeyboard(supportButtons).reply_markup
       });
-      order.managerMessageId = sentMsg.message_id;
-      for (const file of order.details.files) {
-        if (file.type === 'photo') await ctx.telegram.sendPhoto(targetChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
-        else if (file.type === 'document') await ctx.telegram.sendDocument(targetChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
-      }
-      order.createdAt = createdAt; order.finalPrice = pricing.finalPrice; order.discountPercent = pricing.discountPercent; order.paymentDetails = paymentDetails; order.step = 'awaiting_payment';
-      await ctx.reply(`✅ *Заказ успешно оформлен!*\n\nДля завершения переведите **${pricing.finalPrice} ₽** на карту/телефон:\n\`${paymentDetails}\`\n\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и менеджер сразу приступит к работе! 🚀`, { parse_mode: 'Markdown' });
-      await ctx.answerCbQuery('✅ Заказ отправлен!');
-    } catch (error) {
-      // 🌟 Обработка ошибки миграции группы в супергруппу
-      if (error.response && error.response.parameters && error.response.parameters.migrate_to_chat_id) {
-        const newChatId = error.response.parameters.migrate_to_chat_id;
-        console.log(`⚠️ Группа обновлена до супергруппы. Новый chat_id: ${newChatId}`);
-        
-        // Сохраняем новый chat_id для будущей работы (можно добавить в .env или базу данных)
-        // Временно используем новый chat_id для повторной отправки
-        try {
-          const sentMsg = await ctx.telegram.sendMessage(newChatId, orderText, { 
-            parse_mode: 'Markdown', reply_markup: createInlineKeyboard([[{ text: '✅ Принять заказ', callback: `ao:${chatId}` }]]).reply_markup 
-          });
-          order.managerMessageId = sentMsg.message_id;
-          for (const file of order.details.files) {
-            if (file.type === 'photo') await ctx.telegram.sendPhoto(newChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
-            else if (file.type === 'document') await ctx.telegram.sendDocument(newChatId, file.fileId, { caption: `📎 ${file.fileName}`, reply_to_message_id: order.managerMessageId });
-          }
-          // 🌟 Отправляем текстовые данные отдельным сообщением (в супергруппу)
-          if (order.details.text) {
-            await ctx.telegram.sendMessage(newChatId, `📝 *Данные от пользователя:*\n\`${order.details.text}\``, {
-              parse_mode: 'Markdown',
-              reply_to_message_id: order.managerMessageId
-            });
-          }
-          order.createdAt = createdAt; order.finalPrice = pricing.finalPrice; order.discountPercent = pricing.discountPercent; order.paymentDetails = paymentDetails; order.step = 'awaiting_payment';
-          await ctx.reply(`✅ *Заказ успешно оформлен!*\\n\\nДля завершения переведите **${pricing.finalPrice} ₽** на карту/телефон:\\n\`${paymentDetails}\`\\n\\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и менеджер сразу приступит к работе! 🚀`, { parse_mode: 'Markdown' });
-          await ctx.answerCbQuery('✅ Заказ отправлен!');
-          return;
-        } catch (retryError) {
-          console.error('Ошибка отправки заказа в супергруппу:', retryError);
+    } catch (e) {
+      console.error('Не удалось отправить уведомление в поддержку:', e.message);
+    }
+
+    // 🌟 ВАЖНО: НЕ отправляем в чат исполнителей и НЕ создаём там сообщение.
+    // Сохраняем состояние для этапа оплаты.
+    const uniqueChatId = `order_${ctx.from.id}_${order.workId}_${Date.now()}`;
+    order.chatId = uniqueChatId;
+    order.createdAt = createdAt;
+    order.finalPrice = pricing.finalPrice;
+    order.discountPercent = pricing.discountPercent;
+    order.paymentDetails = paymentDetails;
+    order.step = 'awaiting_payment';
+    // managerMessageId пока не существует — он появится только после оплаты
+
+    await ctx.reply(
+      `✅ *Заказ успешно оформлен!*\n\nДля завершения переведите *${pricing.finalPrice} ₽* на карту/телефон:\n\`${paymentDetails}\`\n\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и заказ поступит в работу! 🚀`,
+      { parse_mode: 'Markdown' }
+    );
+    await ctx.answerCbQuery('✅ Заказ отправлен!');
+  });
+
+  // 🌟 Показать исходные данные (редактируем подпись скриншота)
+  bot.action(/^order_data:(.+)$/, async (ctx) => {
+    const order = orders.getOrder(ctx.match[1]);
+    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    const backKeyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
+    ]);
+    const dataCaption = `📝 *Исходные данные к заказу №${order.orderNumber}*\n\n${order.detailsText || 'Нет данных'}`.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+
+    try {
+      await ctx.telegram.editMessageCaption(
+        order.managerChatId, order.managerMessageId, null,
+        dataCaption,
+        { parse_mode: 'Markdown', reply_markup: backKeyboard.reply_markup }
+      );
+      await ctx.answerCbQuery();
+      } catch (e) {
+        if (e.message && e.message.includes('message is not modified')) {
+          // Ничего не меняем — сообщение уже показывает эти данные
+          return ctx.answerCbQuery();
         }
+        // Реальная ошибка (лимит подписи и т.д.) — отправляем отдельным сообщением
+        await ctx.telegram.sendMessage(order.managerChatId, dataCaption, { parse_mode: 'Markdown' });
+        await ctx.answerCbQuery('Данные отправлены отдельным сообщением');
       }
-      console.error('Ошибка отправки заказа:', error);
-      logger.logError(error, ctx); // 🌟
-      // 🌟 Уведомляем поддержку об ошибке
-      await logger.notifyErrorToSupport(error, ctx, bot, {
-        action: 'Отправка заказа в чат исполнителей',
-        workTitle: work ? work.title : null
-      });
-      await ctx.reply('❌ Произошла ошибка при отправке заказа.');
+  });
+
+  // 🌟 Показать файлы задания (заменяем скриншот файлом)
+  bot.action(/^order_files:(.+):(\d+)$/, async (ctx) => {
+    const order = orders.getOrder(ctx.match[1]);
+    const fileIdx = parseInt(ctx.match[2]);
+    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    const files = order.taskFiles || [];
+    if (files.length === 0) return ctx.answerCbQuery('📭 Файлов нет');
+    const file = files[fileIdx];
+
+    const navRow = [];
+    navRow.push(fileIdx > 0 ? Markup.button.callback('◀️', `order_files:${order.id}:${fileIdx - 1}`) : Markup.button.callback('·', 'noop'));
+    navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
+    navRow.push(fileIdx < files.length - 1 ? Markup.button.callback('▶️', `order_files:${order.id}:${fileIdx + 1}`) : Markup.button.callback('·', 'noop'));
+
+    const keyboard = Markup.inlineKeyboard([
+      navRow,
+      [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
+    ]);
+
+    try {
+      await ctx.telegram.editMessageMedia(
+        order.managerChatId, order.managerMessageId, null,
+        {
+          type: file.type === 'photo' ? 'photo' : 'document',
+          media: file.fileId,
+          caption: `📎 Файл ${fileIdx + 1}/${files.length}: ${(file.fileName || 'Файл задания').replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&')}`,
+          reply_markup: keyboard.reply_markup
+        }
+      );
+      await ctx.answerCbQuery();
+    } catch (e) {
+      console.error('Не удалось показать файл:', e.message);
+      await ctx.answerCbQuery('Не удалось показать файл');
+    }
+  });
+
+  // 🌟 Назад — вернуть скриншот оплаты и исходную подпись
+  bot.action(/^order_back:(.+)$/, async (ctx) => {
+    const order = orders.getOrder(ctx.match[1]);
+    if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    const caption = buildExecutorOrderCaption(order);
+    const keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
+
+    try {
+      if (order.screenshotFileId) {
+        await ctx.telegram.editMessageMedia(
+          order.managerChatId, order.managerMessageId, null,
+          {
+            type: order.screenshotType === 'document' ? 'document' : 'photo',
+            media: order.screenshotFileId,
+            caption: caption,
+            parse_mode: 'Markdown',
+            reply_markup: keyboard.reply_markup
+          }
+        );
+      } else {
+        await ctx.telegram.editMessageText(
+          order.managerChatId, order.managerMessageId, null,
+          caption,
+          { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
+        );
+      }
+      await ctx.answerCbQuery();
+    } catch (e) {
+      await ctx.answerCbQuery('Не удалось обновить сообщение');
     }
   });
 
@@ -831,21 +964,27 @@ const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
     
 // 🌟 Редактируем исходное сообщение в группе вместо отправки нового
 if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
-    // Предварительно обновляем данные в БД, чтобы buildGroupOrderText видел исполнителя
-    const executorUser = await ctx.telegram.getChat(executorUserId);
-    orders.updateOrder(activeOrder.id, {
-      executorId: executorUserId,
-      executorUsername: executorUser.username || null,
-      status: 'active',
-      acceptedAt: new Date().toLocaleString('ru-RU'),
-      chatId: chatId
-    });
-    
-    // Перечитываем заказ из БД для формирования текста
-    const updatedOrder = orders.getOrder(activeOrder.id);
-    const updatedText = buildGroupOrderText(updatedOrder, 'in_progress');
-    
-    try {
+const executorUser = await ctx.telegram.getChat(executorUserId);
+orders.updateOrder(activeOrder.id, {
+executorId: executorUserId,
+executorUsername: executorUser.username || null,
+status: 'active',
+acceptedAt: new Date().toLocaleString('ru-RU'),
+chatId: chatId
+});
+const updatedOrder = orders.getOrder(activeOrder.id);
+const updatedText = buildGroupOrderText(updatedOrder, 'in_progress');
+try {
+    // 🌟 Если сообщение — фото/документ (скриншот), используем editMessageCaption
+    if (updatedOrder.screenshotFileId) {
+        await ctx.telegram.editMessageCaption(
+            activeOrder.managerChatId,
+            activeOrder.managerMessageId,
+            null,
+            updatedText,
+            { parse_mode: 'Markdown' }
+        );
+    } else {
         await ctx.telegram.editMessageText(
             activeOrder.managerChatId,
             activeOrder.managerMessageId,
@@ -853,9 +992,10 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
             updatedText,
             { parse_mode: 'Markdown' }
         );
-    } catch (e) {
-        console.log('Не удалось обновить сообщение в группе:', e.message);
     }
+} catch (e) {
+    console.log('Не удалось обновить сообщение в группе:', e.message);
+}
 }
     
     activeChats.set(chatId, { chatId, customerUserId, executorUserId, workId, workTitle: work.title, orderId: activeOrder ? activeOrder.id : null, orderNumber: orderNumber, status: 'idle', createdAt: Date.now() });
@@ -919,22 +1059,32 @@ if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
             completedAt: new Date().toLocaleString('ru-RU')
         });
         
-        // 🌟 Обновляем сообщение в группе исполнителей
-        const updatedOrder = orders.getOrder(chatData.orderId);
-        if (updatedOrder && updatedOrder.managerMessageId && updatedOrder.managerChatId) {
-            const completedText = buildGroupOrderText(updatedOrder, 'completed');
-            try {
-                await ctx.telegram.editMessageText(
-                    updatedOrder.managerChatId,
-                    updatedOrder.managerMessageId,
-                    null,
-                    completedText,
-                    { parse_mode: 'Markdown' }
-                );
-            } catch (e) {
-                console.log('Не удалось обновить сообщение в группе при завершении:', e.message);
-            }
-        }
+     const updatedOrder = orders.getOrder(chatData.orderId);
+     if (updatedOrder && updatedOrder.managerMessageId && updatedOrder.managerChatId) {
+         const completedText = buildGroupOrderText(updatedOrder, 'completed');
+         try {
+             // 🌟 Если сообщение — фото/документ (скриншот), используем editMessageCaption
+             if (updatedOrder.screenshotFileId) {
+                 await ctx.telegram.editMessageCaption(
+                     updatedOrder.managerChatId,
+                     updatedOrder.managerMessageId,
+                     null,
+                     completedText,
+                     { parse_mode: 'Markdown' }
+                 );
+             } else {
+                 await ctx.telegram.editMessageText(
+                     updatedOrder.managerChatId,
+                     updatedOrder.managerMessageId,
+                     null,
+                     completedText,
+                     { parse_mode: 'Markdown' }
+                 );
+             }
+         } catch (e) {
+             console.log('Не удалось обновить сообщение в группе при завершении:', e.message);
+         }
+     }
     }
 
     await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'Markdown' });
