@@ -637,9 +637,15 @@ function register(bot) {
 
       // 🌟 Подпись сообщения (информация о заказе)
       const caption = buildExecutorOrderCaption(newOrder);
-
-      // 🌟 Клавиатура с кнопками просмотра
-      const keyboard = buildExecutorOrderKeyboard(newOrder, chatId);
+      // 🌟 Клавиатура с кнопками просмотра — передаём данные напрямую,
+      // не полагаясь на то, что вернул createOrder
+      const orderForKeyboard = {
+        id: newOrder.id,
+        orderNumber: newOrder.orderNumber,
+        detailsText: order.details.text || null,
+        taskFiles: order.details.files || []
+      };
+      const keyboard = buildExecutorOrderKeyboard(orderForKeyboard, chatId);
 
       // 🌟 Отправляем СООБЩЕНИЕ-СКРИНШОТ в чат исполнителей
       let sentMsg;
