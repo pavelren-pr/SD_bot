@@ -154,7 +154,9 @@ function createOrder(orderData) {
         fileType: orderData.fileType || null,
         isCustomOrder: orderData.isCustomOrder || false,
         managerMessageId: orderData.managerMessageId || null,
-        managerChatId: orderData.managerChatId || null
+        managerChatId: orderData.managerChatId || null,
+        detailsText: orderData.detailsText || null,
+        taskFiles: orderData.taskFiles || []
     };
     
     orders.push(newOrder);
