@@ -935,27 +935,37 @@ chatId: chatId
 });
 const updatedOrder = orders.getOrder(activeOrder.id);
 const updatedText = buildGroupOrderText(updatedOrder, 'in_progress');
+
+// 🌟 Клавиатура для статуса "В РАБОТЕ" — кнопки просмотра данных без "Принять заказ"
+const inProgressButtons = [];
+if (updatedOrder.detailsText || updatedOrder.description) {
+  inProgressButtons.push([Markup.button.callback('📝 Исходные данные', `order_data:${updatedOrder.id}`)]);
+}
+if ((updatedOrder.taskFiles && updatedOrder.taskFiles.length > 0) || updatedOrder.fileId) {
+  inProgressButtons.push([Markup.button.callback('📎 Файлы задания', `order_files:${updatedOrder.id}:0`)]);
+}
+const inProgressKeyboard = Markup.inlineKeyboard(inProgressButtons);
+
 try {
-    // 🌟 Если сообщение — фото/документ (скриншот), используем editMessageCaption
-    if (updatedOrder.screenshotFileId) {
-        await ctx.telegram.editMessageCaption(
-            activeOrder.managerChatId,
-            activeOrder.managerMessageId,
-            null,
-            updatedText,
-            { parse_mode: 'Markdown' }
-        );
-    } else {
-        await ctx.telegram.editMessageText(
-            activeOrder.managerChatId,
-            activeOrder.managerMessageId,
-            null,
-            updatedText,
-            { parse_mode: 'Markdown' }
-        );
-    }
+if (updatedOrder.screenshotFileId) {
+await ctx.telegram.editMessageCaption(
+activeOrder.managerChatId,
+activeOrder.managerMessageId,
+null,
+updatedText,
+{ parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
+);
+} else {
+await ctx.telegram.editMessageText(
+activeOrder.managerChatId,
+activeOrder.managerMessageId,
+null,
+updatedText,
+{ parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
+);
+}
 } catch (e) {
-    console.log('Не удалось обновить сообщение в группе:', e.message);
+console.log('Не удалось обновить сообщение в группе:', e.message);
 }
 }
     
