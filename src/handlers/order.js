@@ -209,110 +209,58 @@ function register(bot) {
       }
   });
 
-  // 🌟 Показать файлы задания (заменяем скриншот файлом)
+  // 🌟 Показать файлы задания (удаляем старое сообщение, отправляем файл с кнопками)
   bot.action(/^order_files:(.+):(\d+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     const fileIdx = parseInt(ctx.match[2]);
     if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
 
     let files = order.taskFiles || [];
-    // Fallback для индивидуальных заказов
     if (files.length === 0 && order.fileId) {
       files = [{ type: order.fileType || 'document', fileId: order.fileId, fileName: order.fileName || 'Файл задания' }];
     }
     if (files.length === 0) return ctx.answerCbQuery('📭 Файлов нет');
-    
+    if (fileIdx >= files.length) return ctx.answerCbQuery('❌ Файл не найден');
+
     const file = files[fileIdx];
-    if (!file) return ctx.answerCbQuery('❌ Файл не найден');
 
-    // Навигация между файлами
-    const navRow = [];
+    // Навигация между файлами (показываем только если файлов больше одного)
+    const keyboardRows = [];
     if (files.length > 1) {
-      navRow.push(
-        fileIdx > 0 
-          ? Markup.button.callback('◀️', `order_files:${order.id}:${fileIdx - 1}`) 
-          : Markup.button.callback('·', 'noop')
-      );
+      const navRow = [];
+      navRow.push(fileIdx > 0 ? Markup.button.callback('◀️', `order_files:${order.id}:${fileIdx - 1}`) : Markup.button.callback('·', 'noop'));
       navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
-      navRow.push(
-        fileIdx < files.length - 1 
-          ? Markup.button.callback('▶️', `order_files:${order.id}:${fileIdx + 1}`) 
-          : Markup.button.callback('·', 'noop')
-      );
+      navRow.push(fileIdx < files.length - 1 ? Markup.button.callback('▶️', `order_files:${order.id}:${fileIdx + 1}`) : Markup.button.callback('·', 'noop'));
+      keyboardRows.push(navRow);
     }
+    keyboardRows.push([Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]);
 
-    const backRow = [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)];
-    const keyboard = navRow.length > 0 
-      ? Markup.inlineKeyboard([navRow, backRow])
-      : Markup.inlineKeyboard([backRow]);
+    const keyboard = Markup.inlineKeyboard(keyboardRows);
+    const caption = `📎 Файл ${fileIdx + 1}/${files.length}: ${file.fileName || 'Файл задания'}`;
 
-    const fileCaption = `📎 Файл ${fileIdx + 1}/${files.length}: ${(file.fileName || 'Файл задания').replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&')}`;
-
-    // Пробуем editMessageMedia с разными вариантами
-    const mediaType = file.type === 'photo' ? 'photo' : 'document';
-    
     try {
-      // Вариант 1: editMessageMedia с caption
-      await ctx.telegram.editMessageMedia(
-        order.managerChatId, order.managerMessageId, null,
-        {
-          type: mediaType,
-          media: file.fileId,
-          caption: fileCaption,
-          parse_mode: 'Markdown',
-          reply_markup: keyboard.reply_markup
-        }
-      );
-      return ctx.answerCbQuery();
-    } catch (e) {
-      if (e.message && e.message.includes('message is not modified')) return ctx.answerCbQuery();
-      
-      // Вариант 2: editMessageMedia без caption
-      try {
-        await ctx.telegram.editMessageMedia(
-          order.managerChatId, order.managerMessageId, null,
-          {
-            type: mediaType,
-            media: file.fileId,
-            reply_markup: keyboard.reply_markup
-          }
-        );
-        return ctx.answerCbQuery();
-      } catch (e2) {
-        // Вариант 3: удаляем старое и отправляем новое сообщение с файлом
-        try {
-          try { 
-            await ctx.telegram.deleteMessage(order.managerChatId, order.managerMessageId); 
-          } catch (_) {}
-          
-          let sent;
-          if (mediaType === 'photo') {
-            sent = await ctx.telegram.sendPhoto(order.managerChatId, file.fileId, {
-              caption: fileCaption,
-              parse_mode: 'Markdown',
-              reply_markup: keyboard.reply_markup
-            });
-          } else {
-            sent = await ctx.telegram.sendDocument(order.managerChatId, file.fileId, {
-              caption: fileCaption,
-              parse_mode: 'Markdown',
-              reply_markup: keyboard.reply_markup
-            });
-          }
-          
-          // Обновляем ID сообщения в базе
-          ordersDb.updateOrder(order.id, { managerMessageId: sent.message_id });
-          return ctx.answerCbQuery();
-        } catch (e3) {
-          console.error('Критическая ошибка в order_files:', e3.message);
-          return ctx.answerCbQuery('Не удалось показать файл');
-        }
+      // Удаляем старое сообщение
+      try { await ctx.telegram.deleteMessage(order.managerChatId, order.managerMessageId); } catch (_) {}
+
+      // Отправляем новое с файлом и кнопками
+      let sentMsg;
+      if (file.type === 'photo') {
+        sentMsg = await ctx.telegram.sendPhoto(order.managerChatId, file.fileId, { caption, reply_markup: keyboard.reply_markup });
+      } else {
+        sentMsg = await ctx.telegram.sendDocument(order.managerChatId, file.fileId, { caption, reply_markup: keyboard.reply_markup });
       }
+
+      // Обновляем ID сообщения в БД (он изменился!)
+      orders.updateOrder(order.id, { managerMessageId: sentMsg.message_id });
+      await ctx.answerCbQuery();
+    } catch (e) {
+      console.error('Не удалось показать файл:', e.message);
+      await ctx.answerCbQuery('Не удалось показать файл');
     }
   });
 
 
-  // 🌟 Назад — вернуть сообщение заказа в актуальное состояние
+  // 🌟 Назад — вернуть исходное состояние заказа (удалить старое, отправить новое)
   bot.action(/^order_back:(.+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
@@ -335,53 +283,45 @@ function register(bot) {
       caption = buildGroupOrderText(order, 'completed');
       keyboard = Markup.inlineKeyboard([]);
     } else {
-      // Новый заказ — кнопка "Принять заказ" нужна
       caption = buildExecutorOrderCaption(order);
       keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
     }
 
-    const editOpts = { reply_markup: keyboard.reply_markup };
+    try {
+      // Удаляем старое сообщение
+      try { await ctx.telegram.deleteMessage(order.managerChatId, order.managerMessageId); } catch (_) {}
 
-    // Пробуем с Markdown, потом без
-    for (const useMarkdown of [true, false]) {
-      try {
-        if (useMarkdown) editOpts.parse_mode = 'Markdown';
-        else delete editOpts.parse_mode;
-
-        if (order.screenshotFileId) {
-          // Фото/документ — меняем только подпись (надёжнее чем editMessageMedia)
-          await ctx.telegram.editMessageCaption(
-            order.managerChatId, order.managerMessageId, null,
-            caption, editOpts
-          );
+      // Отправляем новое
+      let sentMsg;
+      if (order.screenshotFileId) {
+        if (order.screenshotType === 'document') {
+          sentMsg = await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
         } else {
-          await ctx.telegram.editMessageText(
-            order.managerChatId, order.managerMessageId, null,
-            caption, editOpts
-          );
+          sentMsg = await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
         }
-        return ctx.answerCbQuery();
-      } catch (e) {
-        if (e.message && e.message.includes('message is not modified')) {
-          return ctx.answerCbQuery();
-        }
-        if (!useMarkdown) {
-          // Обе попытки провалились — отправляем новое сообщение
-          try {
-            let sent;
-            if (order.screenshotFileId) {
-              sent = order.screenshotType === 'document'
-                ? await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, ...editOpts })
-                : await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, ...editOpts });
-            } else {
-              sent = await ctx.telegram.sendMessage(order.managerChatId, caption, editOpts);
-            }
-            ordersDb.updateOrder(order.id, { managerMessageId: sent.message_id });
-            return ctx.answerCbQuery();
-          } catch (e3) {
-            return ctx.answerCbQuery('Не удалось обновить сообщение');
+      } else {
+        sentMsg = await ctx.telegram.sendMessage(order.managerChatId, caption, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+      }
+
+      orders.updateOrder(order.id, { managerMessageId: sentMsg.message_id });
+      await ctx.answerCbQuery();
+    } catch (e) {
+      // Повтор без Markdown
+      try {
+        let sentMsg;
+        if (order.screenshotFileId) {
+          if (order.screenshotType === 'document') {
+            sentMsg = await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, reply_markup: keyboard.reply_markup });
+          } else {
+            sentMsg = await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, reply_markup: keyboard.reply_markup });
           }
+        } else {
+          sentMsg = await ctx.telegram.sendMessage(order.managerChatId, caption, { reply_markup: keyboard.reply_markup });
         }
+        orders.updateOrder(order.id, { managerMessageId: sentMsg.message_id });
+        await ctx.answerCbQuery();
+      } catch (e2) {
+        await ctx.answerCbQuery('Не удалось обновить сообщение');
       }
     }
   });
