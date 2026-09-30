@@ -251,80 +251,76 @@ function register(bot) {
   });
 
 
-  // 🌟 Назад — вернуть сообщение заказа в АКТУАЛЬНОЕ состояние (с учётом статуса)
+  // 🌟 Назад — вернуть сообщение заказа в актуальное состояние
   bot.action(/^order_back:(.+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
 
-    // 🌟 Определяем текст и клавиатуру по статусу заказа
+    // Определяем текст и клавиатуру по статусу
     let caption;
     let keyboard;
 
     if (order.status === 'active') {
-      // Заказ уже принят — "ЗАКАЗ В РАБОТЕ" без кнопки "Принять заказ"
       caption = buildGroupOrderText(order, 'in_progress');
-      keyboard = buildInProgressKeyboard(order);
+      const btns = [];
+      if (order.detailsText || order.description) {
+        btns.push([Markup.button.callback('📝 Исходные данные', `order_data:${order.id}`)]);
+      }
+      if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+        btns.push([Markup.button.callback('📎 Файлы задания', `order_files:${order.id}:0`)]);
+      }
+      keyboard = Markup.inlineKeyboard(btns);
     } else if (order.status === 'completed') {
-      // Заказ выполнен
       caption = buildGroupOrderText(order, 'completed');
       keyboard = Markup.inlineKeyboard([]);
     } else {
-      // Новый заказ — ожидаем принятия (кнопка "Принять заказ" нужна)
+      // Новый заказ — кнопка "Принять заказ" нужна
       caption = buildExecutorOrderCaption(order);
       keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
     }
 
-    // 🌟 Восстанавливаем сообщение (фото-скриншот)
-    if (order.screenshotFileId) {
+    const editOpts = { reply_markup: keyboard.reply_markup };
+
+    // Пробуем с Markdown, потом без
+    for (const useMarkdown of [true, false]) {
       try {
-        await ctx.telegram.editMessageMedia(
-          order.managerChatId, order.managerMessageId, null,
-          {
-            type: order.screenshotType === 'document' ? 'document' : 'photo',
-            media: order.screenshotFileId,
-            caption: caption,
-            parse_mode: 'Markdown',
-            reply_markup: keyboard.reply_markup
-          }
-        );
+        if (useMarkdown) editOpts.parse_mode = 'Markdown';
+        else delete editOpts.parse_mode;
+
+        if (order.screenshotFileId) {
+          // Фото/документ — меняем только подпись (надёжнее чем editMessageMedia)
+          await ctx.telegram.editMessageCaption(
+            order.managerChatId, order.managerMessageId, null,
+            caption, editOpts
+          );
+        } else {
+          await ctx.telegram.editMessageText(
+            order.managerChatId, order.managerMessageId, null,
+            caption, editOpts
+          );
+        }
         return ctx.answerCbQuery();
       } catch (e) {
-        if (e.message && e.message.includes('message is not modified')) return ctx.answerCbQuery();
-        // повтор без Markdown
-        try {
-          await ctx.telegram.editMessageMedia(
-            order.managerChatId, order.managerMessageId, null,
-            {
-              type: order.screenshotType === 'document' ? 'document' : 'photo',
-              media: order.screenshotFileId,
-              caption: caption,
-              reply_markup: keyboard.reply_markup
-            }
-          );
+        if (e.message && e.message.includes('message is not modified')) {
           return ctx.answerCbQuery();
-        } catch (e2) { /* идём к запасному варианту */ }
-      }
-    }
-
-    // 🌟 Восстанавливаем текстовое сообщение
-    try {
-      await ctx.telegram.editMessageText(
-        order.managerChatId, order.managerMessageId, null,
-        caption,
-        { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
-      );
-      return ctx.answerCbQuery();
-    } catch (e) {
-      if (e.message && e.message.includes('message is not modified')) return ctx.answerCbQuery();
-      try {
-        await ctx.telegram.editMessageText(
-          order.managerChatId, order.managerMessageId, null,
-          caption,
-          { reply_markup: keyboard.reply_markup }
-        );
-        return ctx.answerCbQuery();
-      } catch (e2) {
-        return ctx.answerCbQuery('Не удалось обновить сообщение');
+        }
+        if (!useMarkdown) {
+          // Обе попытки провалились — отправляем новое сообщение
+          try {
+            let sent;
+            if (order.screenshotFileId) {
+              sent = order.screenshotType === 'document'
+                ? await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, ...editOpts })
+                : await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, ...editOpts });
+            } else {
+              sent = await ctx.telegram.sendMessage(order.managerChatId, caption, editOpts);
+            }
+            ordersDb.updateOrder(order.id, { managerMessageId: sent.message_id });
+            return ctx.answerCbQuery();
+          } catch (e3) {
+            return ctx.answerCbQuery('Не удалось обновить сообщение');
+          }
+        }
       }
     }
   });
