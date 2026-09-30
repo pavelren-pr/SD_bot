@@ -238,103 +238,73 @@ function register(bot) {
     }
   });
 
+
   // 🌟 Назад — вернуть скриншот оплаты и исходную подпись
   bot.action(/^order_back:(.+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
 
     const caption = buildExecutorOrderCaption(order);
-    const keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
+    const chatIdForBtn = order.chatId || `order_${order.customerId}_${order.workId}`;
+    const keyboard = buildExecutorOrderKeyboard(order, chatIdForBtn);
 
-    // 🔍 Логируем для диагностики
-    console.log('[order_back] detailsText:', !!order.detailsText, 'description:', !!order.description);
-    console.log('[order_back] taskFiles:', order.taskFiles?.length, 'fileId:', !!order.fileId);
-    console.log('[order_back] screenshotFileId:', !!order.screenshotFileId);
-    console.log('[order_back] keyboard buttons:', keyboard.reply_markup.inline_keyboard.length);
-
-    // Пробуем 3 варианта восстановления сообщения
-    const attempts = [];
-
+    // 1) Если сообщение — фото/документ: возвращаем подпись через editMessageCaption (надёжно!)
     if (order.screenshotFileId) {
-      // Вариант 1: editMessageMedia с Markdown
-      attempts.push({
-        name: 'editMessageMedia + Markdown',
-        fn: () => ctx.telegram.editMessageMedia(
+      try {
+        await ctx.telegram.editMessageCaption(
           order.managerChatId, order.managerMessageId, null,
-          {
-            type: order.screenshotType === 'document' ? 'document' : 'photo',
-            media: order.screenshotFileId,
-            caption: caption,
-            parse_mode: 'Markdown',
-            reply_markup: keyboard.reply_markup
-          }
-        )
-      });
-      // Вариант 2: editMessageMedia без Markdown
-      attempts.push({
-        name: 'editMessageMedia без Markdown',
-        fn: () => ctx.telegram.editMessageMedia(
-          order.managerChatId, order.managerMessageId, null,
-          {
-            type: order.screenshotType === 'document' ? 'document' : 'photo',
-            media: order.screenshotFileId,
-            caption: caption,
-            reply_markup: keyboard.reply_markup
-          }
-        )
-      });
+          caption,
+          { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
+        );
+        return ctx.answerCbQuery();
+      } catch (e) {
+        if (e.message && e.message.includes('message is not modified')) return ctx.answerCbQuery();
+        // повтор без Markdown
+        try {
+          await ctx.telegram.editMessageCaption(
+            order.managerChatId, order.managerMessageId, null,
+            caption,
+            { reply_markup: keyboard.reply_markup }
+          );
+          return ctx.answerCbQuery();
+        } catch (e2) { /* идём к запасному варианту */ }
+      }
     }
 
-    // Вариант 3: editMessageText (если сообщение текстовое или media не сработала)
-    attempts.push({
-      name: 'editMessageText + Markdown',
-      fn: () => ctx.telegram.editMessageText(
+    // 2) Если сообщение текстовое
+    try {
+      await ctx.telegram.editMessageText(
         order.managerChatId, order.managerMessageId, null,
         caption,
         { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
-      )
-    });
-
-    // Вариант 4: editMessageText без Markdown
-    attempts.push({
-      name: 'editMessageText без Markdown',
-      fn: () => ctx.telegram.editMessageText(
-        order.managerChatId, order.managerMessageId, null,
-        caption,
-        { reply_markup: keyboard.reply_markup }
-      )
-    });
-
-    for (const attempt of attempts) {
+      );
+      return ctx.answerCbQuery();
+    } catch (e) {
+      if (e.message && e.message.includes('message is not modified')) return ctx.answerCbQuery();
       try {
-        await attempt.fn();
-        console.log(`[order_back] ✅ Успех: ${attempt.name}`);
+        await ctx.telegram.editMessageText(
+          order.managerChatId, order.managerMessageId, null,
+          caption,
+          { reply_markup: keyboard.reply_markup }
+        );
         return ctx.answerCbQuery();
-      } catch (e) {
-        console.log(`[order_back] ❌ ${attempt.name}: ${e.message}`);
-        // Если сообщение не изменилось — тоже считаем успехом
-        if (e.message && e.message.includes('message is not modified')) {
-          return ctx.answerCbQuery();
-        }
-      }
+      } catch (e2) { /* идём к запасному варианту */ }
     }
 
-    // Все варианты провалились — отправляем новое сообщение с кнопками
-    console.log('[order_back] ⚠️ Все попытки провалились, отправляю новое сообщение');
+    // 3) Запасной вариант: удалить старое и отправить новое с кнопками
     try {
+      try { await ctx.telegram.deleteMessage(order.managerChatId, order.managerMessageId); } catch (_) {}
+      let sent;
       if (order.screenshotFileId) {
-        await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, {
-          caption: caption,
-          reply_markup: keyboard.reply_markup
-        });
+        sent = order.screenshotType === 'document'
+          ? await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, reply_markup: keyboard.reply_markup })
+          : await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, reply_markup: keyboard.reply_markup });
       } else {
-        await ctx.telegram.sendMessage(order.managerChatId, caption, {
-          reply_markup: keyboard.reply_markup
-        });
+        sent = await ctx.telegram.sendMessage(order.managerChatId, caption, { reply_markup: keyboard.reply_markup });
       }
-      return ctx.answerCbQuery('Сообщение обновлено');
-    } catch (e2) {
-      console.error('[order_back] Критическая ошибка:', e2.message);
+      orders.updateOrder(order.id, { managerMessageId: sent.message_id });
+      return ctx.answerCbQuery();
+    } catch (e3) {
       return ctx.answerCbQuery('Не удалось обновить сообщение');
     }
   });
