@@ -130,6 +130,18 @@ function buildExecutorOrderKeyboard(order, chatId) {
   return Markup.inlineKeyboard(buttons);
 }
 
+// 🌟 Клавиатура для статуса "В РАБОТЕ" — БЕЗ кнопки "Принять заказ"
+function buildInProgressKeyboard(order) {
+  const buttons = [];
+  if (order.detailsText || order.description) {
+    buttons.push([Markup.button.callback('📝 Исходные данные', `order_data:${order.id}`)]);
+  }
+  if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+    buttons.push([Markup.button.callback('📎 Файлы задания', `order_files:${order.id}:0`)]);
+  }
+  return Markup.inlineKeyboard(buttons);
+}
+
 // 🌟 Функция экранирования специальных символов Markdown
 function escapeMarkdown(text) {
   if (!text) return '';
@@ -239,39 +251,62 @@ function register(bot) {
   });
 
 
-  // 🌟 Назад — вернуть скриншот оплаты и исходную подпись
+  // 🌟 Назад — вернуть сообщение заказа в АКТУАЛЬНОЕ состояние (с учётом статуса)
   bot.action(/^order_back:(.+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
 
-    const caption = buildExecutorOrderCaption(order);
-    const chatIdForBtn = order.chatId || `order_${order.customerId}_${order.workId}`;
-    const keyboard = buildExecutorOrderKeyboard(order, chatIdForBtn);
+    // 🌟 Определяем текст и клавиатуру по статусу заказа
+    let caption;
+    let keyboard;
 
-    // 1) Если сообщение — фото/документ: возвращаем подпись через editMessageCaption (надёжно!)
+    if (order.status === 'active') {
+      // Заказ уже принят — "ЗАКАЗ В РАБОТЕ" без кнопки "Принять заказ"
+      caption = buildGroupOrderText(order, 'in_progress');
+      keyboard = buildInProgressKeyboard(order);
+    } else if (order.status === 'completed') {
+      // Заказ выполнен
+      caption = buildGroupOrderText(order, 'completed');
+      keyboard = Markup.inlineKeyboard([]);
+    } else {
+      // Новый заказ — ожидаем принятия (кнопка "Принять заказ" нужна)
+      caption = buildExecutorOrderCaption(order);
+      keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
+    }
+
+    // 🌟 Восстанавливаем сообщение (фото-скриншот)
     if (order.screenshotFileId) {
       try {
-        await ctx.telegram.editMessageCaption(
+        await ctx.telegram.editMessageMedia(
           order.managerChatId, order.managerMessageId, null,
-          caption,
-          { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup }
+          {
+            type: order.screenshotType === 'document' ? 'document' : 'photo',
+            media: order.screenshotFileId,
+            caption: caption,
+            parse_mode: 'Markdown',
+            reply_markup: keyboard.reply_markup
+          }
         );
         return ctx.answerCbQuery();
       } catch (e) {
         if (e.message && e.message.includes('message is not modified')) return ctx.answerCbQuery();
         // повтор без Markdown
         try {
-          await ctx.telegram.editMessageCaption(
+          await ctx.telegram.editMessageMedia(
             order.managerChatId, order.managerMessageId, null,
-            caption,
-            { reply_markup: keyboard.reply_markup }
+            {
+              type: order.screenshotType === 'document' ? 'document' : 'photo',
+              media: order.screenshotFileId,
+              caption: caption,
+              reply_markup: keyboard.reply_markup
+            }
           );
           return ctx.answerCbQuery();
         } catch (e2) { /* идём к запасному варианту */ }
       }
     }
 
-    // 2) Если сообщение текстовое
+    // 🌟 Восстанавливаем текстовое сообщение
     try {
       await ctx.telegram.editMessageText(
         order.managerChatId, order.managerMessageId, null,
@@ -288,24 +323,9 @@ function register(bot) {
           { reply_markup: keyboard.reply_markup }
         );
         return ctx.answerCbQuery();
-      } catch (e2) { /* идём к запасному варианту */ }
-    }
-
-    // 3) Запасной вариант: удалить старое и отправить новое с кнопками
-    try {
-      try { await ctx.telegram.deleteMessage(order.managerChatId, order.managerMessageId); } catch (_) {}
-      let sent;
-      if (order.screenshotFileId) {
-        sent = order.screenshotType === 'document'
-          ? await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, reply_markup: keyboard.reply_markup })
-          : await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, reply_markup: keyboard.reply_markup });
-      } else {
-        sent = await ctx.telegram.sendMessage(order.managerChatId, caption, { reply_markup: keyboard.reply_markup });
+      } catch (e2) {
+        return ctx.answerCbQuery('Не удалось обновить сообщение');
       }
-      orders.updateOrder(order.id, { managerMessageId: sent.message_id });
-      return ctx.answerCbQuery();
-    } catch (e3) {
-      return ctx.answerCbQuery('Не удалось обновить сообщение');
     }
   });
 
@@ -936,36 +956,28 @@ chatId: chatId
 const updatedOrder = orders.getOrder(activeOrder.id);
 const updatedText = buildGroupOrderText(updatedOrder, 'in_progress');
 
-// 🌟 Клавиатура для статуса "В РАБОТЕ" — кнопки просмотра данных без "Принять заказ"
-const inProgressButtons = [];
-if (updatedOrder.detailsText || updatedOrder.description) {
-  inProgressButtons.push([Markup.button.callback('📝 Исходные данные', `order_data:${updatedOrder.id}`)]);
-}
-if ((updatedOrder.taskFiles && updatedOrder.taskFiles.length > 0) || updatedOrder.fileId) {
-  inProgressButtons.push([Markup.button.callback('📎 Файлы задания', `order_files:${updatedOrder.id}:0`)]);
-}
-const inProgressKeyboard = Markup.inlineKeyboard(inProgressButtons);
+const inProgressKeyboard = buildInProgressKeyboard(updatedOrder);   // 🌟 используем общую функцию
 
 try {
-if (updatedOrder.screenshotFileId) {
-await ctx.telegram.editMessageCaption(
-activeOrder.managerChatId,
-activeOrder.managerMessageId,
-null,
-updatedText,
-{ parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
-);
-} else {
-await ctx.telegram.editMessageText(
-activeOrder.managerChatId,
-activeOrder.managerMessageId,
-null,
-updatedText,
-{ parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
-);
-}
+  if (updatedOrder.screenshotFileId) {
+    await ctx.telegram.editMessageCaption(
+      activeOrder.managerChatId,
+      activeOrder.managerMessageId,
+      null,
+      updatedText,
+      { parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
+    );
+  } else {
+    await ctx.telegram.editMessageText(
+      activeOrder.managerChatId,
+      activeOrder.managerMessageId,
+      null,
+      updatedText,
+      { parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
+    );
+  }
 } catch (e) {
-console.log('Не удалось обновить сообщение в группе:', e.message);
+  console.log('Не удалось обновить сообщение в группе:', e.message);
 }
 }
     
