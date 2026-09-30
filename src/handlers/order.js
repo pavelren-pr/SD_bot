@@ -216,37 +216,98 @@ function register(bot) {
     if (!order || !order.managerMessageId) return ctx.answerCbQuery('❌ Заказ не найден');
 
     let files = order.taskFiles || [];
-    // Fallback для индивидуальных заказов, где файл хранится в другом поле
+    // Fallback для индивидуальных заказов
     if (files.length === 0 && order.fileId) {
       files = [{ type: order.fileType || 'document', fileId: order.fileId, fileName: order.fileName || 'Файл задания' }];
     }
     if (files.length === 0) return ctx.answerCbQuery('📭 Файлов нет');
+    
     const file = files[fileIdx];
+    if (!file) return ctx.answerCbQuery('❌ Файл не найден');
 
+    // Навигация между файлами
     const navRow = [];
-    navRow.push(fileIdx > 0 ? Markup.button.callback('◀️', `order_files:${order.id}:${fileIdx - 1}`) : Markup.button.callback('·', 'noop'));
-    navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
-    navRow.push(fileIdx < files.length - 1 ? Markup.button.callback('▶️', `order_files:${order.id}:${fileIdx + 1}`) : Markup.button.callback('·', 'noop'));
+    if (files.length > 1) {
+      navRow.push(
+        fileIdx > 0 
+          ? Markup.button.callback('◀️', `order_files:${order.id}:${fileIdx - 1}`) 
+          : Markup.button.callback('·', 'noop')
+      );
+      navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
+      navRow.push(
+        fileIdx < files.length - 1 
+          ? Markup.button.callback('▶️', `order_files:${order.id}:${fileIdx + 1}`) 
+          : Markup.button.callback('·', 'noop')
+      );
+    }
 
-    const keyboard = Markup.inlineKeyboard([
-      navRow,
-      [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
-    ]);
+    const backRow = [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)];
+    const keyboard = navRow.length > 0 
+      ? Markup.inlineKeyboard([navRow, backRow])
+      : Markup.inlineKeyboard([backRow]);
 
+    const fileCaption = `📎 Файл ${fileIdx + 1}/${files.length}: ${(file.fileName || 'Файл задания').replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&')}`;
+
+    // Пробуем editMessageMedia с разными вариантами
+    const mediaType = file.type === 'photo' ? 'photo' : 'document';
+    
     try {
+      // Вариант 1: editMessageMedia с caption
       await ctx.telegram.editMessageMedia(
         order.managerChatId, order.managerMessageId, null,
         {
-          type: file.type === 'photo' ? 'photo' : 'document',
+          type: mediaType,
           media: file.fileId,
-          caption: `📎 Файл ${fileIdx + 1}/${files.length}: ${(file.fileName || 'Файл задания').replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&')}`,
+          caption: fileCaption,
+          parse_mode: 'Markdown',
           reply_markup: keyboard.reply_markup
         }
       );
-      await ctx.answerCbQuery();
+      return ctx.answerCbQuery();
     } catch (e) {
-      console.error('Не удалось показать файл:', e.message);
-      await ctx.answerCbQuery('Не удалось показать файл');
+      if (e.message && e.message.includes('message is not modified')) return ctx.answerCbQuery();
+      
+      // Вариант 2: editMessageMedia без caption
+      try {
+        await ctx.telegram.editMessageMedia(
+          order.managerChatId, order.managerMessageId, null,
+          {
+            type: mediaType,
+            media: file.fileId,
+            reply_markup: keyboard.reply_markup
+          }
+        );
+        return ctx.answerCbQuery();
+      } catch (e2) {
+        // Вариант 3: удаляем старое и отправляем новое сообщение с файлом
+        try {
+          try { 
+            await ctx.telegram.deleteMessage(order.managerChatId, order.managerMessageId); 
+          } catch (_) {}
+          
+          let sent;
+          if (mediaType === 'photo') {
+            sent = await ctx.telegram.sendPhoto(order.managerChatId, file.fileId, {
+              caption: fileCaption,
+              parse_mode: 'Markdown',
+              reply_markup: keyboard.reply_markup
+            });
+          } else {
+            sent = await ctx.telegram.sendDocument(order.managerChatId, file.fileId, {
+              caption: fileCaption,
+              parse_mode: 'Markdown',
+              reply_markup: keyboard.reply_markup
+            });
+          }
+          
+          // Обновляем ID сообщения в базе
+          ordersDb.updateOrder(order.id, { managerMessageId: sent.message_id });
+          return ctx.answerCbQuery();
+        } catch (e3) {
+          console.error('Критическая ошибка в order_files:', e3.message);
+          return ctx.answerCbQuery('Не удалось показать файл');
+        }
+      }
     }
   });
 
