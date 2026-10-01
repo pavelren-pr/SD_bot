@@ -596,14 +596,15 @@ function register(bot) {
     // 💰 ФИНАНСЫ: Обработчики ввода данных
     // ==========================================
     
-    // --- ВВОД ДАТЫ ДЛЯ ПЕРИОДА "С ДАТЫ" ---
-    if (state.startsWith('finance_date:')) {
+    // ==========================================
+    // 💰 ФИНАНСЫ: ВВОД НАЧАЛЬНОЙ ДАТЫ (Шаг 1/2)
+    // ==========================================
+    if (state.startsWith('finance_date_start:')) {
       const section = state.split(':')[1]; // revenue, profit, expenses, executors
       
-      // Парсим дату в формате ДД.ММ.ГГГГ
       const dateMatch = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
       if (!dateMatch) {
-        return ctx.reply('❌ Неверный формат даты. Введите в формате `ДД.ММ.ГГГГ`, например: `01.10.2026`', { parse_mode: 'Markdown' });
+        return ctx.reply('❌ Неверный формат даты. Введите в формате `ДД.ММ.ГГГГ`, например: `01.09.2026`', { parse_mode: 'Markdown' });
       }
       
       const [, day, month, year] = dateMatch;
@@ -613,13 +614,61 @@ function register(bot) {
         return ctx.reply('❌ Некорректная дата. Проверьте правильность.');
       }
       
-      // Сохраняем дату в сессию
+      // Сохраняем начальную дату в сессию
       ctx.session.financeFromDate = fromDate;
+      ctx.session.adminState = `finance_date_end:${section}`;
+      
+      const sectionNames = {
+        revenue: 'Выручка',
+        profit: 'Прибыль',
+        expenses: 'Расход комиссии',
+        executors: 'Заработок исполнителей'
+      };
+      
+      await ctx.reply(
+        `✅ *Начальная дата:* ${fromDate.toLocaleDateString('ru-RU')}\n\n` +
+        `📝 *Шаг 2/2: Введите КОНЕЧНУЮ дату*\n` +
+        `Формат: \`ДД.ММ.ГГГГ\`\nНапример: \`30.09.2026\``,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:finance_${section}`)]])
+        }
+      );
+      return;
+    }
+    
+    // ==========================================
+    // 💰 ФИНАНСЫ: ВВОД КОНЕЧНОЙ ДАТЫ (Шаг 2/2)
+    // ==========================================
+    if (state.startsWith('finance_date_end:')) {
+      const section = state.split(':')[1];
+      
+      const dateMatch = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      if (!dateMatch) {
+        return ctx.reply('❌ Неверный формат даты. Введите в формате `ДД.ММ.ГГГГ`, например: `30.09.2026`', { parse_mode: 'Markdown' });
+      }
+      
+      const [, day, month, year] = dateMatch;
+      const toDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      
+      if (isNaN(toDate.getTime())) {
+        return ctx.reply('❌ Некорректная дата. Проверьте правильность.');
+      }
+      
+      const fromDate = ctx.session.financeFromDate;
+      
+      // Проверяем, что конечная дата не раньше начальной
+      if (toDate < fromDate) {
+        return ctx.reply('❌ Конечная дата не может быть раньше начальной. Попробуйте ещё раз.');
+      }
+      
+      // Очищаем сессию
+      ctx.session.financeFromDate = null;
       ctx.session.adminState = null;
       
       // Рассчитываем статистику
-      const stats = calculateFinancialStats('from_date', fromDate);
-      const periodLabel = getPeriodLabel('from_date', fromDate);
+      const stats = calculateFinancialStats('from_date', fromDate, toDate);
+      const periodLabel = getPeriodLabel('from_date', fromDate, toDate);
       
       let textMsg = '';
       let backAction = '';
@@ -4447,9 +4496,9 @@ const backKeyboard = Markup.inlineKeyboard([
       const period = action.split(':')[1];
       
       if (period === 'from_date') {
-        ctx.session.adminState = 'finance_date:revenue';
+        ctx.session.adminState = 'finance_date_start:revenue';
         await ctx.editMessageText(
-          `📆 *Выручка с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          `📆 *Выручка: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.09.2026\``,
           { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_revenue')]]) }
         );
         return;
@@ -4488,9 +4537,9 @@ const backKeyboard = Markup.inlineKeyboard([
       const period = action.split(':')[1];
       
       if (period === 'from_date') {
-        ctx.session.adminState = 'finance_date:expenses';
+        ctx.session.adminState = 'finance_date_start:expenses';
         await ctx.editMessageText(
-          `📆 *Расход комиссии с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          `📆 *Расход комиссии: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.10.2026\``,
           { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_expenses')]]) }
         );
         return;
@@ -4538,9 +4587,9 @@ const backKeyboard = Markup.inlineKeyboard([
       const period = action.split(':')[1];
       
       if (period === 'from_date') {
-        ctx.session.adminState = 'finance_date:executors';
+        ctx.session.adminState = 'finance_date_start:executors';
         await ctx.editMessageText(
-          `📆 *Заработок исполнителей с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          `📆 *Заработок исполнителей: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.10.2026\``,
           { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_executors')]]) }
         );
         return;
@@ -4593,9 +4642,9 @@ const backKeyboard = Markup.inlineKeyboard([
       const period = action.split(':')[1];
       
       if (period === 'from_date') {
-        ctx.session.adminState = 'finance_date:profit';
+        ctx.session.adminState = 'finance_date_start:profit';
         await ctx.editMessageText(
-          `📆 *Прибыль с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          `📆 *Прибыль: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.10.2026\``,
           { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_profit')]]) }
         );
         return;
