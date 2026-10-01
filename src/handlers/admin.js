@@ -464,23 +464,32 @@ function calculateFinancialStats(period, fromDate = null) {
   const allOrders = ordersDb.getAllOrders().filter(o => !o._meta);
   const orders = filterOrdersByPeriod(allOrders, period, fromDate);
   
-  let revenue = 0;          // Выручка (сумма finalPrice)
-  let executorEarnings = 0; // Заработок исполнителей (сумма executorPrice)
-  let totalCommission = 0;  // Общая комиссия (до скидок)
-  let discountCoverage = 0; // Покрытие скидок из комиссии
+  let revenue = 0;
+  let executorEarnings = 0;
+  let totalCommission = 0;
+  let discountCoverage = 0;
   let ordersCount = 0;
   
   orders.forEach(order => {
-    // Учитываем только оплаченные/выполненные заказы
+    // Учитываем только оплаченные/выполненные/активные заказы
     if (!['paid', 'completed', 'active'].includes(order.status)) return;
     
     ordersCount++;
     
+    // 🌟 Базовая цена: для старых заказов используем price
     const basePrice = order.basePrice || order.price || 0;
+    
+    // 🌟 Итоговая цена для заказчика: для старых заказов = price
     const finalPrice = order.finalPrice || order.price || 0;
-    const executorPrice = order.executorPrice || 0;
+    
+    // 🌟 Комиссия в процентах
     const commissionPercent = order.commissionPercent || order.commission || 0;
+    
+    // 🌟 Покрытие скидок из комиссии (для старых заказов = 0)
     const commissionExpense = order.commissionExpense || 0;
+    
+    // 🌟 Выплата исполнителю: для старых заказов вычисляем из price и commission
+    const executorPrice = order.executorPrice || Math.round(basePrice * (1 - commissionPercent / 100));
     
     revenue += finalPrice;
     executorEarnings += executorPrice;
