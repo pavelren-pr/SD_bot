@@ -2,6 +2,9 @@ const ExcelJS = require('exceljs');
 const ordersDb = require('../data/orders');
 const loyalty = require('../data/loyalty');
 const logger = require('./logger');
+const storage = require('./storage');
+const finance = require('../data/finance');
+const catalog = require('../data/catalog');
 
 // 🌟 Функция удаления эмодзи из строк
 function removeEmojis(str) {
@@ -19,89 +22,161 @@ async function generateExcelExport(includeLogs = false) {
   // ЛИСТ 1: ЗАКАЗЫ
   // ==========================================
   const ordersSheet = workbook.addWorksheet('Заказы');
-  ordersSheet.columns = [
-      // Основная информация
-      { header: '№ Заказа', key: 'orderNumber', width: 12 },
-      { header: 'Тип', key: 'orderType', width: 14 },
-      { header: 'Работа', key: 'workTitle', width: 35 },
-      { header: 'Предмет', key: 'subjectName', width: 22 },
-      { header: 'Курс', key: 'courseName', width: 12 },
-      // Участники
-      { header: 'ID Заказчика', key: 'customerId', width: 15 },
-      { header: 'Заказчик', key: 'customerUsername', width: 20 },
-      { header: 'ID Исполнителя', key: 'executorId', width: 15 },
-      { header: 'Исполнитель', key: 'executorUsername', width: 20 },
-      // Финансы: цены
-      { header: 'Базовая цена (₽)', key: 'basePrice', width: 16 },
-      { header: 'Итог к оплате (₽)', key: 'finalPrice', width: 16 },
-      { header: 'Выплата исполнителю (₽)', key: 'executorPrice', width: 20 },
-      // Финансы: скидки и комиссия
-      { header: 'Скидка (%)', key: 'discountPercent', width: 12 },
-      { header: 'Сумма скидки (₽)', key: 'discountAmount', width: 16 },
-      { header: 'Комиссия (%)', key: 'commissionPercent', width: 13 },
-      { header: 'Покрытие скидок (₽)', key: 'commissionExpense', width: 18 },
-      // Финансы: константа и совладельцы
-      { header: 'Константа (%)', key: 'expenseConstantPercent', width: 14 },
-      { header: 'Сумма константы (₽)', key: 'expenseConstantAmount', width: 18 },
-      { header: 'Совладельцы', key: 'coOwnerSharesText', width: 40 },
-      // Статус и даты
-      { header: 'Статус', key: 'status', width: 16 },
-      { header: 'Дата создания', key: 'createdAt', width: 20 },
-      { header: 'Дата принятия', key: 'acceptedAt', width: 20 },
-      { header: 'Дата выполнения', key: 'completedAt', width: 20 },
-      // Дополнительно
-      { header: 'Описание', key: 'description', width: 40 },
-  ];
-
-  ordersSheet.getRow(1).font = { bold: true };
-  ordersSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
 
   const allOrders = ordersDb.getAllOrders().filter(o => !o._meta);
 
-  // 🌟 Подготавливаем данные для экспорта
-  const cleanedOrders = allOrders.map(order => {
-      // 🌟 Сериализуем доли совладельцев в читаемую строку
-      let coOwnerSharesText = '';
-      if (order.coOwnerShares && Array.isArray(order.coOwnerShares) && order.coOwnerShares.length > 0) {
-          coOwnerSharesText = order.coOwnerShares.map(co => {
-              const name = co.username ? `@${co.username}` : `ID:${co.id}`;
-              return `${name}: ${co.percent}% (${co.amount}₽)`;
-          }).join('; ');
-      }
+  // 🌟 Собираем всех уникальных совладельцев (текущие + из снимков заказов)
+  const coOwnersMap = new Map();
 
-      return {
-          // Основная информация
-          orderNumber: order.orderNumber || '',
-          orderType: order.isCustomOrder ? 'Индивидуальный' : 'Обычный',
-          workTitle: removeEmojis(order.workTitle || ''),
-          subjectName: removeEmojis(order.subjectName || ''),
-          courseName: removeEmojis(order.courseName || ''),
-          // Участники
-          customerId: order.customerId || '',
-          customerUsername: order.customerUsername ? `@${order.customerUsername}` : '',
-          executorId: order.executorId || '',
-          executorUsername: order.executorUsername ? `@${order.executorUsername}` : '',
-          // Финансы: цены (с фоллбеком для старых заказов)
-          basePrice: order.basePrice || order.price || 0,
-          finalPrice: order.finalPrice || order.price || 0,
-          executorPrice: order.executorPrice || Math.round((order.basePrice || order.price || 0) * (1 - (order.commissionPercent || order.commission || 0) / 100)),
-          // Финансы: скидки и комиссия
-          discountPercent: order.discountPercent || 0,
-          discountAmount: order.discountAmount || 0,
-          commissionPercent: order.commissionPercent || order.commission || 0,
-          commissionExpense: order.commissionExpense || 0,
-          // Финансы: константа и совладельцы
-          expenseConstantPercent: order.expenseConstantPercent || 0,
-          expenseConstantAmount: order.expenseConstantAmount || 0,
-          coOwnerSharesText: coOwnerSharesText,
-          // Статус и даты
-          status: order.status || '',
-          createdAt: order.createdAt || '',
-          acceptedAt: order.acceptedAt || '',
-          completedAt: order.completedAt || '',
-          // Дополнительно
-          description: order.description || '',
-      };
+  // Из текущих настроек
+  finance.getCoOwners().forEach(co => {
+    coOwnersMap.set(String(co.id), {
+      id: String(co.id),
+      username: co.username,
+      percent: co.percent
+    });
+  });
+
+  // Из снимков заказов (на случай, если совладелец был удалён)
+  allOrders.forEach(order => {
+    if (order.coOwnerShares && Array.isArray(order.coOwnerShares)) {
+      order.coOwnerShares.forEach(co => {
+        if (!coOwnersMap.has(String(co.id))) {
+          coOwnersMap.set(String(co.id), {
+            id: String(co.id),
+            username: co.username,
+            percent: co.percent
+          });
+        }
+      });
+    }
+  });
+
+  const coOwnersList = Array.from(coOwnersMap.values());
+
+  // 🌟 Формируем столбцы
+  const columns = [
+    // Основная информация
+    { header: '№ Заказа', key: 'orderNumber', width: 12 },
+    { header: 'Тип', key: 'orderType', width: 14 },
+    { header: 'Работа', key: 'workTitle', width: 35 },
+    { header: 'Предмет', key: 'subjectName', width: 22 },
+    { header: 'Курс', key: 'courseName', width: 12 },
+    // Участники
+    { header: 'ID Заказчика', key: 'customerId', width: 15 },
+    { header: 'Заказчик', key: 'customerUsername', width: 20 },
+    { header: 'ID Исполнителя', key: 'executorId', width: 15 },
+    { header: 'Исполнитель', key: 'executorUsername', width: 20 },
+    // Финансы: цены
+    { header: 'Базовая цена (₽)', key: 'basePrice', width: 16 },
+    { header: 'Итог к оплате (₽)', key: 'finalPrice', width: 16 },
+    { header: 'Выплата исполнителю (₽)', key: 'executorPrice', width: 20 },
+    // Финансы: скидки и комиссия
+    { header: 'Скидка (%)', key: 'discountPercent', width: 12 },
+    { header: 'Сумма скидки (₽)', key: 'discountAmount', width: 16 },
+    { header: 'Комиссия (%)', key: 'commissionPercent', width: 13 },
+    { header: 'Покрытие скидок (₽)', key: 'commissionExpense', width: 18 },
+    // Финансы: константа
+    { header: 'Константа (%)', key: 'expenseConstantPercent', width: 14 },
+    { header: 'Сумма константы (₽)', key: 'expenseConstantAmount', width: 18 },
+  ];
+
+  // 🌟 Динамические столбцы для каждого совладельца
+  coOwnersList.forEach(co => {
+    const name = co.username ? `@${co.username}` : `ID:${co.id}`;
+    columns.push({
+      header: `${name} (${co.percent}%)`,
+      key: `coOwner_${co.id}`,
+      width: 22
+    });
+  });
+
+  // Дополнительные столбцы
+  columns.push(
+    { header: 'Счёт оплаты', key: 'paymentAccount', width: 25 },
+    { header: 'Исходные данные', key: 'sourceData', width: 50 },
+    { header: 'Статус', key: 'status', width: 16 },
+    { header: 'Дата создания', key: 'createdAt', width: 20 },
+    { header: 'Дата принятия', key: 'acceptedAt', width: 20 },
+    { header: 'Дата выполнения', key: 'completedAt', width: 20 },
+    { header: 'Описание', key: 'description', width: 40 },
+  );
+
+  ordersSheet.columns = columns;
+  ordersSheet.getRow(1).font = { bold: true };
+  ordersSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD3D3D3' } };
+
+  // 🌟 Подготавливаем данные для экспорта
+const cleanedOrders = allOrders.map(order => {
+  // 🌟 Получаем счёт оплаты из каталога работ
+  let paymentAccount = '';
+  try {
+    if (order.workId) {
+      const work = catalog.getWork(order.workId);
+      if (work && work.paymentEnv) {
+        paymentAccount = process.env[work.paymentEnv] || '';
+      }
+    }
+  } catch (e) {
+    paymentAccount = '';
+  }
+
+  // Получаем исходные данные из хранилища
+  let sourceData = '';
+    try {
+      const orderData = storage.readOrderData(order.orderNumber);
+      if (orderData) {
+        sourceData = orderData.detailsText || orderData.description || '';
+      }
+    } catch (e) {
+      sourceData = '';
+    }
+
+    const row = {
+      // Основная информация
+      orderNumber: order.orderNumber || '',
+      orderType: order.isCustomOrder ? 'Индивидуальный' : 'Обычный',
+      workTitle: removeEmojis(order.workTitle || ''),
+      subjectName: removeEmojis(order.subjectName || ''),
+      courseName: removeEmojis(order.courseName || ''),
+      // Участники
+      customerId: order.customerId || '',
+      customerUsername: order.customerUsername ? `@${order.customerUsername}` : '',
+      executorId: order.executorId || '',
+      executorUsername: order.executorUsername ? `@${order.executorUsername}` : '',
+      // Финансы: цены
+      basePrice: order.basePrice || order.price || 0,
+      finalPrice: order.finalPrice || order.price || 0,
+      executorPrice: order.executorPrice || Math.round((order.basePrice || order.price || 0) * (1 - (order.commissionPercent || order.commission || 0) / 100)),
+      // Финансы: скидки и комиссия
+      discountPercent: order.discountPercent || 0,
+      discountAmount: order.discountAmount || 0,
+      commissionPercent: order.commissionPercent || order.commission || 0,
+      commissionExpense: order.commissionExpense || 0,
+      // Финансы: константа
+      expenseConstantPercent: order.expenseConstantPercent || 0,
+      expenseConstantAmount: order.expenseConstantAmount || 0,
+      // Дополнительные
+      paymentAccount: paymentAccount,
+      sourceData: sourceData,
+      status: order.status || '',
+      createdAt: order.createdAt || '',
+      acceptedAt: order.acceptedAt || '',
+      completedAt: order.completedAt || '',
+      description: order.description || '',
+    };
+
+    // 🌟 Заполняем доли совладельцев для каждого столбца
+    coOwnersList.forEach(co => {
+      let amount = 0;
+      if (order.coOwnerShares && Array.isArray(order.coOwnerShares)) {
+        const share = order.coOwnerShares.find(s => String(s.id) === String(co.id));
+        if (share) amount = share.amount || 0;
+      }
+      row[`coOwner_${co.id}`] = amount;
+    });
+
+    return row;
   });
 
   ordersSheet.addRows(cleanedOrders);
