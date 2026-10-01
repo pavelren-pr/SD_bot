@@ -475,60 +475,55 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
   // 🌟 Агрегация из снимков заказов
   let expenseConstantAmount = 0;
   let coOwnersTotal = 0;
-  const coOwnersMap = {}; // Агрегируем по совладельцам: { id: { id, username, percent, share } }
+  const coOwnersMap = {};
   
   orders.forEach(order => {
-    // Учитываем только оплаченные/выполненные/активные заказы
     if (!['paid', 'completed', 'active'].includes(order.status)) return;
     
     ordersCount++;
     
-    // 🌟 Базовая цена: для старых заказов используем price
     const basePrice = order.basePrice || order.price || 0;
-    
-    // 🌟 Итоговая цена для заказчика: для старых заказов = price
     const finalPrice = order.finalPrice || order.price || 0;
-    
-    // 🌟 Комиссия в процентах
     const commissionPercent = order.commissionPercent || order.commission || 0;
-    
-    // 🌟 Покрытие скидок из комиссии (для старых заказов = 0)
-    const commissionExpense = order.commissionExpense || 0;
-    
-    // 🌟 Выплата исполнителю: для старых заказов вычисляем из price и commission
     const executorPrice = order.executorPrice || Math.round(basePrice * (1 - commissionPercent / 100));
     
     revenue += finalPrice;
     executorEarnings += executorPrice;
     totalCommission += Math.round(basePrice * commissionPercent / 100);
-    discountCoverage += commissionExpense;
     
-    // 🌟 СОБИРАЕМ ФИНАНСОВЫЙ СНИМОК ИЗ ЗАКАЗА
-    if (order.coOwnerShares && order.coOwnerShares.length > 0) {
-      // В заказе есть снимок — используем его
+    // 🌟 ОПРЕДЕЛЯЕМ: есть ли у заказа финансовый снимок?
+    // Снимок есть, если присутствует поле expenseConstantPercent (добавлено в новой версии)
+    const hasSnapshot = (order.expenseConstantPercent !== undefined && order.expenseConstantPercent !== null);
+    
+    if (hasSnapshot) {
+      // 🌟 ИСПОЛЬЗУЕМ ДАННЫЕ ИЗ СНИМКА ЗАКАЗА
+      discountCoverage += order.commissionExpense || 0;
       expenseConstantAmount += order.expenseConstantAmount || 0;
       
-      order.coOwnerShares.forEach(co => {
-        if (!coOwnersMap[co.id]) {
-          coOwnersMap[co.id] = {
-            id: co.id,
-            username: co.username,
-            percent: co.percent,
-            share: 0
-          };
-        }
-        coOwnersMap[co.id].share += co.amount || 0;
-      });
+      if (order.coOwnerShares && Array.isArray(order.coOwnerShares)) {
+        order.coOwnerShares.forEach(co => {
+          if (!coOwnersMap[co.id]) {
+            coOwnersMap[co.id] = {
+              id: co.id,
+              username: co.username,
+              percent: co.percent,
+              share: 0
+            };
+          }
+          coOwnersMap[co.id].share += co.amount || 0;
+        });
+      }
     } else {
-      // 🌟 ФОЛЛБЕК для старых заказов — считаем динамически
+      // 🌟 ФОЛЛБЕК для старых заказов (без снимка) — считаем динамически
       const orderCommission = Math.round(basePrice * commissionPercent / 100);
       const orderActualCommission = Math.max(0, finalPrice - executorPrice);
       const orderCommissionExpense = Math.max(0, orderCommission - orderActualCommission);
       
+      discountCoverage += orderCommissionExpense;
+      
       const currentConstant = finance.getExpenseConstant();
       const orderConstantBase = Math.round(orderCommission * currentConstant / 100);
       expenseConstantAmount += orderConstantBase - orderCommissionExpense;
-      discountCoverage += orderCommissionExpense;
       
       const coOwners = finance.getCoOwners();
       coOwners.forEach(co => {
@@ -548,16 +543,16 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
   // Чистая комиссия (после покрытия скидок)
   const netCommission = totalCommission - discountCoverage;
   
-  // Текущая константа (для отображения в админке)
+  // Текущая константа (для отображения)
   const expenseConstant = finance.getExpenseConstant();
   
-  // Итоговые доли совладельцев из агрегированной карты
+  // Итоговые доли совладельцев
   const coOwnersShares = Object.values(coOwnersMap);
   coOwnersShares.forEach(co => {
     coOwnersTotal += co.share;
   });
   
-  // Чистая прибыль = чистая комиссия - совладельцы - константа
+  // Чистая прибыль
   const netProfit = netCommission - coOwnersTotal - expenseConstantAmount;
   
   return {
