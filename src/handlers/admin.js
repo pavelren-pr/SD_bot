@@ -472,6 +472,11 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
   let discountCoverage = 0;
   let ordersCount = 0;
   
+  // 🌟 Агрегация из снимков заказов
+  let expenseConstantAmount = 0;
+  let coOwnersTotal = 0;
+  const coOwnersMap = {}; // Агрегируем по совладельцам: { id: { id, username, percent, share } }
+  
   orders.forEach(order => {
     // Учитываем только оплаченные/выполненные/активные заказы
     if (!['paid', 'completed', 'active'].includes(order.status)) return;
@@ -497,22 +502,54 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
     executorEarnings += executorPrice;
     totalCommission += Math.round(basePrice * commissionPercent / 100);
     discountCoverage += commissionExpense;
+    
+    // 🌟 СОБИРАЕМ ФИНАНСОВЫЙ СНИМОК ИЗ ЗАКАЗА
+    if (order.coOwnerShares && order.coOwnerShares.length > 0) {
+      // В заказе есть снимок — используем его
+      expenseConstantAmount += order.expenseConstantAmount || 0;
+      
+      order.coOwnerShares.forEach(co => {
+        if (!coOwnersMap[co.id]) {
+          coOwnersMap[co.id] = {
+            id: co.id,
+            username: co.username,
+            percent: co.percent,
+            share: 0
+          };
+        }
+        coOwnersMap[co.id].share += co.amount || 0;
+      });
+    } else {
+      // 🌟 ФОЛЛБЕК для старых заказов — считаем динамически
+      const orderCommission = Math.round(basePrice * commissionPercent / 100);
+      const currentConstant = finance.getExpenseConstant();
+      expenseConstantAmount += Math.round(orderCommission * currentConstant / 100);
+      
+      const coOwners = finance.getCoOwners();
+      coOwners.forEach(co => {
+        if (!coOwnersMap[co.id]) {
+          coOwnersMap[co.id] = {
+            id: co.id,
+            username: co.username,
+            percent: co.percent,
+            share: 0
+          };
+        }
+        coOwnersMap[co.id].share += Math.round(orderCommission * co.percent / 100);
+      });
+    }
   });
   
   // Чистая комиссия (после покрытия скидок)
   const netCommission = totalCommission - discountCoverage;
   
-  // Константа расходов
+  // Текущая константа (для отображения в админке)
   const expenseConstant = finance.getExpenseConstant();
-  const expenseConstantAmount = Math.round(totalCommission * expenseConstant / 100);
   
-  // Совладельцы
-  const coOwners = finance.getCoOwners();
-  let coOwnersTotal = 0;
-  const coOwnersShares = coOwners.map(co => {
-    const share = Math.round(totalCommission * co.percent / 100);
-    coOwnersTotal += share;
-    return { ...co, share };
+  // Итоговые доли совладельцев из агрегированной карты
+  const coOwnersShares = Object.values(coOwnersMap);
+  coOwnersShares.forEach(co => {
+    coOwnersTotal += co.share;
   });
   
   // Чистая прибыль = чистая комиссия - совладельцы - константа

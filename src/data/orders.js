@@ -151,6 +151,11 @@ function createOrder(orderData) {
       discountAmount: orderData.discountAmount || 0,
       commissionPercent: orderData.commissionPercent || orderData.commission || 0,
       commissionExpense: orderData.commissionExpense || 0,      // Покрытие из пула комиссии
+      
+      // 🌟 ФИНАНСОВЫЙ СНИМОК (совладельцы и константа на момент заказа)
+      expenseConstantPercent: orderData.expenseConstantPercent || 0,
+      expenseConstantAmount: orderData.expenseConstantAmount || 0,
+      coOwnerShares: orderData.coOwnerShares || [],
 
       // 📜 LEGACY ПОЛЯ (Для совместимости со старыми заказами и админкой)
       price: orderData.finalPrice || orderData.price || 0,

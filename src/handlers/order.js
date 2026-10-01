@@ -5,6 +5,7 @@ const ordersDb = require('../data/orders');
 const { createInlineKeyboard } = require('../utils/keyboard');
 const logger = require('../utils/logger');
 const storage = require('../utils/storage');
+const finance = require('../data/finance');
 const { Markup } = require('telegraf');
 
 const mediaBuffer = {};
@@ -720,6 +721,19 @@ function register(bot) {
       // Если скидка превысила комиссию, разница покрывается из накопленной комиссии
       const commissionExpense = Math.max(0, executorPrice - finalPrice);
 
+            // 🌟 ФИНАНСОВЫЙ СНИМОК (совладельцы и константа на момент заказа)
+      const totalCommission = Math.round(basePrice * commissionPercent / 100);
+      const expenseConstantPercent = finance.getExpenseConstant();
+      const expenseConstantAmount = Math.round(totalCommission * expenseConstantPercent / 100);
+      
+      const coOwners = finance.getCoOwners();
+      const coOwnerShares = coOwners.map(co => ({
+        id: co.id,
+        username: co.username,
+        percent: co.percent,
+        amount: Math.round(totalCommission * co.percent / 100)
+      }));
+
       // 🌟 Сначала создаём заказ в БД, чтобы получить orderNumber
       const newOrder = orders.createOrder({
         workId: work.id,
@@ -736,6 +750,10 @@ function register(bot) {
         discountAmount: discountAmount,
         commissionPercent: commissionPercent,
         commissionExpense: commissionExpense,
+        // 🌟 ФИНАНСОВЫЙ СНИМОК
+        expenseConstantPercent: expenseConstantPercent,
+        expenseConstantAmount: expenseConstantAmount,
+        coOwnerShares: coOwnerShares,
         // 📜 LEGACY ПОЛЯ (для совместимости)
         price: finalPrice,
         commission: commissionPercent,

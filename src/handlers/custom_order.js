@@ -4,6 +4,7 @@ const loyalty = require('../data/loyalty');
 const { createInlineKeyboard } = require('../utils/keyboard');
 const storage = require('../utils/storage');
 const { Markup } = require('telegraf');
+const finance = require('../data/finance');
 
 // Хранилище состояний для индивидуальных заказов
 const customOrderStates = new Map();
@@ -644,6 +645,19 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   // Комиссия, которую фактически заберёт платформа (может быть 0, если скидка всё съела)
   const commissionAmount = Math.max(0, finalPrice - executorPrice);
 
+  // 🌟 ФИНАНСОВЫЙ СНИМОК (совладельцы и константа на момент заказа)
+  const totalCommission = Math.round(basePrice * commission / 100);
+  const expenseConstantPercent = finance.getExpenseConstant();
+  const expenseConstantAmount = Math.round(totalCommission * expenseConstantPercent / 100);
+  
+  const coOwners = finance.getCoOwners();
+  const coOwnerShares = coOwners.map(co => ({
+    id: co.id,
+    username: co.username,
+    percent: co.percent,
+    amount: Math.round(totalCommission * co.percent / 100)
+  }));
+
   // Обновляем заказ в orders.json
   const updatedOrder = orders.updateOrder(orderRecord.id, {
     // 🌟 НОВЫЕ ПОЛЯ (финансовая модель)
@@ -654,6 +668,10 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     discountAmount: discountAmount,
     commissionPercent: commission,
     commissionExpense: commissionExpense,
+    // 🌟 ФИНАНСОВЫЙ СНИМОК
+    expenseConstantPercent: expenseConstantPercent,
+    expenseConstantAmount: expenseConstantAmount,
+    coOwnerShares: coOwnerShares,
     // 📜 LEGACY ПОЛЯ (для совместимости)
     price: executorPrice,
     commission: commission,
