@@ -3768,12 +3768,6 @@ const backKeyboard = Markup.inlineKeyboard([
           const usernameDisplay = m.username !== 'N/A' ? '@' + escapeMarkdown(m.username) : 'без username';
           text += `  • ${m.id} (${usernameDisplay})\n`;
         });
-
-        // 🌟 ИСПРАВЛЕНИЕ: Экранируем спецсимволы в username, чтобы бот не падал
-        executors.forEach(e => {
-          const usernameDisplay = e.username !== 'N/A' ? '@' + escapeMarkdown(e.username) : 'без username';
-          text += `  • ${e.id} (${usernameDisplay})\n`;
-        });
         
         // 🌟 НОВАЯ КЛАВИАТУРА: две отдельные кнопки вместо одной
         const keyboard = Markup.inlineKeyboard([
