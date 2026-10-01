@@ -121,16 +121,22 @@ const cleanedOrders = allOrders.map(order => {
     paymentAccount = '';
   }
 
-  // Получаем исходные данные из хранилища
+  // 🌟 Получаем исходные данные из нескольких источников
   let sourceData = '';
-    try {
-      const orderData = storage.readOrderData(order.orderNumber);
-      if (orderData) {
-        sourceData = orderData.detailsText || orderData.description || '';
-      }
-    } catch (e) {
-      sourceData = '';
+  try {
+    // Источник 1: Хранилище данных (файлы)
+    const orderData = storage.readOrderData(order.orderNumber);
+    if (orderData) {
+      sourceData = orderData.detailsText || orderData.description || '';
     }
+  } catch (e) {
+    // Хранилище недоступно
+  }
+  
+  // Источник 2: Если из хранилища пусто — берём из самого заказа
+  if (!sourceData) {
+    sourceData = order.detailsText || order.description || '';
+  }
 
     const row = {
       // Основная информация
