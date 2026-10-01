@@ -9,6 +9,7 @@ const { generateExcelExport, generateLogsExport } = require('../utils/export');
 const logger = require('../utils/logger');
 const storage = require('../utils/storage');
 const backup = require('../utils/backup');
+const finance = require('../data/finance');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 
 // 🌟 Получение доступных переменных окружения из .env
@@ -106,7 +107,8 @@ function getAdminMainMenu() {
     [Markup.button.callback('🗂 Управление каталогом', 'admin:catalog')],
     [Markup.button.callback('📦 Управление заказами', 'admin:orders')],
     [Markup.button.callback('👥 База заказчиков', 'admin:customers')],
-    [Markup.button.callback('🏅 Назначить исполнителя/админа', 'admin:set_user_rank')],
+    [Markup.button.callback('💰 Финансы', 'admin:finance')],
+    [Markup.button.callback('🏅 Управление персоналом', 'admin:set_user_rank')],
     [Markup.button.callback('📊 Экспорт данных', 'admin:export_excel')],
     [Markup.button.callback('💾 Хранилище данных', 'admin:storage')],
     [Markup.button.callback('🔙 Назад', 'profile:back')]
@@ -410,6 +412,148 @@ async function showAdminMenu(ctx) {
 }
 
 // ==========================================
+// 💰 ФИНАНСЫ: Расчёт статистики и клавиатуры
+// ==========================================
+
+// 🌟 Парсинг даты из строки "01.10.2026, 14:30:00" или "01.10.2026 14:30:00"
+function parseRussianDate(dateStr) {
+  if (!dateStr) return null;
+  try {
+    // Пробуем стандартный парсинг
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+    
+    // Парсим формат "ДД.ММ.ГГГГ, ЧЧ:ММ:СС"
+    const match = dateStr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    if (match) {
+      const [, day, month, year] = match;
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 🌟 Фильтрация заказов по периоду
+function filterOrdersByPeriod(orders, period, fromDate = null) {
+  const now = new Date();
+  
+  if (period === 'all') return orders;
+  
+  if (period === 'month') {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return orders.filter(o => {
+      const date = parseRussianDate(o.createdAt);
+      return date && date >= startOfMonth;
+    });
+  }
+  
+  if (period === 'from_date' && fromDate) {
+    return orders.filter(o => {
+      const date = parseRussianDate(o.createdAt);
+      return date && date >= fromDate;
+    });
+  }
+  
+  return orders;
+}
+
+// 🌟 Расчёт финансовой статистики
+function calculateFinancialStats(period, fromDate = null) {
+  const allOrders = ordersDb.getAllOrders().filter(o => !o._meta);
+  const orders = filterOrdersByPeriod(allOrders, period, fromDate);
+  
+  let revenue = 0;          // Выручка (сумма finalPrice)
+  let executorEarnings = 0; // Заработок исполнителей (сумма executorPrice)
+  let totalCommission = 0;  // Общая комиссия (до скидок)
+  let discountCoverage = 0; // Покрытие скидок из комиссии
+  let ordersCount = 0;
+  
+  orders.forEach(order => {
+    // Учитываем только оплаченные/выполненные заказы
+    if (!['paid', 'completed', 'active'].includes(order.status)) return;
+    
+    ordersCount++;
+    
+    const basePrice = order.basePrice || order.price || 0;
+    const finalPrice = order.finalPrice || order.price || 0;
+    const executorPrice = order.executorPrice || 0;
+    const commissionPercent = order.commissionPercent || order.commission || 0;
+    const commissionExpense = order.commissionExpense || 0;
+    
+    revenue += finalPrice;
+    executorEarnings += executorPrice;
+    totalCommission += Math.round(basePrice * commissionPercent / 100);
+    discountCoverage += commissionExpense;
+  });
+  
+  // Чистая комиссия (после покрытия скидок)
+  const netCommission = totalCommission - discountCoverage;
+  
+  // Константа расходов
+  const expenseConstant = finance.getExpenseConstant();
+  const expenseConstantAmount = Math.round(totalCommission * expenseConstant / 100);
+  
+  // Совладельцы
+  const coOwners = finance.getCoOwners();
+  let coOwnersTotal = 0;
+  const coOwnersShares = coOwners.map(co => {
+    const share = Math.round(totalCommission * co.percent / 100);
+    coOwnersTotal += share;
+    return { ...co, share };
+  });
+  
+  // Чистая прибыль = чистая комиссия - совладельцы - константа
+  const netProfit = netCommission - coOwnersTotal - expenseConstantAmount;
+  
+  return {
+    ordersCount,
+    revenue,
+    executorEarnings,
+    totalCommission,
+    discountCoverage,
+    netCommission,
+    expenseConstant,
+    expenseConstantAmount,
+    coOwnersShares,
+    coOwnersTotal,
+    netProfit
+  };
+}
+
+// 🌟 Клавиатура главного меню финансов
+function getFinanceMenu() {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('📊 Выручка', 'admin:finance_revenue')],
+    [Markup.button.callback('📈 Прибыль', 'admin:finance_profit')],
+    [Markup.button.callback('📉 Расход комиссии', 'admin:finance_expenses')],
+    [Markup.button.callback('👷 Заработок исполнителей', 'admin:finance_executors')],
+    [Markup.button.callback('⬅️ Назад', 'admin:main')]
+  ]);
+}
+
+// 🌟 Клавиатура выбора периода
+function getPeriodMenu(prefix) {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback('📅 Текущий месяц', `admin:${prefix}:month`)],
+    [Markup.button.callback('📆 С даты по сегодня', `admin:${prefix}:from_date`)],
+    [Markup.button.callback('♾️ За всё время', `admin:${prefix}:all`)],
+    [Markup.button.callback('⬅️ Назад к финансам', 'admin:finance')]
+  ]);
+}
+
+// 🌟 Описание периода для текста
+function getPeriodLabel(period, fromDate = null) {
+  switch (period) {
+    case 'month': return '📅 Текущий месяц';
+    case 'from_date': return fromDate ? `📆 С ${fromDate.toLocaleDateString('ru-RU')}` : '📆 С даты';
+    case 'all': return '♾️ За всё время';
+    default: return '';
+  }
+}
+
+// ==========================================
 // Регистрация обработчиков
 // ==========================================
 function register(bot) {
@@ -433,6 +577,312 @@ function register(bot) {
     
     const state = ctx.session.adminState;
     const text = ctx.message.text;
+
+    // ==========================================
+    // 💰 ФИНАНСЫ: Обработчики ввода данных
+    // ==========================================
+    
+    // --- ВВОД ДАТЫ ДЛЯ ПЕРИОДА "С ДАТЫ" ---
+    if (state.startsWith('finance_date:')) {
+      const section = state.split(':')[1]; // revenue, profit, expenses, executors
+      
+      // Парсим дату в формате ДД.ММ.ГГГГ
+      const dateMatch = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      if (!dateMatch) {
+        return ctx.reply('❌ Неверный формат даты. Введите в формате `ДД.ММ.ГГГГ`, например: `01.10.2026`', { parse_mode: 'Markdown' });
+      }
+      
+      const [, day, month, year] = dateMatch;
+      const fromDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      
+      if (isNaN(fromDate.getTime())) {
+        return ctx.reply('❌ Некорректная дата. Проверьте правильность.');
+      }
+      
+      // Сохраняем дату в сессию
+      ctx.session.financeFromDate = fromDate;
+      ctx.session.adminState = null;
+      
+      // Рассчитываем статистику
+      const stats = calculateFinancialStats('from_date', fromDate);
+      const periodLabel = getPeriodLabel('from_date', fromDate);
+      
+      let textMsg = '';
+      let backAction = '';
+      
+      if (section === 'revenue') {
+        backAction = 'finance_revenue';
+        textMsg = `📊 *Выручка*\n${periodLabel}\n\n`;
+        textMsg += `💰 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📦 *Заказов:* ${stats.ordersCount}\n`;
+        textMsg += `👷 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📈 *Валовая комиссия:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+      } else if (section === 'profit') {
+        backAction = 'finance_profit';
+        textMsg = `📈 *Прибыль*\n${periodLabel}\n\n`;
+        textMsg += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `🎁 *Покрытие скидок:* -${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+        
+        if (stats.coOwnersShares.length > 0) {
+          textMsg += `👥 *Совладельцы:*\n`;
+          stats.coOwnersShares.forEach(co => {
+            const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
+            textMsg += `  • ${name}: ${co.percent}% = ${co.share.toLocaleString('ru-RU')} ₽\n`;
+          });
+          textMsg += `  *Итого совладельцам:* ${stats.coOwnersTotal.toLocaleString('ru-RU')} ₽\n\n`;
+        }
+        
+        textMsg += `⚙️ *Константа расходов (${stats.expenseConstant}%):* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+        textMsg += `💰 *Чистая прибыль:* ${stats.netProfit.toLocaleString('ru-RU')} ₽\n`;
+        if (stats.netProfit < 0) textMsg += `\n⚠️ *Внимание: убыток!*`;
+      } else if (section === 'expenses') {
+        backAction = 'finance_expenses';
+        textMsg = `📉 *Расход комиссии*\n${periodLabel}\n\n`;
+        textMsg += `🎁 *Покрытие скидок:* ${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+        textMsg += `⚙️ *Константа расходов:* ${stats.expenseConstant}%\n`;
+        textMsg += `💸 *Сумма константы:* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+        const remainingFund = stats.expenseConstantAmount - stats.discountCoverage;
+        if (remainingFund >= 0) {
+          textMsg += `✅ *Остаток фонда:* ${remainingFund.toLocaleString('ru-RU')} ₽`;
+        } else {
+          textMsg += `⚠️ *Перерасход фонда:* ${Math.abs(remainingFund).toLocaleString('ru-RU')} ₽`;
+        }
+      } else if (section === 'executors') {
+        backAction = 'finance_executors';
+        textMsg = `👷 *Заработок исполнителей*\n${periodLabel}\n\n`;
+        textMsg += `💰 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📦 *Заказов:* ${stats.ordersCount}\n`;
+        textMsg += `💵 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+        const avgEarning = stats.ordersCount > 0 ? Math.round(stats.executorEarnings / stats.ordersCount) : 0;
+        textMsg += `📊 *Средний заработок за заказ:* ${avgEarning.toLocaleString('ru-RU')} ₽\n`;
+      }
+      
+      await ctx.reply(textMsg, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔄 Другой период', `admin:${backAction}`)],
+          [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+        ])
+      });
+      return;
+    }
+    
+    // --- ДОБАВЛЕНИЕ СОВЛАДЕЛЬЦА: Шаг 1 - ID ---
+    if (state === 'finance_add_coowner_id') {
+      if (isNaN(text)) {
+        return ctx.reply('❌ ID должен быть числом. Введите Telegram ID совладельца.');
+      }
+      
+      ctx.session.tempCoOwnerId = text.trim();
+      ctx.session.adminState = 'finance_add_coowner_username';
+      
+      await ctx.reply(
+        `👤 *ID принят:* \`${text}\`\n\n📝 *Шаг 2/3: Введите username совладельца (без @):*`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+      );
+      return;
+    }
+    
+    // --- ДОБАВЛЕНИЕ СОВЛАДЕЛЬЦА: Шаг 2 - Username ---
+    if (state === 'finance_add_coowner_username') {
+      const username = text.replace('@', '').trim();
+      if (!username) {
+        return ctx.reply('❌ Username не может быть пустым.');
+      }
+      
+      ctx.session.tempCoOwnerUsername = username;
+      ctx.session.adminState = 'finance_add_coowner_percent';
+      
+      await ctx.reply(
+        `📛 *Username принят:* @${username}\n\n📊 *Шаг 3/3: Введите процент дохода совладельца (0-100):*\n\n_Процент считается от изначальной комиссии до вычета скидок._`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+      );
+      return;
+    }
+    
+    // --- ДОБАВЛЕНИЕ СОВЛАДЕЛЬЦА: Шаг 3 - Процент ---
+    if (state === 'finance_add_coowner_percent') {
+      if (isNaN(text)) {
+        return ctx.reply('❌ Процент должен быть числом.');
+      }
+      
+      const percent = parseInt(text);
+      if (percent < 0 || percent > 100) {
+        return ctx.reply('❌ Процент должен быть в диапазоне от 0 до 100.');
+      }
+      
+      const coOwnerId = ctx.session.tempCoOwnerId;
+      const coOwnerUsername = ctx.session.tempCoOwnerUsername;
+      
+      // Проверяем, не превысит ли сумма процентов 100%
+      const currentTotal = finance.getTotalCoOwnersPercent();
+      const expenseConstant = finance.getExpenseConstant();
+      const newTotal = currentTotal + percent + expenseConstant;
+      
+      if (newTotal > 100) {
+        return ctx.reply(
+          `❌ *Превышен лимит 100%!*\n\n` +
+          `Текущая сумма: ${currentTotal}% (совладельцы) + ${expenseConstant}% (константа) = ${currentTotal + expenseConstant}%\n` +
+          `Новый процент: ${percent}%\n` +
+          `Итого будет: ${newTotal}%\n\n` +
+          `Уменьшите процент или удалите других совладельцев.`
+        );
+      }
+      
+      // Добавляем совладельца
+      finance.addCoOwner(coOwnerId, coOwnerUsername, percent);
+      
+      // Логируем действие
+      logger.logAdminAction('coowner_added', {
+        coOwnerId: coOwnerId,
+        username: coOwnerUsername,
+        percent: percent
+      }, ctx);
+      
+      // Очищаем временные данные
+      ctx.session.tempCoOwnerId = null;
+      ctx.session.tempCoOwnerUsername = null;
+      ctx.session.adminState = null;
+      
+      await ctx.reply(
+        `✅ *Совладелец добавлен!*\n\n` +
+        `👤 *ID:* \`${coOwnerId}\`\n` +
+        `📛 *Username:* @${coOwnerUsername}\n` +
+        `📊 *Процент:* ${percent}%`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('👥 К списку совладельцев', 'admin:finance_coowners')],
+            [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+          ])
+        }
+      );
+      return;
+    }
+    
+    // --- ИЗМЕНЕНИЕ ПРОЦЕНТА СОВЛАДЕЛЬЦА ---
+    if (state.startsWith('finance_edit_coowner_percent:')) {
+      const coOwnerId = state.split(':')[1];
+      
+      if (isNaN(text)) {
+        return ctx.reply('❌ Процент должен быть числом.');
+      }
+      
+      const newPercent = parseInt(text);
+      if (newPercent < 0 || newPercent > 100) {
+        return ctx.reply('❌ Процент должен быть в диапазоне от 0 до 100.');
+      }
+      
+      // Проверяем лимит
+      const coOwners = finance.getCoOwners();
+      const coOwner = coOwners.find(c => String(c.id) === String(coOwnerId));
+      if (!coOwner) {
+        ctx.session.adminState = null;
+        return ctx.reply('❌ Совладелец не найден.');
+      }
+      
+      const otherCoOwnersTotal = coOwners
+        .filter(c => String(c.id) !== String(coOwnerId))
+        .reduce((sum, c) => sum + (c.percent || 0), 0);
+      
+      const expenseConstant = finance.getExpenseConstant();
+      const newTotal = otherCoOwnersTotal + newPercent + expenseConstant;
+      
+      if (newTotal > 100) {
+        return ctx.reply(
+          `❌ *Превышен лимит 100%!*\n\n` +
+          `Другие совладельцы: ${otherCoOwnersTotal}%\n` +
+          `Константа: ${expenseConstant}%\n` +
+          `Новый процент: ${newPercent}%\n` +
+          `Итого будет: ${newTotal}%`
+        );
+      }
+      
+      const oldPercent = coOwner.percent;
+      finance.updateCoOwnerPercent(coOwnerId, newPercent);
+      
+      logger.logAdminAction('coowner_percent_changed', {
+        coOwnerId: coOwnerId,
+        oldPercent: oldPercent,
+        newPercent: newPercent
+      }, ctx);
+      
+      ctx.session.adminState = null;
+      
+      const name = coOwner.username ? `@${coOwner.username}` : coOwnerId;
+      await ctx.reply(
+        `✅ *Процент совладельца изменён!*\n\n` +
+        `👤 *Совладелец:* ${name}\n` +
+        `📊 *Было:* ${oldPercent}%\n` +
+        `📊 *Стало:* ${newPercent}%`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('👥 К списку совладельцев', 'admin:finance_coowners')],
+            [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+          ])
+        }
+      );
+      return;
+    }
+    
+    // --- ИЗМЕНЕНИЕ КОНСТАНТЫ РАСХОДОВ ---
+    if (state === 'finance_edit_constant') {
+      if (isNaN(text)) {
+        return ctx.reply('❌ Константа должна быть числом.');
+      }
+      
+      const newConstant = parseInt(text);
+      if (newConstant < 0 || newConstant > 100) {
+        return ctx.reply('❌ Константа должна быть в диапазоне от 0 до 100.');
+      }
+      
+      // Проверяем лимит с совладельцами
+      const coOwnersTotal = finance.getTotalCoOwnersPercent();
+      const newTotal = coOwnersTotal + newConstant;
+      
+      if (newTotal > 100) {
+        return ctx.reply(
+          `❌ *Превышен лимит 100%!*\n\n` +
+          `Совладельцы: ${coOwnersTotal}%\n` +
+          `Новая константа: ${newConstant}%\n` +
+          `Итого будет: ${newTotal}%\n\n` +
+          `Уменьшите значение или удалите совладельцев.`
+        );
+      }
+      
+      const oldConstant = finance.getExpenseConstant();
+      finance.setExpenseConstant(newConstant);
+      
+      logger.logAdminAction('expense_constant_changed', {
+        oldConstant: oldConstant,
+        newConstant: newConstant
+      }, ctx);
+      
+      ctx.session.adminState = null;
+      
+      await ctx.reply(
+        `✅ *Константа расходов изменена!*\n\n` +
+        `📊 *Было:* ${oldConstant}%\n` +
+        `📊 *Стало:* ${newConstant}%\n\n` +
+        `Константа используется для:\n` +
+        `• Покрытия скидок пользователей\n` +
+        `• Оплаты бота\n` +
+        `• Прочих расходов`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('📉 Расход комиссии', 'admin:finance_expenses')],
+            [Markup.button.callback('📈 Прибыль', 'admin:finance_profit')],
+            [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+          ])
+        }
+      );
+      return;
+    }
 
     // --- СПЕЦИАЛЬНОСТИ: Добавление ---
     if (state === 'awaiting_specialty_name') {
@@ -3948,6 +4398,394 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Назад в меню', 'admin:main')]
       ]);
       await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    }
+
+    // ==========================================
+    // 💰 ФИНАНСЫ
+    // ==========================================
+    
+    // Главное меню финансов
+    else if (action === 'finance') {
+      ctx.session.adminState = null;
+      const expenseConstant = finance.getExpenseConstant();
+      const coOwnersCount = finance.getCoOwners().length;
+      
+      let text = `💰 *Финансы*\n\n`;
+      text += `📊 Выберите раздел для просмотра статистики:\n`;
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...getFinanceMenu()
+      });
+    }
+    
+    // --- ВЫРУЧКА: выбор периода ---
+    else if (action === 'finance_revenue') {
+      ctx.session.adminState = null;
+      await ctx.editMessageText(
+        `📊 *Выручка*\n\nВыберите период:`,
+        { parse_mode: 'Markdown', ...getPeriodMenu('finance_revenue') }
+      );
+    }
+    
+    // --- ВЫРУЧКА: показ за период ---
+    else if (action.startsWith('finance_revenue:')) {
+      const period = action.split(':')[1];
+      
+      if (period === 'from_date') {
+        ctx.session.adminState = 'finance_date:revenue';
+        await ctx.editMessageText(
+          `📆 *Выручка с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_revenue')]]) }
+        );
+        return;
+      }
+      
+      const stats = calculateFinancialStats(period);
+      const periodLabel = getPeriodLabel(period);
+      
+      let text = `📊 *Выручка*\n`;
+      text += `${periodLabel}\n\n`;
+      text += `💰 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+      text += `📦 *Заказов:* ${stats.ordersCount}\n`;
+      text += `👷 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+      text += `📈 *Валовая комиссия:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔄 Другой период', 'admin:finance_revenue')],
+          [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+        ])
+      });
+    }
+    
+    // --- РАСХОД КОМИССИИ: выбор периода ---
+    else if (action === 'finance_expenses') {
+      ctx.session.adminState = null;
+      await ctx.editMessageText(
+        `📉 *Расход комиссии*\n\nВыберите период:`,
+        { parse_mode: 'Markdown', ...getPeriodMenu('finance_expenses') }
+      );
+    }
+    
+    // --- РАСХОД КОМИССИИ: показ за период ---
+    else if (action.startsWith('finance_expenses:')) {
+      const period = action.split(':')[1];
+      
+      if (period === 'from_date') {
+        ctx.session.adminState = 'finance_date:expenses';
+        await ctx.editMessageText(
+          `📆 *Расход комиссии с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_expenses')]]) }
+        );
+        return;
+      }
+      
+      const stats = calculateFinancialStats(period);
+      const periodLabel = getPeriodLabel(period);
+      
+      let text = `📉 *Расход комиссии*\n`;
+      text += `${periodLabel}\n\n`;
+      text += `🎁 *Покрытие скидок:* ${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+      text += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+      text += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+      text += `⚙️ *Константа расходов:* ${stats.expenseConstant}%\n`;
+      text += `💸 *Сумма константы:* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+      
+      const remainingFund = stats.expenseConstantAmount - stats.discountCoverage;
+      if (remainingFund >= 0) {
+        text += `✅ *Остаток фонда:* ${remainingFund.toLocaleString('ru-RU')} ₽`;
+      } else {
+        text += `⚠️ *Перерасход фонда:* ${Math.abs(remainingFund).toLocaleString('ru-RU')} ₽`;
+      }
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('⚙️ Изменить константу', 'admin:finance_edit_constant')],
+          [Markup.button.callback('🔄 Другой период', 'admin:finance_expenses')],
+          [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+        ])
+      });
+    }
+    
+    // --- ЗАРАБОТОК ИСПОЛНИТЕЛЕЙ: выбор периода ---
+    else if (action === 'finance_executors') {
+      ctx.session.adminState = null;
+      await ctx.editMessageText(
+        `👷 *Заработок исполнителей*\n\nВыберите период:`,
+        { parse_mode: 'Markdown', ...getPeriodMenu('finance_executors') }
+      );
+    }
+    
+    // --- ЗАРАБОТОК ИСПОЛНИТЕЛЕЙ: показ за период ---
+    else if (action.startsWith('finance_executors:')) {
+      const period = action.split(':')[1];
+      
+      if (period === 'from_date') {
+        ctx.session.adminState = 'finance_date:executors';
+        await ctx.editMessageText(
+          `📆 *Заработок исполнителей с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_executors')]]) }
+        );
+        return;
+      }
+      
+      const stats = calculateFinancialStats(period);
+      const periodLabel = getPeriodLabel(period);
+      
+      let text = `👷 *Заработок исполнителей*\n`;
+      text += `${periodLabel}\n\n`;
+      text += `💰 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+      text += `📦 *Заказов:* ${stats.ordersCount}\n`;
+      text += `💵 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+      
+      const avgEarning = stats.ordersCount > 0 ? Math.round(stats.executorEarnings / stats.ordersCount) : 0;
+      text += `📊 *Средний заработок за заказ:* ${avgEarning.toLocaleString('ru-RU')} ₽\n`;
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('🔄 Другой период', 'admin:finance_executors')],
+          [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+        ])
+      });
+    }
+    
+    // ==========================================
+    // 💰 ФИНАНСЫ: ПРИБЫЛЬ + СОВЛАДЕЛЬЦЫ
+    // ==========================================
+    
+    // --- ПРИБЫЛЬ: выбор периода ---
+    else if (action === 'finance_profit') {
+      ctx.session.adminState = null;
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('📅 Текущий месяц', 'admin:finance_profit:month')],
+        [Markup.button.callback('📆 С даты по сегодня', 'admin:finance_profit:from_date')],
+        [Markup.button.callback('♾️ За всё время', 'admin:finance_profit:all')],
+        [Markup.button.callback('👥 Указать совладельцев', 'admin:finance_coowners')],
+        [Markup.button.callback('⚙️ Константа расходов', 'admin:finance_edit_constant')],
+        [Markup.button.callback('⬅️ Назад к финансам', 'admin:finance')]
+      ]);
+      await ctx.editMessageText(
+        `📈 *Прибыль*\n\nВыберите период или настройте совладельцев:`,
+        { parse_mode: 'Markdown', ...keyboard }
+      );
+    }
+    
+    // --- ПРИБЫЛЬ: показ за период ---
+    else if (action.startsWith('finance_profit:')) {
+      const period = action.split(':')[1];
+      
+      if (period === 'from_date') {
+        ctx.session.adminState = 'finance_date:profit';
+        await ctx.editMessageText(
+          `📆 *Прибыль с даты*\n\nВведите дату в формате \`ДД.ММ.ГГГГ\`:\nНапример: \`01.10.2026\``,
+          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_profit')]]) }
+        );
+        return;
+      }
+      
+      const stats = calculateFinancialStats(period);
+      const periodLabel = getPeriodLabel(period);
+      
+      let text = `📈 *Прибыль*\n`;
+      text += `${periodLabel}\n\n`;
+      text += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+      text += `🎁 *Покрытие скидок:* -${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+      text += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+      
+      // Совладельцы
+      if (stats.coOwnersShares.length > 0) {
+        text += `👥 *Совладельцы:*\n`;
+        stats.coOwnersShares.forEach(co => {
+          const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
+          text += `  • ${name}: ${co.percent}% = ${co.share.toLocaleString('ru-RU')} ₽\n`;
+        });
+        text += `  *Итого совладельцам:* ${stats.coOwnersTotal.toLocaleString('ru-RU')} ₽\n\n`;
+      }
+      
+      // Константа расходов
+      text += `⚙️ *Константа расходов (${stats.expenseConstant}%):* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+      
+      // Чистая прибыль
+      text += `💰 *Чистая прибыль:* ${stats.netProfit.toLocaleString('ru-RU')} ₽\n`;
+      
+      if (stats.netProfit < 0) {
+        text += `\n⚠️ *Внимание: убыток!*`;
+      }
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('👥 Совладельцы', 'admin:finance_coowners')],
+          [Markup.button.callback('🔄 Другой период', 'admin:finance_profit')],
+          [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
+        ])
+      });
+    }
+    
+    // ==========================================
+    // 👥 УПРАВЛЕНИЕ СОВЛАДЕЛЬЦАМИ
+    // ==========================================
+    
+    else if (action === 'finance_coowners') {
+      ctx.session.adminState = null;
+      const coOwners = finance.getCoOwners();
+      const totalPercent = finance.getTotalCoOwnersPercent();
+      const expenseConstant = finance.getExpenseConstant();
+      
+      let text = `👥 *Совладельцы*\n\n`;
+      text += `⚙️ *Константа расходов:* ${expenseConstant}%\n`;
+      text += `👥 *Сумма процентов совладельцев:* ${totalPercent}%\n`;
+      text += `💰 *Свободно:* ${100 - totalPercent - expenseConstant}%\n\n`;
+      
+      if (coOwners.length > 0) {
+        text += `*Список совладельцев:*\n`;
+        coOwners.forEach((co, idx) => {
+          const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
+          text += `${idx + 1}. ${name} — ${co.percent}%\n`;
+        });
+      } else {
+        text += `_Совладельцы не добавлены_\n`;
+      }
+      
+      const buttons = [];
+      coOwners.forEach(co => {
+        const name = co.username ? `@${co.username}` : co.id;
+        buttons.push([
+          Markup.button.callback(`✏️ ${name} (${co.percent}%)`, `admin:finance_edit_coowner:${co.id}`),
+          Markup.button.callback('🗑', `admin:finance_delete_coowner:${co.id}`)
+        ]);
+      });
+      
+      buttons.push([Markup.button.callback('➕ Добавить совладельца', 'admin:finance_add_coowner')]);
+      buttons.push([Markup.button.callback('⬅️ Назад к прибыли', 'admin:finance_profit')]);
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(buttons)
+      });
+    }
+    
+    // Добавить совладельца: шаг 1 - ID
+    else if (action === 'finance_add_coowner') {
+      ctx.session.adminState = 'finance_add_coowner_id';
+      await ctx.editMessageText(
+        `➕ *Добавление совладельца*\n\n📝 *Шаг 1/3: Введите Telegram ID совладельца (число):*`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+      );
+    }
+    
+    // Изменить совладельца
+    else if (action.startsWith('finance_edit_coowner:')) {
+      const coOwnerId = action.split(':')[1];
+      const coOwners = finance.getCoOwners();
+      const coOwner = coOwners.find(c => String(c.id) === String(coOwnerId));
+      
+      if (!coOwner) {
+        await ctx.answerCbQuery('❌ Совладелец не найден');
+        return;
+      }
+      
+      const name = coOwner.username ? `@${coOwner.username}` : coOwner.id;
+      ctx.session.adminState = `finance_edit_coowner_percent:${coOwnerId}`;
+      
+      await ctx.editMessageText(
+        `✏️ *Изменение процента совладельца*\n\n👤 *Совладелец:* ${name}\n📊 *Текущий процент:* ${coOwner.percent}%\n\nВведите новый процент (0-100):`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+      );
+    }
+    
+    // Удалить совладельца: подтверждение
+    else if (action.startsWith('finance_delete_coowner:')) {
+      const coOwnerId = action.split(':')[1];
+      const coOwners = finance.getCoOwners();
+      const coOwner = coOwners.find(c => String(c.id) === String(coOwnerId));
+      
+      if (!coOwner) {
+        await ctx.answerCbQuery('❌ Совладелец не найден');
+        return;
+      }
+      
+      const name = coOwner.username ? `@${coOwner.username}` : coOwner.id;
+      
+      await ctx.editMessageText(
+        `⚠️ *Подтверждение удаления*\n\nУдалить совладельца ${name} (${coOwner.percent}%)?`,
+        {
+          parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('✅ Да, удалить', `admin:finance_delete_coowner_confirm:${coOwnerId}`)],
+            [Markup.button.callback('❌ Отмена', 'admin:finance_coowners')]
+          ])
+        }
+      );
+    }
+    
+    // Удалить совладельца: выполнение
+    else if (action.startsWith('finance_delete_coowner_confirm:')) {
+      const coOwnerId = action.split(':')[1];
+      finance.removeCoOwner(coOwnerId);
+      
+      await ctx.answerCbQuery('✅ Совладелец удалён');
+      
+      // Возвращаемся к списку совладельцев
+      const coOwners = finance.getCoOwners();
+      const totalPercent = finance.getTotalCoOwnersPercent();
+      const expenseConstant = finance.getExpenseConstant();
+      
+      let text = `👥 *Совладельцы*\n\n`;
+      text += `⚙️ *Константа расходов:* ${expenseConstant}%\n`;
+      text += `👥 *Сумма процентов совладельцев:* ${totalPercent}%\n`;
+      text += `💰 *Свободно:* ${100 - totalPercent - expenseConstant}%\n\n`;
+      
+      if (coOwners.length > 0) {
+        text += `*Список совладельцев:*\n`;
+        coOwners.forEach((co, idx) => {
+          const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
+          text += `${idx + 1}. ${name} — ${co.percent}%\n`;
+        });
+      } else {
+        text += `_Совладельцы не добавлены_\n`;
+      }
+      
+      const buttons = [];
+      coOwners.forEach(co => {
+        const name = co.username ? `@${co.username}` : co.id;
+        buttons.push([
+          Markup.button.callback(`✏️ ${name} (${co.percent}%)`, `admin:finance_edit_coowner:${co.id}`),
+          Markup.button.callback('🗑', `admin:finance_delete_coowner:${co.id}`)
+        ]);
+      });
+      
+      buttons.push([Markup.button.callback('➕ Добавить совладельца', 'admin:finance_add_coowner')]);
+      buttons.push([Markup.button.callback('⬅️ Назад к прибыли', 'admin:finance_profit')]);
+      
+      await ctx.editMessageText(text, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard(buttons)
+      });
+    }
+    
+    // ==========================================
+    // ⚙️ КОНСТАНТА РАСХОДОВ
+    // ==========================================
+    
+    else if (action === 'finance_edit_constant') {
+      const currentConstant = finance.getExpenseConstant();
+      ctx.session.adminState = 'finance_edit_constant';
+      
+      await ctx.editMessageText(
+        `⚙️ *Константа расходов*\n\n` +
+        `📊 *Текущее значение:* ${currentConstant}%\n\n` +
+        `Константа входит в комиссию и используется для:\n` +
+        `• Покрытия скидок пользователей\n` +
+        `• Оплаты бота\n` +
+        `• Прочих расходов\n\n` +
+        `Введите новое значение (0-100):`,
+        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_profit')]]) }
+      );
     }
 
     await ctx.answerCbQuery();
