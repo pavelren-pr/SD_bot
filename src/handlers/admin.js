@@ -436,7 +436,7 @@ function parseRussianDate(dateStr) {
 }
 
 // 🌟 Фильтрация заказов по периоду
-function filterOrdersByPeriod(orders, period, fromDate = null) {
+function filterOrdersByPeriod(orders, period, fromDate = null, toDate = null) {
   const now = new Date();
   
   if (period === 'all') return orders;
@@ -449,10 +449,12 @@ function filterOrdersByPeriod(orders, period, fromDate = null) {
     });
   }
   
-  if (period === 'from_date' && fromDate) {
+  if (period === 'from_date' && fromDate && toDate) {
+    // Устанавливаем конец дня для toDate (23:59:59)
+    const endOfDay = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59);
     return orders.filter(o => {
       const date = parseRussianDate(o.createdAt);
-      return date && date >= fromDate;
+      return date && date >= fromDate && date <= endOfDay;
     });
   }
   
@@ -460,9 +462,9 @@ function filterOrdersByPeriod(orders, period, fromDate = null) {
 }
 
 // 🌟 Расчёт финансовой статистики
-function calculateFinancialStats(period, fromDate = null) {
+function calculateFinancialStats(period, fromDate = null, toDate = null) {
   const allOrders = ordersDb.getAllOrders().filter(o => !o._meta);
-  const orders = filterOrdersByPeriod(allOrders, period, fromDate);
+  const orders = filterOrdersByPeriod(allOrders, period, fromDate, toDate);
   
   let revenue = 0;
   let executorEarnings = 0;
@@ -546,17 +548,20 @@ function getFinanceMenu() {
 function getPeriodMenu(prefix) {
   return Markup.inlineKeyboard([
     [Markup.button.callback('📅 Текущий месяц', `admin:${prefix}:month`)],
-    [Markup.button.callback('📆 С даты по сегодня', `admin:${prefix}:from_date`)],
+    [Markup.button.callback('📆 Выбрать период (с даты по дату)', `admin:${prefix}:from_date`)],
     [Markup.button.callback('♾️ За всё время', `admin:${prefix}:all`)],
     [Markup.button.callback('⬅️ Назад к финансам', 'admin:finance')]
   ]);
 }
 
 // 🌟 Описание периода для текста
-function getPeriodLabel(period, fromDate = null) {
+function getPeriodLabel(period, fromDate = null, toDate = null) {
   switch (period) {
     case 'month': return '📅 Текущий месяц';
-    case 'from_date': return fromDate ? `📆 С ${fromDate.toLocaleDateString('ru-RU')}` : '📆 С даты';
+    case 'from_date':
+      const fromStr = fromDate ? fromDate.toLocaleDateString('ru-RU') : '...';
+      const toStr = toDate ? toDate.toLocaleDateString('ru-RU') : '...';
+      return `📆 ${fromStr} — ${toStr}`;
     case 'all': return '♾️ За всё время';
     default: return '';
   }
