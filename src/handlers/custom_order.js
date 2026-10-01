@@ -623,28 +623,60 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     return ctx.reply('❌ Пожалуйста, введите корректную цену (положительное число).');
   }
 
-  // 🌟 Рассчитываем итоговую цену с учётом комиссии
+  // 🌟 НОВАЯ ЛОГИКА: Фиксированная выплата исполнителю + скидка заказчика
   const commission = orderRecord.commission || 0;
-  const finalPrice = Math.round(executorPrice / (1 - commission / 100));
-  const commissionAmount = finalPrice - executorPrice;
+  
+  // Получаем скидку заказчика из системы лояльности
+  const loyaltyInfo = loyalty.getLoyaltyInfo(orderRecord.customerId);
+  const discountPercent = loyaltyInfo.discountPercent || 0;
+  
+  // Базовая цена: сколько заказчик заплатил бы без скидки, чтобы исполнитель получил свою сумму
+  // Формула: basePrice * (1 - commission/100) = executorPrice
+  const basePrice = Math.round(executorPrice / (1 - commission / 100));
+  
+  // Применяем скидку заказчика
+  const discountAmount = Math.round(basePrice * discountPercent / 100);
+  const finalPrice = basePrice - discountAmount; // Сколько фактически заплатит заказчик
+  
+  // Если скидка превысила комиссию, возникает дефицит — он покрывается из фонда комиссии
+  const commissionExpense = Math.max(0, executorPrice - finalPrice);
+  
+  // Комиссия, которую фактически заберёт платформа (может быть 0, если скидка всё съела)
+  const commissionAmount = Math.max(0, finalPrice - executorPrice);
 
   // Обновляем заказ в orders.json
   const updatedOrder = orders.updateOrder(orderRecord.id, {
-    price: executorPrice,       // Цена исполнителя (сколько он получит)
-    finalPrice: finalPrice,     // Итоговая цена для заказчика (с комиссией)
+    // 🌟 НОВЫЕ ПОЛЯ (финансовая модель)
+    basePrice: basePrice,
+    executorPrice: executorPrice,
+    finalPrice: finalPrice,
+    discountPercent: discountPercent,
+    discountAmount: discountAmount,
+    commissionPercent: commission,
+    commissionExpense: commissionExpense,
+    // 📜 LEGACY ПОЛЯ (для совместимости)
+    price: executorPrice,
+    commission: commission,
     status: 'price_negotiating'
   });
 
   const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
 
   // Формируем сообщение для заказчика
-  const customerMessage = 
+  let customerMessage =
     `💰 *Назначена цена за ваш заказ*\n\n` +
     `🆔 *Номер заказа:* №${orderNumber}\n` +
     `📚 *Предмет:* ${updatedOrder.subjectName}\n` +
     `🎓 *Курс:* ${updatedOrder.courseName}\n` +
     `📅 *Дата заказа:* ${updatedOrder.createdAt}\n` +
-    `💵 *Стоимость выполнения:* ${finalPrice} ₽\n\n` +
+    `💵 *Базовая цена:* ${basePrice} ₽\n`;
+  
+  if (discountPercent > 0) {
+    customerMessage += `🎉 *Ваша скидка:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+  }
+  
+  customerMessage +=
+    `✅ *Итого к оплате:* ${finalPrice} ₽\n\n` +
     `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
 
   const customerKeyboard = Markup.inlineKeyboard([
@@ -669,11 +701,17 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     if (cacheData && cacheData.managerMessageId && targetChatId) {
       let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
       updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-      updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@' + updatedOrder.customerUsername : 'ID: ' + updatedOrder.customerId}\n`;
+      updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
       updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
-      updatedText += `💰 *Цена исполнителя:* ${executorPrice} ₽\n`;
-      updatedText += `📊 *Комиссия:* ${commission}% (${commissionAmount} ₽)\n`;
-      updatedText += `💵 *Итого для заказчика:* ${finalPrice} ₽\n`;
+      updatedText += `💵 *Базовая цена:* ${basePrice} ₽\n`;
+      if (discountPercent > 0) {
+        updatedText += `🎉 *Скидка заказчика:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+      }
+      updatedText += `💰 *Итог к оплате:* ${finalPrice} ₽\n`;
+      updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commission}%)\n`;
+      if (commissionExpense > 0) {
+        updatedText += `📉 *Покрытие из фонда комиссии:* ${commissionExpense} ₽\n`;
+      }
       updatedText += `👷 *Исполнитель:* ${executorName}\n`;
       updatedText += `🟡 *Статус:* СОГЛАСОВАНИЕ ЦЕНЫ`;
       await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
@@ -685,14 +723,24 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       });
     }
 
-    await ctx.reply(
-      `✅ Цена назначена!\n\n` +
-      `💰 *Ваша цена:* ${executorPrice} ₽\n` +
-      `📊 *Комиссия:* ${commission}% (${commissionAmount} ₽)\n` +
-      `💵 *Итого для заказчика:* ${finalPrice} ₽\n\n` +
-      `Теперь заказчик может обсудить цену или перейти к оплате.`,
-      { parse_mode: 'Markdown' }
-    );
+    let executorConfirmMsg =
+      `✅ *Цена назначена!*\n\n` +
+      `💰 *Вы получите:* ${executorPrice} ₽\n` +
+      `💵 *Базовая цена:* ${basePrice} ₽\n`;
+    
+    if (discountPercent > 0) {
+      executorConfirmMsg += `🎉 *Скидка заказчика:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+    }
+    
+    executorConfirmMsg += `✅ *Заказчик заплатит:* ${finalPrice} ₽\n`;
+    
+    if (commissionExpense > 0) {
+      executorConfirmMsg += `📉 *Покрытие из фонда:* ${commissionExpense} ₽\n`;
+    }
+    
+    executorConfirmMsg += `\nТеперь заказчик может обсудить цену или перейти к оплате.`;
+    
+    await ctx.reply(executorConfirmMsg, { parse_mode: 'Markdown' });
     ctx.session.waitingCustomPrice = null;
   } catch (error) {
     console.error('Ошибка назначения цены:', error);
@@ -1088,17 +1136,31 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     return ctx.reply(`❌ Ошибка: Не настроен ${work.paymentEnv} в .env файле`);
   }
 
-  // 🌟 Используем итоговую цену (с комиссией)
+  // 🌟 Получаем данные из заказа
+  const basePrice = orderRecord.basePrice || orderRecord.finalPrice || orderRecord.price;
+  const discountPercent = orderRecord.discountPercent || 0;
+  const discountAmount = orderRecord.discountAmount || 0;
   const paymentAmount = orderRecord.finalPrice || orderRecord.price;
 
-  await ctx.editMessageText(
+  let paymentMsg =
     `💳 *Оплата заказа*\n\n` +
     `🆔 *Номер заказа:* №${orderNumber}\n` +
-    `💵 *Стоимость выполнения:* ${paymentAmount} ₽\n\n` +
+    `💵 *Базовая цена:* ${basePrice} ₽\n`;
+  
+  if (discountPercent > 0) {
+    paymentMsg += `🎉 *Ваша скидка:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+  }
+  
+  paymentMsg +=
+    `✅ *Итого к оплате:* ${paymentAmount} ₽\n\n` +
     `Переведите сумму на карту:\n` +
-    `\`${paymentValue}\`\n\n` + `📸 После оплаты отправьте скриншот чека в этот чат.`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
-    );
+    `\`${paymentValue}\`\n\n` +
+    `📸 После оплаты отправьте скриншот чека в этот чат.`;
+
+  await ctx.editMessageText(paymentMsg, {
+    parse_mode: 'Markdown',
+    reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup
+  });
     // 🌟 Сохраняем исходное сообщение для возможности возврата
     ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
     ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
@@ -1170,32 +1232,57 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       // Обновляем сообщение в чате исполнителей
       const cacheData = customOrderStates.get(orderNumber);
       if (cacheData && cacheData.managerMessageId && targetChatId) {
-        let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-        updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-        updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@' + updatedOrder.customerUsername : 'ID: ' + updatedOrder.customerId}\n`;
-        updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
-        updatedText += `💰 *Цена:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n`;
-        updatedText += `👷 *Исполнитель:* ${updatedOrder.executorId ? '@' + (await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
-        updatedText += `✅ *Оплачен:* ${updatedOrder.paidAt}\n`;
-        updatedText += `🟢 *Статус:* ОПЛАЧЕН - В РАБОТЕ`;
+      const basePrice = updatedOrder.basePrice || updatedOrder.finalPrice || updatedOrder.price;
+      const discountPercent = updatedOrder.discountPercent || 0;
+      const discountAmount = updatedOrder.discountAmount || 0;
+      const commissionExpense = updatedOrder.commissionExpense || 0;
+      const executorPrice = updatedOrder.executorPrice || 0;
+
+      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
+      updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
+      updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
+      updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
+      updatedText += `💵 *Базовая цена:* ${basePrice} ₽\n`;
+      if (discountPercent > 0) {
+        updatedText += `🎉 *Скидка:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+      }
+      updatedText += `💰 *Заказчик заплатил:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n`;
+      updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽\n`;
+      if (commissionExpense > 0) {
+        updatedText += `📉 *Покрытие из фонда:* ${commissionExpense} ₽\n`;
+      }
+      updatedText += `👷 *Исполнитель:* ${updatedOrder.executorId ? '@'+(await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
+      updatedText += `✅ *Оплачен:* ${updatedOrder.paidAt}\n`;
+      updatedText += `🟢 *Статус:* ОПЛАЧЕН - В РАБОТЕ`;
         await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
           parse_mode: 'Markdown'
         });
       }
       
-      await ctx.reply(
-  `✅ *Оплата подтверждена!*\n\n` +
-  `🆔 *Номер заказа:* №${orderNumber}\n` +
-  `💵 *Сумма:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n\n` +
-  `Ваш заказ передан исполнителю. Ожидайте выполнения работы.\n\n` +
-  `✏️ Если нужно уточнить детали, напишите исполнителю:`,
-  { 
-    parse_mode: 'Markdown',
-    reply_markup: Markup.inlineKeyboard([
-      [Markup.button.callback('✏️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
-    ]).reply_markup
-  }
-);
+    const paidBasePrice = updatedOrder.basePrice || updatedOrder.finalPrice || updatedOrder.price;
+    const paidDiscountPercent = updatedOrder.discountPercent || 0;
+    const paidDiscountAmount = updatedOrder.discountAmount || 0;
+
+    let paymentConfirmMsg =
+      `✅ *Оплата подтверждена!*\n\n` +
+      `🆔 *Номер заказа:* №${orderNumber}\n`;
+    
+    if (paidDiscountPercent > 0) {
+      paymentConfirmMsg += `💵 *Базовая цена:* ${paidBasePrice} ₽\n`;
+      paymentConfirmMsg += `🎉 *Скидка:* ${paidDiscountPercent}% (-${paidDiscountAmount} ₽)\n`;
+    }
+    
+    paymentConfirmMsg +=
+      `💰 *Вы заплатили:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n\n` +
+      `Ваш заказ передан исполнителю. Ожидайте выполнения работы.\n\n` +
+      `✏️ Если нужно уточнить детали, напишите исполнителю:`;
+
+    await ctx.reply(paymentConfirmMsg, {
+      parse_mode: 'Markdown',
+      reply_markup: Markup.inlineKeyboard([
+        [Markup.button.callback('✏️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
+      ]).reply_markup
+    });
       
       ctx.session.waitingCustomPayment = null;
     } catch (error) {

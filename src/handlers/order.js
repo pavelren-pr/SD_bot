@@ -62,8 +62,16 @@ function buildGroupOrderText(order, status) {
     else header = '✅ *ЗАКАЗ ВЫПОЛНЕН*';
     
     const esc = (s) => s ? String(s).replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&') : '';
-    const commissionPercent = order.commission || 0;
-    const executorPrice = Math.round(order.price * (1 - commissionPercent / 100));
+    
+    // 🌟 Новая финансовая модель
+    const basePrice = order.basePrice || order.price || 0;
+    const executorPrice = order.executorPrice || Math.round((order.price || 0) * (1 - (order.commission || 0) / 100));
+    const finalPrice = order.finalPrice || order.price || 0;
+    const discountAmount = order.discountAmount || 0;
+    const discountPercent = order.discountPercent || 0;
+    const commissionExpense = order.commissionExpense || 0;
+    const commissionPercent = order.commissionPercent || order.commission || 0;
+    
     const userLink = order.customerUsername 
         ? `@${order.customerUsername}` 
         : `[Пользователь](tg://user?id=${order.customerId})`;
@@ -72,8 +80,17 @@ function buildGroupOrderText(order, status) {
     text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
     text += `👤 *Заказчик:* ${userLink}\n`;
     text += `📚 *Работа:* ${esc(order.workTitle)}\n`;
-    text += `💰 *Сумма:* ${order.price} ₽\n`;
+    
+    text += `💵 *Базовая цена:* ${basePrice} ₽\n`;
+    if (discountPercent > 0) {
+      text += `🎉 *Скидка заказчика:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+    }
+    text += `💰 *Итог к оплате:* ${finalPrice} ₽\n`;
     text += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+    
+    if (commissionExpense > 0) {
+      text += `📉 *Покрытие из фонда комиссии:* ${commissionExpense} ₽\n`;
+    }
     
     if (order.executorUsername || order.executorId) {
         const executorDisplay = order.executorUsername 
@@ -102,15 +119,33 @@ function buildGroupOrderText(order, status) {
 // 🌟 Подпись сообщения-скриншота в чате исполнителей
 function buildExecutorOrderCaption(order) {
   const esc = (s) => s ? String(s).replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&') : '';
-  const commissionPercent = order.commission || 0;
-  const executorPrice = Math.round(order.price * (1 - commissionPercent / 100));
+  
+  // 🌟 Новая финансовая модель (с поддержкой старых заказов)
+  const basePrice = order.basePrice || order.price || 0;
+  const executorPrice = order.executorPrice || Math.round((order.price || 0) * (1 - (order.commission || 0) / 100));
+  const finalPrice = order.finalPrice || order.price || 0;
+  const discountAmount = order.discountAmount || 0;
+  const discountPercent = order.discountPercent || 0;
+  const commissionExpense = order.commissionExpense || 0;
+  const commissionPercent = order.commissionPercent || order.commission || 0;
+
   const userLink = order.customerUsername ? `@${order.customerUsername}` : `[Пользователь](tg://user?id=${order.customerId})`;
   let text = `🔔 *НОВЫЙ ЗАКАЗ!*\n\n`;
   text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
   text += `👤 *Заказчик:* ${userLink}\n`;
   text += `📚 *Работа:* ${esc(order.workTitle)}\n`;
-  text += `💰 *Сумма:* ${order.price} ₽\n`;
+  
+  text += `💵 *Базовая цена:* ${basePrice} ₽\n`;
+  if (discountPercent > 0) {
+    text += `🎉 *Скидка заказчика:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+  }
+  text += `💰 *Итог к оплате:* ${finalPrice} ₽\n`;
   text += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+  
+  if (commissionExpense > 0) {
+    text += `📉 *Покрытие из фонда комиссии:* ${commissionExpense} ₽\n`;
+  }
+  
   text += `⏰ *Создан:* ${order.createdAt}\n`;
   text += `🟢 *Статус:* ОПЛАЧЕН — ОЖИДАЕТ ПРИНЯТИЯ`;
   return text;
@@ -673,6 +708,18 @@ function register(bot) {
       const course = catalog.getCourse(subject.courseId);
       const chatId = ctx.session.order.chatId || `order_${ctx.from.id}_${order.workId}_${Date.now()}`;
 
+      // 🌟 НОВАЯ ЛОГИКА: Фиксированная выплата исполнителю
+      const basePrice = work.price; // Изначальная цена работы из каталога
+      const commissionPercent = work.commission || 0;
+      const executorPrice = Math.round(basePrice * (1 - commissionPercent / 100)); // Фикс на руки исполнителю
+      
+      const discountPercent = order.discountPercent || 0; // Скидка из loyalty
+      const discountAmount = basePrice - (order.finalPrice || basePrice); // Сумма скидки
+      const finalPrice = order.finalPrice || basePrice; // Что фактически заплатит заказчик
+      
+      // Если скидка превысила комиссию, разница покрывается из накопленной комиссии
+      const commissionExpense = Math.max(0, executorPrice - finalPrice);
+
       // 🌟 Сначала создаём заказ в БД, чтобы получить orderNumber
       const newOrder = orders.createOrder({
         workId: work.id,
@@ -681,8 +728,17 @@ function register(bot) {
         courseName: course.name,
         customerId: ctx.from.id,
         customerUsername: ctx.from.username || null,
-        price: order.finalPrice,
-        commission: work.commission,
+        // 🌟 НОВЫЕ ПОЛЯ
+        basePrice: basePrice,
+        executorPrice: executorPrice,
+        finalPrice: finalPrice,
+        discountPercent: discountPercent,
+        discountAmount: discountAmount,
+        commissionPercent: commissionPercent,
+        commissionExpense: commissionExpense,
+        // 📜 LEGACY ПОЛЯ (для совместимости)
+        price: finalPrice,
+        commission: commissionPercent,
         createdAt: paidTime,
         managerChatId: targetChatId,
         // 🌟 Сохраняем данные для кнопок
@@ -692,9 +748,6 @@ function register(bot) {
       });
       ctx.session.currentOrderId = newOrder.id;
       logger.logOrderEvent('created', newOrder, ctx.from.id, ctx.from.username);
-
-      const commissionPercent = work.commission || 0;
-      const executorPrice = Math.round(order.finalPrice * (1 - commissionPercent / 100));
 
       // 🌟 Подпись сообщения (информация о заказе)
       const caption = buildExecutorOrderCaption(newOrder);

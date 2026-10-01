@@ -132,31 +132,43 @@ function createOrder(orderData) {
     const orderNumber = meta.nextOrderNumber;
     
     const newOrder = {
-        orderNumber: orderNumber,
-        id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        workId: orderData.workId || null,
-        workTitle: orderData.workTitle || 'Не указано',
-        subjectName: orderData.subjectName || 'Не указано',
-        courseName: orderData.courseName || 'Не указано',
-        customerId: orderData.customerId,
-        customerUsername: orderData.customerUsername || null,
-        executorId: null,
-        executorUsername: null,
-        price: orderData.price,
-        commission: orderData.commission || 0,
-        status: orderData.status || 'pending',
-        createdAt: orderData.createdAt || new Date().toLocaleString('ru-RU'),
-        acceptedAt: null,
-        completedAt: null,
-        description: orderData.description || null,
-        fileName: orderData.fileName || null,
-        fileId: orderData.fileId || null,
-        fileType: orderData.fileType || null,
-        isCustomOrder: orderData.isCustomOrder || false,
-        managerMessageId: orderData.managerMessageId || null,
-        managerChatId: orderData.managerChatId || null,
-        detailsText: orderData.detailsText || null,
-        taskFiles: orderData.taskFiles || []
+      orderNumber: orderNumber,
+      id: `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      workId: orderData.workId || null,
+      workTitle: orderData.workTitle || 'Не указано',
+      subjectName: orderData.subjectName || 'Не указано',
+      courseName: orderData.courseName || 'Не указано',
+      customerId: orderData.customerId,
+      customerUsername: orderData.customerUsername || null,
+      executorId: null,
+      executorUsername: null,
+      
+      // 🌟 НОВЫЕ ПОЛЯ (Финансовая модель)
+      basePrice: orderData.basePrice || orderData.price || 0, // Изначальная цена до скидки
+      executorPrice: orderData.executorPrice || 0,            // Фикс на руки исполнителю
+      finalPrice: orderData.finalPrice || orderData.price || 0, // Итог к оплате от заказчика
+      discountPercent: orderData.discountPercent || 0,
+      discountAmount: orderData.discountAmount || 0,
+      commissionPercent: orderData.commissionPercent || orderData.commission || 0,
+      commissionExpense: orderData.commissionExpense || 0,      // Покрытие из пула комиссии
+
+      // 📜 LEGACY ПОЛЯ (Для совместимости со старыми заказами и админкой)
+      price: orderData.finalPrice || orderData.price || 0,
+      commission: orderData.commissionPercent || orderData.commission || 0,
+
+      status: orderData.status || 'pending',
+      createdAt: orderData.createdAt || new Date().toLocaleString('ru-RU'),
+      acceptedAt: null,
+      completedAt: null,
+      description: orderData.description || null,
+      fileName: orderData.fileName || null,
+      fileId: orderData.fileId || null,
+      fileType: orderData.fileType || null,
+      isCustomOrder: orderData.isCustomOrder || false,
+      managerMessageId: orderData.managerMessageId || null,
+      managerChatId: orderData.managerChatId || null,
+      detailsText: orderData.detailsText || null,
+      taskFiles: orderData.taskFiles || []
     };
     
     orders.push(newOrder);
