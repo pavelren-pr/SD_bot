@@ -4625,7 +4625,7 @@ const backKeyboard = Markup.inlineKeyboard([
       ctx.session.adminState = null;
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('📅 Текущий месяц', 'admin:finance_profit:month')],
-        [Markup.button.callback('📆 С даты по сегодня', 'admin:finance_profit:from_date')],
+        [Markup.button.callback('📆 Выбрать период (с даты по дату)', 'admin:finance_profit:from_date')],
         [Markup.button.callback('♾️ За всё время', 'admin:finance_profit:all')],
         [Markup.button.callback('👥 Указать совладельцев', 'admin:finance_coowners')],
         [Markup.button.callback('⚙️ Константа расходов', 'admin:finance_edit_constant')],
