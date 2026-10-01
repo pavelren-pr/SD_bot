@@ -639,16 +639,15 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   const discountAmount = Math.round(basePrice * discountPercent / 100);
   const finalPrice = basePrice - discountAmount; // Сколько фактически заплатит заказчик
   
-  // Если скидка превысила комиссию, возникает дефицит — он покрывается из фонда комиссии
-  const commissionExpense = Math.max(0, executorPrice - finalPrice);
-  
-  // Комиссия, которую фактически заберёт платформа (может быть 0, если скидка всё съела)
-  const commissionAmount = Math.max(0, finalPrice - executorPrice);
+  // 🌟 РАСЧЁТ ПОКРЫТИЯ СКИДКИ И КОНСТАНТЫ
+  const totalCommission = Math.round(basePrice * commission / 100);
+  const actualCommission = Math.max(0, finalPrice - executorPrice); // Что платформа реально получила
+  const commissionExpense = Math.max(0, totalCommission - actualCommission); // Потерянная комиссия из-за скидки
 
   // 🌟 ФИНАНСОВЫЙ СНИМОК (совладельцы и константа на момент заказа)
-  const totalCommission = Math.round(basePrice * commission / 100);
   const expenseConstantPercent = finance.getExpenseConstant();
-  const expenseConstantAmount = Math.round(totalCommission * expenseConstantPercent / 100);
+  const expenseConstantBase = Math.round(totalCommission * expenseConstantPercent / 100);
+  const expenseConstantAmount = expenseConstantBase - commissionExpense; // Может быть отрицательным!
   
   const coOwners = finance.getCoOwners();
   const coOwnerShares = coOwners.map(co => ({

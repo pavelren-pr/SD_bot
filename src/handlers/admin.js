@@ -522,8 +522,13 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
     } else {
       // 🌟 ФОЛЛБЕК для старых заказов — считаем динамически
       const orderCommission = Math.round(basePrice * commissionPercent / 100);
+      const orderActualCommission = Math.max(0, finalPrice - executorPrice);
+      const orderCommissionExpense = Math.max(0, orderCommission - orderActualCommission);
+      
       const currentConstant = finance.getExpenseConstant();
-      expenseConstantAmount += Math.round(orderCommission * currentConstant / 100);
+      const orderConstantBase = Math.round(orderCommission * currentConstant / 100);
+      expenseConstantAmount += orderConstantBase - orderCommissionExpense;
+      discountCoverage += orderCommissionExpense;
       
       const coOwners = finance.getCoOwners();
       coOwners.forEach(co => {

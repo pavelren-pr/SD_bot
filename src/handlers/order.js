@@ -718,13 +718,15 @@ function register(bot) {
       const discountAmount = basePrice - (order.finalPrice || basePrice); // Сумма скидки
       const finalPrice = order.finalPrice || basePrice; // Что фактически заплатит заказчик
       
-      // Если скидка превысила комиссию, разница покрывается из накопленной комиссии
-      const commissionExpense = Math.max(0, executorPrice - finalPrice);
-
-            // 🌟 ФИНАНСОВЫЙ СНИМОК (совладельцы и константа на момент заказа)
+      // 🌟 РАСЧЁТ ПОКРЫТИЯ СКИДКИ И КОНСТАНТЫ
       const totalCommission = Math.round(basePrice * commissionPercent / 100);
+      const actualCommission = Math.max(0, finalPrice - executorPrice); // Что платформа реально получила
+      const commissionExpense = Math.max(0, totalCommission - actualCommission); // Потерянная комиссия из-за скидки
+
+      // 🌟 ФИНАНСОВЫЙ СНИМОК (совладельцы и константа на момент заказа)
       const expenseConstantPercent = finance.getExpenseConstant();
-      const expenseConstantAmount = Math.round(totalCommission * expenseConstantPercent / 100);
+      const expenseConstantBase = Math.round(totalCommission * expenseConstantPercent / 100);
+      const expenseConstantAmount = expenseConstantBase - commissionExpense; // Может быть отрицательным!
       
       const coOwners = finance.getCoOwners();
       const coOwnerShares = coOwners.map(co => ({
