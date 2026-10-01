@@ -478,7 +478,7 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
   const coOwnersMap = {};
   
   orders.forEach(order => {
-    if (!['paid', 'completed', 'active'].includes(order.status)) return;
+    if (!['paid', 'completed', 'active', 'pending', 'waiting_acceptance', 'price_negotiating'].includes(order.status)) return;
     
     ordersCount++;
     
