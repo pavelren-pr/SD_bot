@@ -3710,7 +3710,7 @@ const backKeyboard = Markup.inlineKeyboard([
         const requester = ctx.from.username ? `@${ctx.from.username}` : `ID: ${ctx.from.id}`;
         await ctx.telegram.sendMessage(
           backupChatId,
-          `📦 *Ручной бэкап данных (архив)*\n📅 ${new Date().toLocaleString('ru-RU')}\n👤 *Запрошен:* ${requester}\n💾 *Размер:* ${sizeMB.toFixed(2)} МБ`,
+          `📦 *Ручной бэкап данных (архив)*\n📅 ${new Date().toLocaleString('ru-RU')}\n👤 *Запрошен:* ${escapeMarkdown(requester)}\n💾 *Размер:* ${sizeMB.toFixed(2)} МБ`,
           { parse_mode: 'Markdown' }
         );
 
@@ -3733,7 +3733,7 @@ const backKeyboard = Markup.inlineKeyboard([
 
         await ctx.reply(
           `✅ *Бэкап успешно создан и отправлен!*\n\n` +
-          `📁 *Файл:* ${archiveInfo.name}\n` +
+          `📁 *Файл:* ${escapeMarkdown(archiveInfo.name)}\n` +
           `💾 *Размер:* ${sizeMB.toFixed(2)} МБ\n` +
           `📍 *Отправлен в:* группу бэкапов`,
           { parse_mode: 'Markdown' }
