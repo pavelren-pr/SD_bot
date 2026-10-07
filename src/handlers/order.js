@@ -55,14 +55,15 @@ function restoreChatData(chatId) {
   return chatData;
 }
 
-// 🌟 Функция формирования текста сообщения в группе исполнителей
+// 🌟 REFACTOR: переход на HTML — функция формирования текста сообщения в группе исполнителей
 function buildGroupOrderText(order, status) {
     let header;
-    if (status === 'new') header = '🔔 *НОВЫЙ ЗАКАЗ!*';
-    else if (status === 'in_progress') header = '🔨 *ЗАКАЗ В РАБОТЕ*';
-    else header = '✅ *ЗАКАЗ ВЫПОЛНЕН*';
-    
-    const esc = (s) => s ? String(s).replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&') : '';
+    if (status === 'new') header = '🔔 <b>НОВЫЙ ЗАКАЗ!</b>';
+    else if (status === 'in_progress') header = '🔨 <b>ЗАКАЗ В РАБОТЕ</b>';
+    else header = '✅ <b>ЗАКАЗ ВЫПОЛНЕН</b>';
+
+    // 🌟 REFACTOR: переход на HTML — экранирование спецсимволов HTML вместо Markdown
+    const esc = (s) => escapeHtml(s);
     
     // 🌟 Новая финансовая модель
     const basePrice = order.basePrice || order.price || 0;
@@ -73,53 +74,56 @@ function buildGroupOrderText(order, status) {
     const commissionExpense = order.commissionExpense || 0;
     const commissionPercent = order.commissionPercent || order.commission || 0;
     
+    // 🌟 REFACTOR: переход на HTML — ссылка на пользователя в формате HTML
     const userLink = order.customerUsername 
-        ? `@${order.customerUsername}` 
-        : `[Пользователь](tg://user?id=${order.customerId})`;
+        ? `@${escapeHtml(order.customerUsername)}` 
+        : `<a href="tg://user?id=${order.customerId}">Пользователь</a>`;
     
     let text = `${header}\n\n`;
-    text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
-    text += `👤 *Заказчик:* ${userLink}\n`;
-    text += `📚 *Работа:* ${esc(order.workTitle)}\n`;
+    text += `🆔 <b>Номер заказа:</b> №${order.orderNumber}\n`;
+    text += `👤 <b>Заказчик:</b> ${userLink}\n`;
+    text += `📚 <b>Работа:</b> ${esc(order.workTitle)}\n`;
     
-    text += `💵 *Базовая цена:* ${basePrice} ₽\n`;
+    text += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
     if (discountPercent > 0) {
-      text += `🎉 *Скидка заказчика:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+      text += `🎉 <b>Скидка заказчика:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
     }
-    text += `💰 *Итог к оплате:* ${finalPrice} ₽\n`;
-    text += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+    text += `💰 <b>Итог к оплате:</b> ${finalPrice} ₽\n`;
+    text += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
     
     if (commissionExpense > 0) {
-      text += `📉 *Покрытие из фонда комиссии:* ${commissionExpense} ₽\n`;
+      text += `📉 <b>Покрытие из фонда комиссии:</b> ${commissionExpense} ₽\n`;
     }
     
     if (order.executorUsername || order.executorId) {
+        // 🌟 REFACTOR: переход на HTML — экранируем username исполнителя
         const executorDisplay = order.executorUsername 
-            ? `@${order.executorUsername}` 
+            ? `@${escapeHtml(order.executorUsername)}` 
             : `ID: ${order.executorId}`;
-        text += `👷 *Исполнитель:* ${executorDisplay}\n`;
+        text += `👷 <b>Исполнитель:</b> ${executorDisplay}\n`;
     }
     
-    text += `\n⏰ *Создан:* ${order.createdAt}`;
+    text += `\n⏰ <b>Создан:</b> ${order.createdAt}`;
     
     if (order.acceptedAt) {
-        text += `\n🔨 *Принят:* ${order.acceptedAt}`;
+        text += `\n🔨 <b>Принят:</b> ${order.acceptedAt}`;
     }
     if (order.completedAt) {
-        text += `\n✅ *Выполнен:* ${order.completedAt}`;
+        text += `\n✅ <b>Выполнен:</b> ${order.completedAt}`;
     }
     
     // Статус
-    if (status === 'new') text += `\n🟢 *Статус:* ОПЛАЧЕН — ОЖИДАЕТ ПРИНЯТИЯ`;
-    else if (status === 'in_progress') text += `\n🟡 *Статус:* В РАБОТЕ`;
-    else text += `\n🟢 *Статус:* ВЫПОЛНЕН`;
+    if (status === 'new') text += `\n🟢 <b>Статус:</b> ОПЛАЧЕН — ОЖИДАЕТ ПРИНЯТИЯ`;
+    else if (status === 'in_progress') text += `\n🟡 <b>Статус:</b> В РАБОТЕ`;
+    else text += `\n🟢 <b>Статус:</b> ВЫПОЛНЕН`;
     
     return text;
 }
 
-// 🌟 Подпись сообщения-скриншота в чате исполнителей
+// 🌟 REFACTOR: переход на HTML — подпись сообщения-скриншота в чате исполнителей
 function buildExecutorOrderCaption(order) {
-  const esc = (s) => s ? String(s).replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&') : '';
+  // 🌟 REFACTOR: переход на HTML — экранирование спецсимволов HTML вместо Markdown
+  const esc = (s) => escapeHtml(s);
   
   // 🌟 Новая финансовая модель (с поддержкой старых заказов)
   const basePrice = order.basePrice || order.price || 0;
@@ -130,8 +134,9 @@ function buildExecutorOrderCaption(order) {
   const commissionExpense = order.commissionExpense || 0;
   const commissionPercent = order.commissionPercent || order.commission || 0;
 
-  const userLink = order.customerUsername ? `@${order.customerUsername}` : `[Пользователь](tg://user?id=${order.customerId})`;
-  let text = `🔔 *НОВЫЙ ЗАКАЗ!*\n\n`;
+  // 🌟 REFACTOR: переход на HTML — ссылка на пользователя в формате HTML
+  const userLink = order.customerUsername ? `@${escapeHtml(order.customerUsername)}` : `<a href="tg://user?id=${order.customerId}">Пользователь</a>`;
+  let text = `🔔 <b>НОВЫЙ ЗАКАЗ!</b>\n\n`;
   text += `🆔 *Номер заказа:* №${order.orderNumber}\n`;
   text += `👤 *Заказчик:* ${userLink}\n`;
   text += `📚 *Работа:* ${esc(order.workTitle)}\n`;
@@ -178,10 +183,14 @@ function buildInProgressKeyboard(order) {
   return Markup.inlineKeyboard(buttons);
 }
 
-// 🌟 Функция экранирования специальных символов Markdown
-function escapeMarkdown(text) {
+// 🌟 REFACTOR: переход на HTML — функция экранирования специальных символов HTML
+// (вместо Markdown-экранирования: Telegram сам валидирует теги, экранируем только <, >, &)
+function escapeHtml(text) {
   if (!text) return '';
-  return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function getChatKeyboard(chatId, isCustomer) {
@@ -208,12 +217,13 @@ function register(bot) {
       return;
     }
     ctx.session.order = { workId, step: 'waiting_details', details: { text: null, files: [] } };
-    let message = `📎 Отлично!\n\n${escapeMarkdown(work.prompt)}`;
+    // 🌟 REFACTOR: переход на HTML — экранируем prompt и ссылку в формате HTML
+    let message = `📎 Отлично!\n\n${escapeHtml(work.prompt)}`;
     // 🌟 Добавляем ссылку на примеры работ, если она есть в каталоге
     if (work.exampleUrl) {
-      message += `\n\n📚 Пример работы и методические указания доступны по [ссылке](${work.exampleUrl})`;
+      message += `\n\n📚 Пример работы и методические указания доступны по <a href="${escapeHtml(work.exampleUrl)}">ссылке</a>`;
     }
-    await ctx.editMessageText(message, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(message, { parse_mode: 'HTML' }); // 🌟 REFACTOR: переход на HTML
   });
 
   // 🌟 Показать исходные данные (редактируем подпись)
@@ -225,13 +235,14 @@ function register(bot) {
       [Markup.button.callback('💳 Подтверждение оплаты / Назад', `order_back:${order.id}`)]
     ]);
     const textToShow = order.detailsText || order.description || 'Нет данных';
-    const dataCaption = `📝 *Исходные данные к заказу №${order.orderNumber}*\n\n${textToShow}`.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+    // 🌟 REFACTOR: переход на HTML — вместо Markdown-экранирования экранируем только <, >, &
+    const dataCaption = `📝 <b>Исходные данные к заказу №${order.orderNumber}</b>\n\n${escapeHtml(textToShow)}`;
 
     try {
       await ctx.telegram.editMessageCaption(
         order.managerChatId, order.managerMessageId, null,
         dataCaption,
-        { parse_mode: 'Markdown', reply_markup: backKeyboard.reply_markup }
+        { parse_mode: 'HTML', reply_markup: backKeyboard.reply_markup }
       );
       await ctx.answerCbQuery();
       } catch (e) {
@@ -240,7 +251,7 @@ function register(bot) {
           return ctx.answerCbQuery();
         }
         // Реальная ошибка (лимит подписи и т.д.) — отправляем отдельным сообщением
-        await ctx.telegram.sendMessage(order.managerChatId, dataCaption, { parse_mode: 'Markdown' });
+        await ctx.telegram.sendMessage(order.managerChatId, dataCaption, { parse_mode: 'HTML' });
         await ctx.answerCbQuery('Данные отправлены отдельным сообщением');
       }
   });
@@ -331,12 +342,12 @@ function register(bot) {
       let sentMsg;
       if (order.screenshotFileId) {
         if (order.screenshotType === 'document') {
-          sentMsg = await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+          sentMsg = await ctx.telegram.sendDocument(order.managerChatId, order.screenshotFileId, { caption, parse_mode: 'HTML', reply_markup: keyboard.reply_markup });
         } else {
-          sentMsg = await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+          sentMsg = await ctx.telegram.sendPhoto(order.managerChatId, order.screenshotFileId, { caption, parse_mode: 'HTML', reply_markup: keyboard.reply_markup });
         }
       } else {
-        sentMsg = await ctx.telegram.sendMessage(order.managerChatId, caption, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
+        sentMsg = await ctx.telegram.sendMessage(order.managerChatId, caption, { parse_mode: 'HTML', reply_markup: keyboard.reply_markup });
       }
 
       orders.updateOrder(order.id, { managerMessageId: sentMsg.message_id });
@@ -401,8 +412,8 @@ function register(bot) {
         ctx.message.caption ||
         '[Фото/Файл]';
 
-      const messageText = escapeMarkdown(rawMessageText);
-      const safeOrderTitle = escapeMarkdown(orderTitle);
+      const messageText = escapeHtml(rawMessageText);
+      const safeOrderTitle = escapeHtml(orderTitle);
 
       const adminReplyKeyboard = Markup.inlineKeyboard([
         [
@@ -421,7 +432,7 @@ function register(bot) {
         `📅 *Дата заказа:* ${orderDate}\n\n` +
         `${messageText}`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: adminReplyKeyboard.reply_markup
         }
       );
@@ -466,7 +477,7 @@ function register(bot) {
           await ctx.telegram.sendMessage(
             adminId,
             `💬 *Ответ заказчика по заказу №${orderNumber}*\n\n👤 *Заказчик:* ${customerUsername}\n📚 *Заказ:* ${orderTitle}\n\n${messageText}`,
-            { parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup }
+            { parse_mode: 'HTML', reply_markup: replyKeyboard.reply_markup }
           );
           if (ctx.message.photo) {
             await ctx.telegram.sendPhoto(adminId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
@@ -502,7 +513,7 @@ function register(bot) {
       await ctx.telegram.sendMessage(
         targetUserId,
         `💬 *Вам сообщение от исполнителя*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
-        { parse_mode: 'Markdown', ...keyboard }
+        { parse_mode: 'HTML', ...keyboard }
       );
       if (ctx.message.photo) {
         await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
@@ -576,7 +587,7 @@ function register(bot) {
   await ctx.telegram.sendMessage(
     targetUserId,
     `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n📅 *Дата заказа:* ${orderDate}\n\n${messageText}`,
-    { parse_mode: 'Markdown', ...keyboard }
+    { parse_mode: 'HTML', ...keyboard }
   );
 
   if (ctx.message.photo) {
@@ -611,7 +622,7 @@ function register(bot) {
       const targetUsername = ctx.session.replyToUsername || 'неизвестно';
       const messageText = ctx.message.text || '[Фото/Файл]';
       
-      await ctx.telegram.sendMessage(targetUserId, `💬 *Сообщение от менеджера:*\n\n${messageText}`, { parse_mode: 'Markdown' });
+      await ctx.telegram.sendMessage(targetUserId, `💬 *Сообщение от менеджера:*\n\n${messageText}`, { parse_mode: 'HTML' });
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
       
@@ -789,21 +800,21 @@ function register(bot) {
       if (screenshotPhoto) {
         sentMsg = await ctx.telegram.sendPhoto(targetChatId, screenshotPhoto, {
           caption: caption,
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: keyboard.reply_markup
         });
         orders.updateOrder(newOrder.id, { screenshotFileId: screenshotPhoto, screenshotType: 'photo', managerMessageId: sentMsg.message_id });
       } else if (screenshotDoc) {
         sentMsg = await ctx.telegram.sendDocument(targetChatId, screenshotDoc, {
           caption: caption,
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: keyboard.reply_markup
         });
         orders.updateOrder(newOrder.id, { screenshotFileId: screenshotDoc, screenshotType: 'document', managerMessageId: sentMsg.message_id });
       } else {
         // Скриншота нет — отправляем обычное текстовое сообщение
         sentMsg = await ctx.telegram.sendMessage(targetChatId, caption, {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: keyboard.reply_markup
         });
         orders.updateOrder(newOrder.id, { managerMessageId: sentMsg.message_id });
@@ -820,7 +831,7 @@ function register(bot) {
         `📚 *Работа:* ${work.title}\n` +
         `💰 *Сумма:* ${order.finalPrice} ₽\n\n` +
         `Мы уже ищем для вас лучшего специалиста.\nЕсли у вас есть срочные вопросы, нажмите кнопку ниже:`,
-        { parse_mode: 'Markdown', reply_markup: waitingKeyboard.reply_markup }
+        { parse_mode: 'HTML', reply_markup: waitingKeyboard.reply_markup }
       );
     } catch (error) {
       console.error('Ошибка обработки оплаты:', error);
@@ -839,7 +850,7 @@ function register(bot) {
       ]);
 
       await ctx.telegram.sendMessage(supportChatId, `📩 *Новое сообщение от пользователя*\n👤 ${userLink}\n\nСообщение переслано ниже 👇`, { 
-        parse_mode: 'Markdown', reply_markup: supportReplyKeyboard.reply_markup 
+        parse_mode: 'HTML', reply_markup: supportReplyKeyboard.reply_markup 
       });
       
       await ctx.forwardMessage(supportChatId, ctx.chat.id, ctx.message.message_id);
@@ -867,7 +878,7 @@ function register(bot) {
       
       await ctx.editMessageText(
         `✏️ *Режим ответа*\n\nНапишите сообщение или прикрепите файл, которое будет отправлено пользователю @${username} (ID: \`${targetUserId}\`).\n\nЧтобы отменить, нажмите /start`, 
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'HTML' }
       );
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
     } catch (error) {
@@ -887,21 +898,21 @@ function register(bot) {
     if (order.details.text) summary += `📝 *Ваши данные:*\n\`${order.details.text}\`\n\n`;
     if (order.details.files.length > 0) {
       summary += `📎 *Принято файлов:* ${order.details.files.length}\n`;
-      order.details.files.forEach(file => { summary += `• ${escapeMarkdown(file.fileName)}\n`; });
+      order.details.files.forEach(file => { summary += `• ${escapeHtml(file.fileName)}\n`; });
       summary += '\n';
     }
     summary += 'Проверьте данные и нажмите кнопку ниже.';
     const buttons = [[{ text: '💳 Подтвердить и оплатить', callback: 'order:confirm' }]];
     if (order.details.text) buttons.push([{ text: '✏️ Изменить данные', callback: 'order:edit_text' }]);
     if (order.details.files.length > 0) buttons.push([{ text: '📎 Изменить вложение', callback: 'order:edit_files' }]);
-    await ctx.reply(summary, { parse_mode: 'Markdown', reply_markup: createInlineKeyboard(buttons).reply_markup });
+    await ctx.reply(summary, { parse_mode: 'HTML', reply_markup: createInlineKeyboard(buttons).reply_markup });
   }
 
   bot.action('order:edit_text', async (ctx) => {
     const order = ctx.session.order;
     if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
     order.details.text = null; order.step = 'waiting_details';
-    await ctx.editMessageText(`✏️ *Редактирование данных*\n\n${catalog.getWork(order.workId).prompt}`, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(`✏️ *Редактирование данных*\n\n${catalog.getWork(order.workId).prompt}`, { parse_mode: 'HTML' });
     await ctx.answerCbQuery();
   });
 
@@ -909,7 +920,7 @@ function register(bot) {
     const order = ctx.session.order;
     if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
     order.details.files = []; order.step = 'waiting_details';
-    await ctx.editMessageText(`📎 *Загрузка вложений*\n\n${catalog.getWork(order.workId).prompt}`, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(`📎 *Загрузка вложений*\n\n${catalog.getWork(order.workId).prompt}`, { parse_mode: 'HTML' });
     await ctx.answerCbQuery();
   });
 
@@ -946,7 +957,7 @@ function register(bot) {
 
     try {
       await ctx.telegram.sendMessage(supportChatId, supportText, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard(supportButtons).reply_markup
       });
     } catch (e) {
@@ -966,7 +977,7 @@ function register(bot) {
 
     await ctx.reply(
       `✅ *Заказ успешно оформлен!*\n\nДля завершения переведите *${pricing.finalPrice} ₽* на карту/телефон:\n\`${paymentDetails}\`\n\n📸 *После оплаты просто пришлите скриншот чека в этот чат*, и заказ поступит в работу! 🚀`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery('✅ Заказ отправлен!');
   });
@@ -1035,7 +1046,7 @@ try {
       activeOrder.managerMessageId,
       null,
       updatedText,
-      { parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
+      { parse_mode: 'HTML', reply_markup: inProgressKeyboard.reply_markup }
     );
   } else {
     await ctx.telegram.editMessageText(
@@ -1043,7 +1054,7 @@ try {
       activeOrder.managerMessageId,
       null,
       updatedText,
-      { parse_mode: 'Markdown', reply_markup: inProgressKeyboard.reply_markup }
+      { parse_mode: 'HTML', reply_markup: inProgressKeyboard.reply_markup }
     );
   }
 } catch (e) {
@@ -1075,13 +1086,13 @@ try {
     await ctx.telegram.sendMessage(
       executorUserId, 
       `✅ *Вы приняли заказ!*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Работа:* ${work.title}\n👤 *Заказчик ID:* ${customerUserId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`, 
-      { parse_mode: 'Markdown', reply_markup: executorFullKeyboard.reply_markup }
+      { parse_mode: 'HTML', reply_markup: executorFullKeyboard.reply_markup }
     );
 
     await ctx.telegram.sendMessage(
       customerUserId, 
       `✅ *Ваш заказ в работе!*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Работа:* ${work.title}\n\nИсполнитель назначен. Теперь вы можете обсудить детали выполнения заказа, используя кнопки ниже:`, 
-      { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) }
+      { parse_mode: 'HTML', reply_markup: getChatKeyboard(chatId, true) }
     );
     
     // 🌟 Логируем принятие заказа
@@ -1123,7 +1134,7 @@ try {
                      updatedOrder.managerMessageId,
                      null,
                      completedText,
-                     { parse_mode: 'Markdown' }
+                     { parse_mode: 'HTML' }
                  );
              } else {
                  await ctx.telegram.editMessageText(
@@ -1131,7 +1142,7 @@ try {
                      updatedOrder.managerMessageId,
                      null,
                      completedText,
-                     { parse_mode: 'Markdown' }
+                     { parse_mode: 'HTML' }
                  );
              }
          } catch (e) {
@@ -1140,8 +1151,8 @@ try {
      }
     }
 
-    await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'Markdown' });
-    await ctx.editMessageText(`✅ *Заказ выполнен!*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.telegram.sendMessage(chatData.customerUserId, `✅ *Исполнитель завершил работу по заказу!*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(`✅ *Заказ выполнен!*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML' });
     
     // 🌟 Логируем завершение заказа
     logger.logOrderEvent('completed', {
@@ -1166,7 +1177,7 @@ try {
     await ctx.telegram.sendMessage(
       customerUserId,
       `💬 *Вам сообщение от исполнителя*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`,
-      { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, true) }
+      { parse_mode: 'HTML', reply_markup: getChatKeyboard(chatId, true) }
     );
 
     // Пересылаем файл, если есть
@@ -1196,7 +1207,7 @@ try {
     await ctx.telegram.sendMessage(
       executorUserId,
       `💬 *Вам сообщение от заказчика*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${workTitle}\n\n${messageText}`,
-      { parse_mode: 'Markdown', reply_markup: getChatKeyboard(chatId, false) }
+      { parse_mode: 'HTML', reply_markup: getChatKeyboard(chatId, false) }
     );
 
     // Пересылаем файл, если есть
@@ -1226,7 +1237,7 @@ try {
       return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
     }
     chatData.status = 'waiting_customer_message';
-    await ctx.editMessageText(`✏️ *Напишите сообщение исполнителю:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`✏️ *Напишите сообщение исполнителю:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1240,7 +1251,7 @@ try {
       return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
     }
     chatData.status = 'waiting_customer_file';
-    await ctx.editMessageText(`📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1254,8 +1265,8 @@ try {
       return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
     }
     chatData.status = 'closed';
-    await ctx.telegram.sendMessage(chatData.executorUserId, `❌ *Заказчик завершил чат*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
-    await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.telegram.sendMessage(chatData.executorUserId, `❌ *Заказчик завершил чат*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML' });
     await ctx.answerCbQuery('Чат завершён');
   });
 
@@ -1268,7 +1279,7 @@ try {
       return ctx.answerCbQuery();
     }
     chatData.status = 'waiting_executor_message';
-    await ctx.editMessageText(`✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1292,7 +1303,7 @@ try {
   chatData.status = 'waiting_executor_message';
   await ctx.editMessageText(
     `✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
   );
   await ctx.answerCbQuery();
 });
@@ -1315,7 +1326,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
   chatData.status = 'waiting_executor_file';
   await ctx.editMessageText(
     `📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
   );
   await ctx.answerCbQuery();
   });
@@ -1329,7 +1340,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       return ctx.answerCbQuery();
     }
     chatData.status = 'waiting_executor_file';
-    await ctx.editMessageText(`📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1342,8 +1353,8 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       return ctx.answerCbQuery();
     }
     chatData.status = 'closed';
-    await ctx.telegram.sendMessage(chatData.customerUserId, `❌ *Исполнитель завершил чат по этому заказу.*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
-    await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'Markdown' });
+    await ctx.telegram.sendMessage(chatData.customerUserId, `❌ *Исполнитель завершил чат по этому заказу.*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || "—"}\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(`✅ *Чат завершён*\n\n📚 *Заказ:* ${chatData.workTitle}`, { parse_mode: 'HTML' });
     await ctx.answerCbQuery('Чат завершён');
   });
 
@@ -1370,7 +1381,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
         : `💬 *Чат с заказчиком*\n\n🆔 *Номер заказа:* №${chatData.orderNumber || '—'}\n📚 *Заказ:* ${chatData.workTitle}\n\nВыберите действие:`;
 
     await ctx.editMessageText(returnText, { 
-        parse_mode: 'Markdown', 
+        parse_mode: 'HTML', 
         reply_markup: getChatKeyboard(chatId, isCustomer) 
     });
     await ctx.answerCbQuery('Отменено');
@@ -1393,7 +1404,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `✏️ *Напишите ответ исполнителю:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
@@ -1414,7 +1425,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `📎 *Пришлите файл или фото для исполнителя:*\n\n📚 *Заказ:* ${ctx.session.customerReplyOrderTitle}`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
@@ -1435,7 +1446,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `✏️ *Напишите сообщение заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
@@ -1456,7 +1467,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
     `📎 *Пришлите файл или фото заказчику:*\n\n📚 *Заказ:* ${ctx.session.executorReplyOrderTitle}`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
     });
@@ -1481,7 +1492,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
       await ctx.editMessageText(
         `✏️ *Режим ответа администратору*\n\n🆔 *Номер заказа:* №${orderNumber}\n📚 *Заказ:* ${orderTitle}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено администратору.`,
-        { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
+        { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
       );
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
     });
@@ -1510,16 +1521,16 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       if (ctx.session.cancelReplyOriginalText) {
           try {
               await ctx.editMessageText(ctx.session.cancelReplyOriginalText, { 
-                  parse_mode: 'Markdown', 
+                  parse_mode: 'HTML', 
                   reply_markup: ctx.session.cancelReplyOriginalKeyboard 
               });
           } catch (e) {
-              await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+              await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
           }
           ctx.session.cancelReplyOriginalText = null;
           ctx.session.cancelReplyOriginalKeyboard = null;
       } else {
-          await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+          await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
       }
       await ctx.answerCbQuery('Отменено');
     });
@@ -1601,7 +1612,7 @@ async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignmen
   await bot.telegram.sendMessage(
     executorUserId,
     `✅ *Вам назначен новый заказ!*\n\n🆔 *Номер заказа:* №${order.orderNumber || '—'}\n📚 *Работа:* ${order.workTitle}\n👤 *Заказчик ID:* ${order.customerId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`,
-    { parse_mode: 'Markdown', reply_markup: executorFullKeyboard.reply_markup }
+    { parse_mode: 'HTML', reply_markup: executorFullKeyboard.reply_markup }
   );
   
   // Отправляем уведомление заказчику
@@ -1615,7 +1626,7 @@ async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignmen
   await bot.telegram.sendMessage(
     order.customerId,
     customerText,
-    { parse_mode: 'Markdown', reply_markup: customerKeyboard }
+    { parse_mode: 'HTML', reply_markup: customerKeyboard }
   );
   
   return { chatId, executorUser, executorUsername };
@@ -1649,7 +1660,7 @@ async function unassignExecutorFromOrder(orderId, bot) {
     await bot.telegram.sendMessage(
       oldExecutorId,
       `⚠️ *Заказ отменён*\n\n🆔 *Номер заказа:* №${order.orderNumber || '—'}\n📚 *Работа:* ${order.workTitle}\n\nАдминистратор вернул заказ в статус ожидания. Вы больше не являетесь исполнителем.`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
   } catch (e) {
     console.log('Не удалось уведомить исполнителя:', e.message);
@@ -1660,7 +1671,7 @@ async function unassignExecutorFromOrder(orderId, bot) {
     await bot.telegram.sendMessage(
       order.customerId,
       `⏳ *Статус заказа изменён*\n\n🆔 *Номер заказа:* №${order.orderNumber || '—'}\n📚 *Работа:* ${order.workTitle}\n\nВаш заказ временно возвращён в статус ожидания. Мы ищем нового исполнителя.`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
   } catch (e) {
     console.log('Не удалось уведомить заказчика:', e.message);
