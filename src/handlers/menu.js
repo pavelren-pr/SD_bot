@@ -1010,39 +1010,71 @@ function formatOrderCard(order, role) {
   if (order.status === 'waiting_price') statusText = 'Ожидает цену';
   if (order.status === 'price_negotiating') statusText = 'Согласование цены';
   if (order.status === 'paid' && order.isCustomOrder) statusText = 'Оплачен — в работе';
-  
+
+  // 🌟 REFACTOR: новая финансовая модель
+  // 🌟 ИЗВЛЕЧЕНИЕ ФИНАНСОВЫХ ДАННЫХ С ФОЛЛБЭКОМ
+  const basePrice = order.basePrice !== undefined ? order.basePrice : (order.price || 0);
+  const finalPrice = order.finalPrice !== undefined ? order.finalPrice : (order.price || 0);
+  const discountPercent = order.discountPercent || 0;
+  const discountAmount = order.discountAmount || 0;
+  const commissionPercent = order.commissionPercent !== undefined ? order.commissionPercent : (order.commission || 0);
+  const commissionExpense = order.commissionExpense || 0;
+  const expenseConstantPercent = order.expenseConstantPercent || 0;
+  const expenseConstantAmount = order.expenseConstantAmount || 0;
+  const executorPrice = order.executorPrice !== undefined ? order.executorPrice : Math.round(basePrice * (1 - commissionPercent / 100));
+
+  // 🌟 ОБРАБОТКА СОВЛАДЕЛЬЦЕВ
+  let coOwnersText = '';
+  if (order.coOwnerShares && Array.isArray(order.coOwnerShares) && order.coOwnerShares.length > 0) {
+    coOwnersText = order.coOwnerShares.map(co =>
+      `   • ${co.username ? '@' + co.username : 'ID: ' + co.id} — ${co.amount || 0} ₽`
+    ).join('\n');
+  }
+  // 🌟 REFACTOR: новая финансовая модель
+
   let text = `📦 *Заказ №${order.orderNumber}*\n\n`;
   text += `${statusEmoji} *Статус:* ${statusText}\n\n`;
   text += `📚 *Работа:* ${order.workTitle}\n`;
   text += `📖 *Предмет:* ${order.subjectName}\n`;
   text += `🎓 *Курс:* ${order.courseName}\n\n`;
-  // 🌟 Отображение стоимости
-  if (order.isCustomOrder && order.finalPrice && order.finalPrice > 0) {
-    // Индивидуальный заказ: finalPrice = что платит заказчик, price = что получает исполнитель
-    text += `💰 *Стоимость:* ${order.finalPrice} ₽\n`;
-  } else {
-    // Обычный заказ: price = что платит заказчик
-    text += `💰 *Стоимость:* ${order.price} ₽\n`;
-  }
 
-  if (role === 'executor' || role === 'admin') {
-    if (order.isCustomOrder && order.finalPrice && order.finalPrice > 0) {
-      // Для индивидуальных заказов: price — это уже цена исполнителя
-      const commissionAmount = order.finalPrice - order.price;
-      const commissionPercent = order.commission || 0;
-      text += `📊 *Комиссия:* ${commissionPercent}% (${commissionAmount} ₽)\n`;
-      text += `💰 *Цена исполнителя:* ${order.price} ₽\n\n`;
-    } else {
-      // Для обычных заказов: вычисляем цену исполнителя из цены заказа
-      const commissionPercent = order.commission || 0;
-      const commissionAmount = Math.round(order.price * commissionPercent / 100);
-      const executorPrice = order.price - commissionAmount;
-      text += `📊 *Комиссия:* ${commissionPercent}% (${commissionAmount} ₽)\n`;
-      text += `💰 *Цена исполнителя:* ${executorPrice} ₽\n\n`;
+  // 🌟 REFACTOR: новая финансовая модель
+  // 🌟 ОТОБРАЖЕНИЕ СТОИМОСТИ ДЛЯ ЗАКАЗЧИКА
+  if (role === 'customer') {
+    text += `💰 <b>Стоимость:</b> ${finalPrice} ₽\n\n`;
+  }
+  // 🌟 ДЕТАЛЬНАЯ ФИНАНСОВАЯ МОДЕЛЬ ДЛЯ АДМИНА И ИСПОЛНИТЕЛЯ
+  if (role === 'admin' || role === 'executor') {
+    text += `<b>💵 Базовая цена:</b> ${basePrice} ₽\n`;
+
+    if (discountPercent > 0) {
+      text += `🎉 <b>Скидка заказчика:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
     }
-  } else {
+
+    text += `💰 <b>Итог к оплате:</b> ${finalPrice} ₽\n`;
+    text += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+
     text += `\n`;
   }
+
+  // 🌟 УТОЧНЕНИЕ: поля только для админа
+  // 🌟 ПОЛЯ ТОЛЬКО ДЛЯ АДМИНА
+  if (role === 'admin') {
+    if (commissionExpense > 0) {
+      text += `📉 <b>Покрытие из фонда комиссии:</b> ${commissionExpense} ₽\n`;
+    }
+
+    if (expenseConstantAmount > 0) {
+      text += `🏛 <b>Константа расходов:</b> ${expenseConstantAmount} ₽\n`;
+    }
+
+    if (coOwnersText) {
+      text += `👥 <b>Доли совладельцев:</b>\n${coOwnersText}\n`;
+    }
+
+    text += `\n`;
+  }
+  // 🌟 REFACTOR: новая финансовая модель
 
   // Отображение ID заказчика и исполнителя для админа и исполнителя
   if (role === 'admin' || role === 'executor') {
