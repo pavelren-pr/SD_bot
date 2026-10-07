@@ -1,5 +1,5 @@
 .env
 logs/
 node_modules/
-data/*.json
+src/data/*.json
 /backups_temp/
