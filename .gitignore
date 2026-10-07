@@ -1,7 +1,5 @@
 .env
 logs/
 node_modules/
-!orders.json
-!loyalty.json
-!catalog.json
+data/*.json
 /backups_temp/
