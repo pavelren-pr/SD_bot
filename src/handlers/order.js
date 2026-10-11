@@ -1014,7 +1014,7 @@ function register(bot) {
       const waitingKeyboard = Markup.inlineKeyboard([
         [Markup.button.url('👨‍💼 Связаться с менеджером', `https://t.me/${managerUsername}`)]
       ]);
-      await ctx.reply(
+      await ctx.editMessageText(
         `✅ <b>Заказ оформлен и ожидает назначения исполнителя</b>.\n\n` +
         `🆔 <b>Номер заказа:</b> №${newOrder.orderNumber}\n\n` +
         `📚 <b>Работа:</b> ${work.title}\n` +
@@ -1025,7 +1025,7 @@ function register(bot) {
     } catch (error) {
       console.error('Ошибка обработки оплаты:', error);
       logger.logError(error, ctx);
-      await ctx.reply('❌ Произошла ошибка. Напишите нам напрямую.');
+      await ctx.editMessageText('❌ Произошла ошибка. Напишите нам напрямую.');
     }
     return;
   }
@@ -1094,7 +1094,7 @@ function register(bot) {
     const buttons = [[{ text: '💳 Подтвердить и оплатить', callback: 'order:confirm' }]];
     if (order.details.text) buttons.push([{ text: '✏️ Изменить данные', callback: 'order:edit_text' }]);
     if (order.details.files.length > 0) buttons.push([{ text: '📎 Изменить вложение', callback: 'order:edit_files' }]);
-    await ctx.reply(summary, { parse_mode: 'HTML', reply_markup: createInlineKeyboard(buttons).reply_markup });
+    await ctx.editMessageText(summary, { parse_mode: 'HTML', reply_markup: createInlineKeyboard(buttons).reply_markup });
   }
 
   bot.action('order:edit_text', async (ctx) => {
@@ -1164,7 +1164,7 @@ function register(bot) {
     order.step = 'awaiting_payment';
     // managerMessageId пока не существует — он появится только после оплаты
 
-    await ctx.reply(
+    await ctx.editMessageText(
       `✅ <b>Заказ успешно оформлен!</b>\n\nДля завершения переведите <b>${pricing.finalPrice} ₽</b> на карту/телефон:\n<code>${paymentDetails}</code>\n\n📸 <b>После оплаты просто пришлите скриншот чека в этот чат</b>, и заказ поступит в работу! 🚀`,
       { parse_mode: 'HTML' }
     );
