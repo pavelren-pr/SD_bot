@@ -9,9 +9,12 @@ const finance = require('../data/finance');
 // Хранилище состояний для индивидуальных заказов
 const customOrderStates = new Map();
 
-function escapeMarkdown(text) {
+function escapeHtml(text) {
   if (!text) return '';
-  return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 /**
@@ -102,14 +105,14 @@ function register(bot) {
       `• Сроки исполнения\n` +
       `• Дополнительная информация\n` +
       `• Другие важные детали\n\n` +
-      `💡 *Подсказка:* После отправки текста вы сможете прикрепить файл с заданием.`;
-    
+      `💡 <b>Подсказка:</b> После отправки текста вы сможете прикрепить файл с заданием.`;
+
     await ctx.editMessageText(
-      `📝 *${subjectName} - Индивидуальный заказ*\n\n` +
-      `🎓 *Курс:* ${courseName}\n\n` +
-      `📝 *Шаг 1: Описание задания*\n\n` +
+      `📝 <b>${subjectName} - Индивидуальный заказ</b>\n\n` +
+      `🎓 <b>Курс:</b> ${courseName}\n\n` +
+      `📝 <b>Шаг 1: Описание задания</b>\n\n` +
       `${promptText}`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery();
   });
@@ -128,12 +131,12 @@ function register(bot) {
     customOrder.description = ctx.message.text;
     customOrder.step = 'waiting_file';
     await ctx.reply(
-      `✅ *Описание получено!*\n\n` +
-      `📎 *Шаг 2: Файл задания*\n\n` +
+      `✅ <b>Описание получено!</b>\n\n` +
+      `📎 <b>Шаг 2: Файл задания</b>\n\n` +
       `Теперь прикрепите файл с вашим заданием (фото, PDF, DOCX и т.д.)\n\n` +
       `📁 Вы можете отправить один файл или несколько файлов.`,
-      { 
-        parse_mode: 'Markdown',
+      {
+        parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard([
           [Markup.button.callback('🚀 Продолжить без отправки файла', 'custom_order:skip_file')]
         ]).reply_markup
@@ -176,15 +179,15 @@ function register(bot) {
     const work = catalog.getWork(customOrder.workId);
     const { subjectName, courseName } = getSubjectFullName(work);
     
-    let summary = `📝 *Подтверждение индивидуального заказа*\n\n`;
-    summary += `🎓 *Курс:* ${courseName}\n`;
-    summary += `📚 *Предмет:* ${subjectName}\n\n`;
-    summary += `📝 *Описание задания:*\n\`${escapeMarkdown(customOrder.description)}\`\n\n`;
-    
+    let summary = `📝 <b>Подтверждение индивидуального заказа</b>\n\n`;
+    summary += `🎓 <b>Курс:</b> ${courseName}\n`;
+    summary += `📚 <b>Предмет:</b> ${subjectName}\n\n`;
+    summary += `📝 <b>Описание задания:</b>\n<code>${escapeHtml(customOrder.description)}</code>\n\n`;
+
     if (customOrder.file) {
-      summary += `📎 *Прикреплённый файл:* ${escapeMarkdown(customOrder.file.fileName)}\n\n`;
+      summary += `📎 <b>Прикреплённый файл:</b> ${escapeHtml(customOrder.file.fileName)}\n\n`;
     }
-    
+
     summary += `Проверьте информацию и выберите действие:`;
     
     const buttons = [
@@ -194,7 +197,7 @@ function register(bot) {
     ];
     
     await ctx.reply(summary, { 
-      parse_mode: 'Markdown', 
+      parse_mode: 'HTML', 
       reply_markup: createInlineKeyboard(buttons).reply_markup 
     });
   }
@@ -207,9 +210,9 @@ function register(bot) {
     
     customOrder.step = 'waiting_description';
     await ctx.editMessageText(
-      `✏️ *Редактирование описания*\n\n` +
+      `✏️ <b>Редактирование описания</b>\n\n` +
       `Отправьте новое текстовое описание задания:`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery();
   });
@@ -223,9 +226,9 @@ function register(bot) {
     customOrder.file = null;
     customOrder.step = 'waiting_file';
     await ctx.editMessageText(
-      `📎 *Загрузка нового файла*\n\n` +
+      `📎 <b>Загрузка нового файла</b>\n\n` +
       `Прикрепите файл с вашим заданием:`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery();
   });
@@ -264,7 +267,7 @@ async function sendOrderForEvaluation(ctx) {
   const work = catalog.getWork(customOrder.workId);
   const { subjectName, courseName } = getSubjectFullName(work);
   const { chatId } = getWorkConfig(work);
-  const userLink = ctx.from.username ? `@${ctx.from.username}` : `[${ctx.from.first_name}](tg://user?id=${ctx.from.id})`;
+  const userLink = ctx.from.username ? `@${ctx.from.username}` : `<a href="tg://user?id=${ctx.from.id}">${ctx.from.first_name}</a>`;
   const createdAt = new Date().toLocaleString('ru-RU');
 
   if (!chatId) {
@@ -291,20 +294,21 @@ async function sendOrderForEvaluation(ctx) {
 
   const orderNumber = orderData.orderNumber;
 
-  let orderText = `🔔 *НОВЫЙ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ!*\n\n`;
-  orderText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-  orderText += `👤 *Заказчик:* ${userLink}\n`;
-  orderText += `🎓 *Курс:* ${courseName}\n`;
-  orderText += `📚 *Предмет:* ${subjectName}\n`;
-  orderText += `📝 *Описание:* ${escapeMarkdown(customOrder.description)}\n`;
-  // 🌟 Файл указываем только если он есть
+  let orderText = `🔔 <b>НОВЫЙ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ!</b>\n\n`;
+  orderText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
+  orderText += `👤 <b>Заказчик:</b> ${userLink}\n`;
+  orderText += `🎓 <b>Курс:</b> ${courseName}\n`;
+  orderText += `📚 <b>Предмет:</b> ${subjectName}\n`;
+  orderText += `📝 <b>Описание:</b> ${escapeHtml(customOrder.description)}\n`;
+
   if (customOrder.file) {
-    orderText += `📎 *Файл:* ${escapeMarkdown(customOrder.file.fileName)}\n`;
+    orderText += `📎 <b>Файл:</b> ${escapeHtml(customOrder.file.fileName)}\n`;
   } else {
-    orderText += `📎 *Файл:* ❌ Не прикреплён\n`;
+    orderText += `📎 <b>Файл:</b> ❌ Не прикреплён\n`;
   }
-  orderText += `⏰ *Создан:* ${createdAt}\n`;
-  orderText += `🟡 *Статус:* ОЖИДАЕТ ОЦЕНКИ`;
+
+  orderText += `⏰ <b>Создан:</b> ${createdAt}\n`;
+  orderText += `🟡 <b>Статус:</b> ОЖИДАЕТ ОЦЕНКИ`;
 
   try {
     const sentMsg = await ctx.telegram.sendMessage(chatId, orderText, {
@@ -368,12 +372,12 @@ async function sendOrderForEvaluation(ctx) {
     if (customOrder.file) {
       if (customOrder.file.type === "photo") {
         await ctx.telegram.sendPhoto(chatId, customOrder.file.fileId, { 
-          caption: `📎 Файл задания: ${escapeMarkdown(customOrder.file.fileName)}`,
+          caption: `📎 Файл задания: ${escapeHtml(customOrder.file.fileName)}`,
           reply_to_message_id: sentMsg.message_id 
         });
       } else {
         await ctx.telegram.sendDocument(chatId, customOrder.file.fileId, { 
-          caption: `📎 Файл задания: ${escapeMarkdown(customOrder.file.fileName)}`,
+          caption: `📎 Файл задания: ${escapeHtml(customOrder.file.fileName)}`,
           reply_to_message_id: sentMsg.message_id 
         });
       }
@@ -430,27 +434,27 @@ bot.action(/^accept_custom_order:(\d+)$/, async (ctx) => {
   const customerName = orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId;
   
   // 1. Обновляем сообщение в ГРУППОВОМ чате (убираем кнопки, чтобы не захламлять)
-  let groupText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ ПРИНЯТ*\n\n`;
-  groupText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-  groupText += `👤 *Заказчик:* ${customerName}\n`;
-  groupText += `📚 *Предмет:* ${orderRecord.subjectName}\n`;
-  groupText += `👷 *Исполнитель:* ${executorName}\n`;
-  groupText += `🟡 *Статус:* ОЖИДАЕТ ОЦЕНКИ\n\n`;
-  groupText += `_Дальнейшее согласование цены и деталей перенесено в личный чат исполнителя._`;
+  let groupText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ ПРИНЯТ</b>\n\n`;
+  groupText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
+  groupText += `👤 <b>Заказчик:</b> ${customerName}\n`;
+  groupText += `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n`;
+  groupText += `👷 <b>Исполнитель:</b> ${executorName}\n`;
+  groupText += `🟡 <b>Статус:</b> ОЖИДАЕТ ОЦЕНКИ\n\n`;
+  groupText += `<i>Дальнейшее согласование цены и деталей перенесено в личный чат исполнителя.</i>`;
   
   try {
-    await ctx.editMessageText(groupText, { parse_mode: 'Markdown' });
+    await ctx.editMessageText(groupText, { parse_mode: 'HTML' });
   } catch (e) {
     console.error('Не удалось обновить сообщение в группе:', e);
   }
   
   // 2. Отправляем сообщение в ЛИЧНЫЙ чат исполнителю с кнопками управления
-  let privateText = `🔔 *ВЫ ПРИНЯЛИ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-  privateText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-  privateText += `👤 *Заказчик:* ${customerName}\n`;
-  privateText += `📚 *Предмет:* ${orderRecord.subjectName}\n`;
+  let privateText = `🔔 <b>ВЫ ПРИНЯЛИ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
+  privateText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
+  privateText += `👤 <b>Заказчик:</b> ${customerName}\n`;
+  privateText += `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n`;
   if (orderRecord.description) {
-    privateText += `📝 *Описание:* ${escapeMarkdown(orderRecord.description)}\n`;
+    privateText += `📝 <b>Описание:</b> ${escapeHtml(orderRecord.description)}\n`;
   }
   privateText += `\nНазначьте цену или свяжитесь с заказчиком для уточнения деталей:\n`;
   
@@ -462,7 +466,7 @@ bot.action(/^accept_custom_order:(\d+)$/, async (ctx) => {
   let privateMsg;
   try {
     privateMsg = await ctx.telegram.sendMessage(ctx.from.id, privateText, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: privateKeyboard.reply_markup
     });
   } catch (e) {
@@ -514,9 +518,9 @@ bot.action(/^custom_set_price:(\d+)$/, async (ctx) => {
     return ctx.answerCbQuery('❌ Это не ваш заказ. Сначала нажмите "Принять заказ".');
   }
   
-  const promptText = `💰 *${orderRecord.price && orderRecord.price > 0 ? 'Изменение цены' : 'Назначение цены'}*\n\n` +
-    `🆔 *Номер заказа:* №${orderNumber}\n` +
-    `📚 *Предмет:* ${orderRecord.subjectName}${orderRecord.price && orderRecord.price > 0 ? '\n💵 *Текущая цена:* ' + orderRecord.price + ' ₽' : ''}\n\n` +
+  const promptText = `💰 <b>${orderRecord.price && orderRecord.price > 0 ? 'Изменение цены' : 'Назначение цены'}</b>\n\n` +
+    `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+    `📚 <b>Предмет:</b> ${orderRecord.subjectName}${orderRecord.price && orderRecord.price > 0 ? '\n💵 <b>Текущая цена:</b> ' + orderRecord.price + ' ₽' : ''}\n\n` +
     `Отправьте ${orderRecord.price && orderRecord.price > 0 ? 'новую' : ''}цену заказа в рублях (только число):`;
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('↩️ Назад', `custom_back:${orderNumber}`)]
@@ -524,9 +528,9 @@ bot.action(/^custom_set_price:(\d+)$/, async (ctx) => {
   
   // 🌟 Проверяем: текстовое сообщение или медиа
   if (ctx.callbackQuery.message.text) {
-    await ctx.editMessageText(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
+    await ctx.editMessageText(promptText, { parse_mode: 'HTML', reply_markup: keyboard });
   } else {
-    await ctx.reply(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
+    await ctx.reply(promptText, { parse_mode: 'HTML', reply_markup: keyboard });
   }
   
   ctx.session.waitingCustomPrice = { orderNumber };
@@ -551,18 +555,18 @@ bot.action(/^custom_back:(\d+)$/, async (ctx) => {
   const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
   
   // Формируем сообщение управления заказом
-  let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-  updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-  updatedText += `👤 *Заказчик:* ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}\n`;
-  updatedText += `📚 *Предмет:* ${orderRecord.subjectName}\n`;
+  let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
+  updatedText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
+  updatedText += `👤 <b>Заказчик:</b> ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}\n`;
+  updatedText += `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n`;
   if (orderRecord.price && orderRecord.price > 0) {
-    updatedText += `💰 *Цена:* ${orderRecord.price} ₽\n`;
+    updatedText += `💰 <b>Цена:</b> ${orderRecord.price} ₽\n`;
   }
-  updatedText += `👷 *Исполнитель:* ${executorName}\n`;
-  updatedText += `🟡 *Статус:* ${orderRecord.price && orderRecord.price > 0 ? 'СОГЛАСОВАНИЕ ЦЕНЫ' : 'ОЖИДАЕТ ОЦЕНКИ'}`;
+  updatedText += `👷 <b>Исполнитель:</b> ${executorName}\n`;
+  updatedText += `🟡 <b>Статус:</b> ${orderRecord.price && orderRecord.price > 0 ? 'СОГЛАСОВАНИЕ ЦЕНЫ' : 'ОЖИДАЕТ ОЦЕНКИ'}`;
   
   await ctx.editMessageText(updatedText, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     reply_markup: Markup.inlineKeyboard([
       [Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)],
       [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
@@ -589,16 +593,16 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   if (ctx.session.customCancelOriginalText) {
       try {
           await ctx.editMessageText(ctx.session.customCancelOriginalText, {
-              parse_mode: 'Markdown',
+              parse_mode: 'HTML',
               reply_markup: ctx.session.customCancelOriginalKeyboard
           });
       } catch (e) {
-          await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+          await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
       }
       ctx.session.customCancelOriginalText = null;
       ctx.session.customCancelOriginalKeyboard = null;
   } else {
-      await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'Markdown' });
+      await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
   }
   await ctx.answerCbQuery('Отменено');
   });
@@ -681,19 +685,17 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
 
   // Формируем сообщение для заказчика
   let customerMessage =
-    `💰 *Назначена цена за ваш заказ*\n\n` +
-    `🆔 *Номер заказа:* №${orderNumber}\n` +
-    `📚 *Предмет:* ${updatedOrder.subjectName}\n` +
-    `🎓 *Курс:* ${updatedOrder.courseName}\n` +
-    `📅 *Дата заказа:* ${updatedOrder.createdAt}\n` +
-    `💵 *Базовая цена:* ${basePrice} ₽\n`;
-  
+    `💰 <b>Назначена цена за ваш заказ</b>\n\n` +
+    `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+    `📚 <b>Предмет:</b> ${updatedOrder.subjectName}\n` +
+    `🎓 <b>Курс:</b> ${updatedOrder.courseName}\n` +
+    `📅 <b>Дата заказа:</b> ${updatedOrder.createdAt}\n` +
+    `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
   if (discountPercent > 0) {
-    customerMessage += `🎉 *Ваша скидка:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+    customerMessage += `🎉 <b>Ваша скидка:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
   }
-  
   customerMessage +=
-    `✅ *Итого к оплате:* ${finalPrice} ₽\n\n` +
+    `✅ <b>Итого к оплате:</b> ${finalPrice} ₽\n\n` +
     `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
 
   const customerKeyboard = Markup.inlineKeyboard([
@@ -707,7 +709,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       updatedOrder.customerId,
       customerMessage,
       { 
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: customerKeyboard.reply_markup
       }
     );
@@ -716,23 +718,23 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     const targetChatId = getCustomOrderChatId(orderNumber);
     const cacheData = customOrderStates.get(orderNumber);
     if (cacheData && cacheData.managerMessageId && targetChatId) {
-      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-      updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-      updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
-      updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
-      updatedText += `💵 *Базовая цена:* ${basePrice} ₽\n`;
+      let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
+      updatedText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
+      updatedText += `👤 <b>Заказчик:</b> ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
+      updatedText += `📚 <b>Предмет:</b> ${updatedOrder.subjectName}\n`;
+      updatedText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
       if (discountPercent > 0) {
-        updatedText += `🎉 *Скидка заказчика:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+        updatedText += `🎉 <b>Скидка заказчика:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
       }
-      updatedText += `💰 *Итог к оплате:* ${finalPrice} ₽\n`;
-      updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽ (комиссия ${commission}%)\n`;
+      updatedText += `💰 <b>Итог к оплате:</b> ${finalPrice} ₽\n`;
+      updatedText += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commission}%)\n`;
       if (commissionExpense > 0) {
-        updatedText += `📉 *Покрытие из фонда комиссии:* ${commissionExpense} ₽\n`;
+        updatedText += `📉 <b>Покрытие из фонда комиссии:</b> ${commissionExpense} ₽\n`;
       }
-      updatedText += `👷 *Исполнитель:* ${executorName}\n`;
-      updatedText += `🟡 *Статус:* СОГЛАСОВАНИЕ ЦЕНЫ`;
+      updatedText += `👷 <b>Исполнитель:</b> ${executorName}\n`;
+      updatedText += `🟡 <b>Статус:</b> СОГЛАСОВАНИЕ ЦЕНЫ`;
       await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: createInlineKeyboard([
           [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderNumber}` }],
           [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderNumber}` }]
@@ -741,23 +743,19 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     }
 
     let executorConfirmMsg =
-      `✅ *Цена назначена!*\n\n` +
-      `💰 *Вы получите:* ${executorPrice} ₽\n` +
-      `💵 *Базовая цена:* ${basePrice} ₽\n`;
-    
+      `✅ <b>Цена назначена!</b>\n\n` +
+      `💰 <b>Вы получите:</b> ${executorPrice} ₽\n` +
+      `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
     if (discountPercent > 0) {
-      executorConfirmMsg += `🎉 *Скидка заказчика:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+      executorConfirmMsg += `🎉 <b>Скидка заказчика:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
     }
-    
-    executorConfirmMsg += `✅ *Заказчик заплатит:* ${finalPrice} ₽\n`;
-    
+    executorConfirmMsg += `✅ <b>Заказчик заплатит:</b> ${finalPrice} ₽\n`;
     if (commissionExpense > 0) {
-      executorConfirmMsg += `📉 *Покрытие из фонда:* ${commissionExpense} ₽\n`;
+      executorConfirmMsg += `📉 <b>Покрытие из фонда:</b> ${commissionExpense} ₽\n`;
     }
-    
     executorConfirmMsg += `\nТеперь заказчик может обсудить цену или перейти к оплате.`;
     
-    await ctx.reply(executorConfirmMsg, { parse_mode: 'Markdown' });
+    await ctx.reply(executorConfirmMsg, { parse_mode: 'HTML' });
     ctx.session.waitingCustomPrice = null;
   } catch (error) {
     console.error('Ошибка назначения цены:', error);
@@ -780,8 +778,8 @@ bot.action(/^custom_write_customer:(\d+)$/, async (ctx) => {
     return ctx.answerCbQuery('❌ Это не ваш заказ. Сначала нажмите "Принять заказ".');
   }
   
-  const promptText = `✉️ *Написать сообщение заказчику*\n\n` +
-    `🆔 *Номер заказа:* №${orderNumber}\n\n` +
+  const promptText = `✉️ <b>Написать сообщение заказчику</b>\n\n` +
+    `🆔 <b>Номер заказа:</b> №${orderNumber}\n\n` +
     `Отправьте ваше сообщение:`;
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('📎 Отправить файл', `custom_write_customer_file:${orderNumber}`)],
@@ -790,9 +788,9 @@ bot.action(/^custom_write_customer:(\d+)$/, async (ctx) => {
   
   // 🌟 Проверяем: текстовое сообщение или медиа
   if (ctx.callbackQuery.message.text) {
-    await ctx.editMessageText(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
+    await ctx.editMessageText(promptText, { parse_mode: 'HTML', reply_markup: keyboard });
   } else {
-    await ctx.reply(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
+    await ctx.reply(promptText, { parse_mode: 'HTML', reply_markup: keyboard });
   }
   
   // 🌟 Сохраняем исходное сообщение для возможности возврата
@@ -818,10 +816,10 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     return ctx.answerCbQuery('❌ Это не ваш заказ.');
   }
   await ctx.editMessageText(
-    `📎 *Отправить файл заказчику*\n\n` +
-    `🆔 *Номер заказа:* №${orderNumber}\n\n` +
+    `📎 <b>Отправить файл заказчику</b>\n\n` +
+    `🆔 <b>Номер заказа:</b> №${orderNumber}\n\n` +
     `Прикрепите файл или фото:`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
     );
     // 🌟 Сохраняем исходное сообщение для возможности возврата
     ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
@@ -852,12 +850,12 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     // Пересылаем сообщение заказчику
     try {
       await ctx.telegram.sendMessage(orderRecord.customerId,
-        `💬 *Вам сообщение от исполнителя*\n\n` +
-        `🆔 *Номер заказа:* №${orderNumber}\n` +
-        `📚 *Предмет:* ${orderRecord.subjectName}\n\n` +
+        `💬 <b>Вам сообщение от исполнителя</b>\n\n` +
+        `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+        `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n\n` +
         `${messageText}`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: Markup.inlineKeyboard([
             [Markup.button.callback('✏️ Ответить исполнителю', `custom_reply_executor:${orderNumber}`)]
           ]).reply_markup
@@ -908,9 +906,9 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     }
 
     const caption =
-      `📎 *Файл от исполнителя*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${orderRecord.subjectName}`;
+      `📎 <b>Файл от исполнителя</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+      `📚 <b>Предмет:</b> ${orderRecord.subjectName}`;
 
     const replyKeyboard = Markup.inlineKeyboard([
       [Markup.button.callback('✏️ Ответить исполнителю', `custom_reply_executor:${orderNumber}`)]
@@ -919,11 +917,11 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     try {
       if (fileType === 'photo') {
         await ctx.telegram.sendPhoto(orderRecord.customerId, fileId, {
-          caption, parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup
+          caption, parse_mode: 'HTML', reply_markup: replyKeyboard.reply_markup
         });
       } else {
         await ctx.telegram.sendDocument(orderRecord.customerId, fileId, {
-          caption, parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup
+          caption, parse_mode: 'HTML', reply_markup: replyKeyboard.reply_markup
         });
       }
 
@@ -951,8 +949,8 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       return ctx.answerCbQuery('❌ Заказ не найден');
     }
     
-    const promptText = `✏️ *Написать ответ исполнителю*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n\n` +
+    const promptText = `✏️ <b>Написать ответ исполнителю</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${orderNumber}\n\n` +
       `Отправьте ваше сообщение:`;
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback('📎 Отправить файл', `custom_reply_file:${orderNumber}`)],
@@ -961,9 +959,9 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     
     // 🌟 Проверяем: текстовое сообщение или медиа
     if (ctx.callbackQuery.message.text) {
-      await ctx.editMessageText(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
+      await ctx.editMessageText(promptText, { parse_mode: 'HTML', reply_markup: keyboard });
     } else {
-      await ctx.reply(promptText, { parse_mode: 'Markdown', reply_markup: keyboard });
+      await ctx.reply(promptText, { parse_mode: 'HTML', reply_markup: keyboard });
     }
     
     // 🌟 Сохраняем исходное сообщение для возможности возврата
@@ -982,10 +980,10 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       return ctx.answerCbQuery('❌ Заказ не найден');
     }
   await ctx.editMessageText(
-    `📎 *Отправить файл исполнителю*\n\n` +
-    `🆔 *Номер заказа:* №${orderNumber}\n\n` +
+    `📎 <b>Отправить файл исполнителю</b>\n\n` +
+    `🆔 <b>Номер заказа:</b> №${orderNumber}\n\n` +
     `Прикрепите файл или фото:`,
-    { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
     );
     // 🌟 Сохраняем исходное сообщение для возможности возврата
     ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
@@ -1028,11 +1026,11 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       // Отправляем в личный чат исполнителя
       if (orderRecord.executorId) {
         await ctx.telegram.sendMessage(orderRecord.executorId,
-          `💬 *Вам сообщение от заказчика*\n\n` +
-          `🆔 *Номер заказа:* №${orderNumber}\n` +
-          `👤 *Заказчик:* ${customerName}\n\n` +
+          `💬 <b>Вам сообщение от заказчика</b>\n\n` +
+          `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+          `👤 <b>Заказчик:</b> ${customerName}\n\n` +
           `${messageText}`,
-          { parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup }
+          { parse_mode: 'HTML', reply_markup: executorKeyboard.reply_markup }
         );
       }
 
@@ -1046,7 +1044,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         customerReplyButtons.push([Markup.button.callback('💳 Оплатить заказ', `custom_pay:${orderNumber}`)]);
       }
       await ctx.reply('✅ Сообщение отправлено исполнителю.', {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard(customerReplyButtons).reply_markup
       });
 
@@ -1085,9 +1083,9 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     }
 
     const caption =
-      `📎 *Файл от заказчика*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `👤 *Заказчик:* ${customerName}`;
+      `📎 <b>Файл от заказчика</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+      `👤 <b>Заказчик:</b> ${customerName}`;
 
     let executorKeyboard;
     if (orderRecord.status === 'paid') {
@@ -1105,11 +1103,11 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       if (orderRecord.executorId) {
         if (fileType === 'photo') {
           await ctx.telegram.sendPhoto(orderRecord.executorId, fileId, {
-            caption, parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup
+            caption, parse_mode: 'HTML', reply_markup: executorKeyboard.reply_markup
           });
         } else {
           await ctx.telegram.sendDocument(orderRecord.executorId, fileId, {
-            caption, parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup
+            caption, parse_mode: 'HTML', reply_markup: executorKeyboard.reply_markup
           });
         }
       }
@@ -1124,7 +1122,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         customerFileReplyButtons.push([Markup.button.callback('💳 Оплатить заказ', `custom_pay:${orderNumber}`)]);
       }
       await ctx.reply('✅ Файл отправлен исполнителю.', {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard(customerFileReplyButtons).reply_markup
       });
 
@@ -1160,22 +1158,21 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
   const paymentAmount = orderRecord.finalPrice || orderRecord.price;
 
   let paymentMsg =
-    `💳 *Оплата заказа*\n\n` +
-    `🆔 *Номер заказа:* №${orderNumber}\n` +
-    `💵 *Базовая цена:* ${basePrice} ₽\n`;
+    `💳 <b>Оплата заказа</b>\n\n` +
+    `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+    `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
   
   if (discountPercent > 0) {
-    paymentMsg += `🎉 *Ваша скидка:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+    paymentMsg += `🎉 <b>Ваша скидка:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
   }
   
   paymentMsg +=
-    `✅ *Итого к оплате:* ${paymentAmount} ₽\n\n` +
+    `✅ <b>Итого к оплате:</b> ${paymentAmount} ₽\n\n` +
     `Переведите сумму на карту:\n` +
-    `\`${paymentValue}\`\n\n` +
-    `📸 После оплаты отправьте скриншот чека в этот чат.`;
+    `<code>${paymentValue}</code>\n\n`+`📸 После оплаты отправьте скриншот чека в этот чат.`;
 
   await ctx.editMessageText(paymentMsg, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup
   });
     // 🌟 Сохраняем исходное сообщение для возможности возврата
@@ -1217,23 +1214,23 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       const work = catalog.getWork(orderRecord.workId);
       const { chatId: groupChatId } = getWorkConfig(work);
 
-      const paymentMsg = `💳 *ПОДТВЕРЖДЕНИЕ ОПЛАТЫ*\n\n🆔 *Номер заказа:* №${orderNumber}\n👤 *Заказчик:* ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}`;
+      const paymentMsg = `💳 <b>ПОДТВЕРЖДЕНИЕ ОПЛАТЫ</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n👤 <b>Заказчик:</b> ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}`;
 
       // 1. Отправляем в личку исполнителя
       if (targetChatId) {
         if (fileType === 'photo') {
-          await ctx.telegram.sendPhoto(targetChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+          await ctx.telegram.sendPhoto(targetChatId, fileId, { caption: paymentMsg, parse_mode: 'HTML' });
         } else {
-          await ctx.telegram.sendDocument(targetChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+          await ctx.telegram.sendDocument(targetChatId, fileId, { caption: paymentMsg, parse_mode: 'HTML' });
         }
       }
 
       // 2. Отправляем в групповой чат
       if (groupChatId && String(groupChatId) !== String(targetChatId)) {
         if (fileType === 'photo') {
-          await ctx.telegram.sendPhoto(groupChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+          await ctx.telegram.sendPhoto(groupChatId, fileId, { caption: paymentMsg, parse_mode: 'HTML' });
         } else {
-          await ctx.telegram.sendDocument(groupChatId, fileId, { caption: paymentMsg, parse_mode: 'Markdown' });
+          await ctx.telegram.sendDocument(groupChatId, fileId, { caption: paymentMsg, parse_mode: 'HTML' });
         }
       }
       
@@ -1255,24 +1252,24 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       const commissionExpense = updatedOrder.commissionExpense || 0;
       const executorPrice = updatedOrder.executorPrice || 0;
 
-      let updatedText = `🔔 *ИНДИВИДУАЛЬНЫЙ ЗАКАЗ*\n\n`;
-      updatedText += `🆔 *Номер заказа:* №${orderNumber}\n`;
-      updatedText += `👤 *Заказчик:* ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
-      updatedText += `📚 *Предмет:* ${updatedOrder.subjectName}\n`;
-      updatedText += `💵 *Базовая цена:* ${basePrice} ₽\n`;
+      let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
+      updatedText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
+      updatedText += `👤 <b>Заказчик:</b> ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
+      updatedText += `📚 <b>Предмет:</b> ${updatedOrder.subjectName}\n`;
+      updatedText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
       if (discountPercent > 0) {
-        updatedText += `🎉 *Скидка:* ${discountPercent}% (-${discountAmount} ₽)\n`;
+        updatedText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
       }
-      updatedText += `💰 *Заказчик заплатил:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n`;
-      updatedText += `👷 *Исполнитель получит:* ${executorPrice} ₽\n`;
+      updatedText += `💰 <b>Заказчик заплатил:</b> ${updatedOrder.finalPrice || updatedOrder.price} ₽\n`;
+      updatedText += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽\n`;
       if (commissionExpense > 0) {
-        updatedText += `📉 *Покрытие из фонда:* ${commissionExpense} ₽\n`;
+        updatedText += `📉 <b>Покрытие из фонда:</b> ${commissionExpense} ₽\n`;
       }
-      updatedText += `👷 *Исполнитель:* ${updatedOrder.executorId ? '@'+(await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
-      updatedText += `✅ *Оплачен:* ${updatedOrder.paidAt}\n`;
-      updatedText += `🟢 *Статус:* ОПЛАЧЕН - В РАБОТЕ`;
+      updatedText += `👷 <b>Исполнитель:</b> ${updatedOrder.executorId ? '@'+(await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
+      updatedText += `✅ <b>Оплачен:</b> ${updatedOrder.paidAt}\n`;
+      updatedText += `🟢 <b>Статус:</b> ОПЛАЧЕН - В РАБОТЕ`;
         await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
-          parse_mode: 'Markdown'
+          parse_mode: 'HTML'
         });
       }
       
@@ -1281,21 +1278,19 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     const paidDiscountAmount = updatedOrder.discountAmount || 0;
 
     let paymentConfirmMsg =
-      `✅ *Оплата подтверждена!*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n`;
-    
+      `✅ <b>Оплата подтверждена!</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
     if (paidDiscountPercent > 0) {
-      paymentConfirmMsg += `💵 *Базовая цена:* ${paidBasePrice} ₽\n`;
-      paymentConfirmMsg += `🎉 *Скидка:* ${paidDiscountPercent}% (-${paidDiscountAmount} ₽)\n`;
+      paymentConfirmMsg += `💵 <b>Базовая цена:</b> ${paidBasePrice} ₽\n`;
+      paymentConfirmMsg += `🎉 <b>Скидка:</b> ${paidDiscountPercent}% (-${paidDiscountAmount} ₽)\n`;
     }
-    
     paymentConfirmMsg +=
-      `💰 *Вы заплатили:* ${updatedOrder.finalPrice || updatedOrder.price} ₽\n\n` +
+      `💰 <b>Вы заплатили:</b> ${updatedOrder.finalPrice || updatedOrder.price} ₽\n\n` +
       `Ваш заказ передан исполнителю. Ожидайте выполнения работы.\n\n` +
       `✏️ Если нужно уточнить детали, напишите исполнителю:`;
 
     await ctx.reply(paymentConfirmMsg, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
       ]).reply_markup
@@ -1325,10 +1320,10 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     }
     
     await ctx.editMessageText(
-      `✏️ *Написать исполнителю*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n\n` +
+      `✏️ <b>Написать исполнителю</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${orderNumber}\n\n` +
       `Отправьте ваше сообщение:`,
-      { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
       );
     // 🌟 Сохраняем исходное сообщение для возможности возврата
     ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
@@ -1371,11 +1366,11 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       // Отправляем в личный чат исполнителя
       if (orderRecord.executorId) {
         await ctx.telegram.sendMessage(orderRecord.executorId,
-          `💬 *Сообщение от заказчика*\n\n` +
-          `🆔 *Номер заказа:* №${orderNumber}\n` +
-          `👤 *Заказчик:* ${customerName}\n\n` +
+          `💬 <b>Сообщение от заказчика</b>\n\n` +
+          `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+          `👤 <b>Заказчик:</b> ${customerName}\n\n` +
           `${messageText}`,
-          { parse_mode: 'Markdown', reply_markup: executorKeyboard.reply_markup }
+          { parse_mode: 'HTML', reply_markup: executorKeyboard.reply_markup }
         );
       }
 
@@ -1389,7 +1384,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
         customerWriteButtons.push([Markup.button.callback('💳 Оплатить заказ', `custom_pay:${orderNumber}`)]);
       }
       await ctx.reply('✅ Сообщение отправлено исполнителю.', {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard(customerWriteButtons).reply_markup
       });
 

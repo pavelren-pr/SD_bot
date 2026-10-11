@@ -50,7 +50,7 @@ async function showDepartmentOrders(ctx, chatEnv, deptIdx, filter, page) {
   const currentPage = Math.min(page, totalPages - 1);
   const displayOrders = filtered.slice(currentPage * ORDERS_PER_PAGE, (currentPage + 1) * ORDERS_PER_PAGE).reverse();
 
-  let text = `🏢 *Отдел:* ${deptName}\n`;
+  let text = `🏢 <b>Отдел:</b> ${deptName}\n`;
   text += `${title}\n\n`;
   text += `Страница ${currentPage + 1} из ${totalPages}\n`;
   text += `Всего заказов: ${filtered.length}`;
@@ -98,7 +98,7 @@ async function showDepartmentOrders(ctx, chatEnv, deptIdx, filter, page) {
 
     // 🌟 Оборачиваем в try-catch, чтобы не падать при повторном нажатии той же кнопки
   try {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
   } catch (e) {
     // Игнорируем ошибку "сообщение не изменено" — она возникает при нажатии на уже активный раздел
     if (!e.message || !e.message.includes('message is not modified')) {
@@ -169,9 +169,9 @@ async function showOrderCard(ctx, orderId) {
   // 🌟 ИСПРАВЛЕНИЕ: если это нажатие кнопки — редактируем сообщение,
   // если текстовый ввод — отправляем новое сообщение
   if (ctx.callbackQuery) {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
   } else {
-    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
+    await ctx.reply(text, { parse_mode: 'HTML', ...keyboard });
   }
 }
 
@@ -190,8 +190,8 @@ function register(bot) {
     const chats = loyalty.getManagedChats(ctx.from.id);
     if (chats.length === 0) {
       await ctx.editMessageText(
-        '🏢 *Заказы моего отдела*\n\n⚠️ Вам не назначены чаты отделов.\nОбратитесь к администратору.',
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Назад в профиль', 'profile:back')]]) }
+        '🏢 <b>Заказы моего отдела</b>\n\n⚠️ Вам не назначены чаты отделов.\nОбратитесь к администратору.',
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('🔙 Назад в профиль', 'profile:back')]]) }
       );
       return;
     }
@@ -201,14 +201,14 @@ function register(bot) {
       return;
     }
 
-    let text = '🏢 *Заказы моего отдела*\n\nВыберите отдел:';
+    let text = '🏢 <b>Заказы моего отдела</b>\n\nВыберите отдел:';
     const buttons = chats.map((c, idx) => {
       const ordersCount = getDepartmentOrders(c.chatEnv).length;
       return [Markup.button.callback(`🏢 ${c.name} (${ordersCount})`, `dept:list:${idx}:all:0`)];
     });
     buttons.push([Markup.button.callback('🔙 Назад в профиль', 'profile:back')]);
 
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
   });
 
   bot.action(/^dept:list:(\d+):(.+):(\d+)$/, async (ctx) => {
@@ -282,7 +282,7 @@ function register(bot) {
             updatedOrderForGroup.managerMessageId,
             null,
             updatedGroupText,
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'HTML' }
           );
         } catch (e) {
           console.log('Не удалось обновить сообщение в группе:', e.message);
@@ -313,8 +313,8 @@ function register(bot) {
       [Markup.button.callback('⬅️ Назад', `dept:view:${orderId}`)]
     ]);
     await ctx.editMessageText(
-      `🔄 *Смена статуса заказа №${order.orderNumber}*\n\nТекущий статус: *${order.status}*`,
-      { parse_mode: 'Markdown', ...statusKeyboard }
+      `🔄 <b>Смена статуса заказа №${order.orderNumber}</b>\n\nТекущий статус: <b>${order.status}</b>`,
+      { parse_mode: 'HTML', ...statusKeyboard }
     );
   });
 
@@ -344,23 +344,23 @@ function register(bot) {
       }
     }
     if (executors.length > 0) {
-      availableUsersText += `🔥 *Исполнители (Прометей):*\n`;
+      availableUsersText += `🔥 <b>Исполнители (Прометей):</b>\n`;
       executors.forEach(e => {
-        availableUsersText += `• \`${e.id}\`${e.username ? ` (\`@${e.username}\`)` : ''}\n`;
+        availableUsersText += `• <code>${e.id}</code>${e.username ? ` (<code>@${e.username}</code>)` : ''}\n`;
       });
     } else {
-      availableUsersText += `🔥 *Исполнители:* _нет назначенных рангов_\n`;
+      availableUsersText += `🔥 <b>Исполнители:</b> <i>нет назначенных рангов</i>\n`;
     }
     if (managers.length > 0) {
-      availableUsersText += `\n👁️ *Управляющие отделами (Циклоп):*\n`;
+      availableUsersText += `\n👁️ <b>Управляющие отделами (Циклоп):</b>\n`;
       managers.forEach(m => {
-        availableUsersText += `• \`${m.id}\`${m.username ? ` (\`@${m.username}\`)` : ''}\n`;
+        availableUsersText += `• <code>${m.id}</code>${m.username ? ` (<code>@${m.username}</code>)` : ''}\n`;
       });
     }
     if (admins.length > 0) {
-      availableUsersText += `\n👑 *Администраторы (Посейдон):*\n`;
+      availableUsersText += `\n👑 <b>Администраторы (Посейдон):</b>\n`;
       admins.forEach(a => {
-        availableUsersText += `• \`${a.id}\`${a.username ? ` (\`@${a.username}\`)` : ''}\n`;
+        availableUsersText += `• <code>${a.id}</code>${a.username ? ` (<code>@${a.username}</code>)` : ''}\n`;
       });
     }
 
@@ -368,13 +368,13 @@ function register(bot) {
     ctx.session = ctx.session || {};
     ctx.session.deptState = `dept_executor_id:${orderId}`;
     await ctx.editMessageText(
-      `👷 *Назначение исполнителя*\n\n` +
-      `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n` +
+      `👷 <b>Назначение исполнителя</b>\n\n` +
+      `📦 <b>Заказ:</b> №${order.orderNumber} | ${order.workTitle}\n\n` +
       `Введите Telegram ID исполнителя (число):\n\n` +
       `${availableUsersText}\n` +
-      `_Или введите ID любого пользователя вручную_`,
+      `<i>Или введите ID любого пользователя вручную</i>`,
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `dept:view:${orderId}`)]])
       }
     );
@@ -393,12 +393,12 @@ function register(bot) {
     ctx.session = ctx.session || {};
     ctx.session.deptState = `dept_msg_customer:${orderId}`;
     await ctx.editMessageText(
-      `💬 Отправка сообщения заказчику\n\n` +
+      `💬 <b>Отправка сообщения заказчику</b>\n\n` +
       `Заказ №${order.orderNumber}\n` +
       `Заказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\n` +
       `Введите текст сообщения:`,
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `dept:view:${orderId}`)]])
       }
     );
@@ -420,8 +420,8 @@ function register(bot) {
       return;
     }
 
-    let text = `🏢 *Привязка заказа к отделу*\n\n`;
-    text += `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n`;
+    let text = `🏢 <b>Привязка заказа к отделу</b>\n\n`;
+    text += `📦 <b>Заказ:</b> №${order.orderNumber} | ${order.workTitle}\n\n`;
     text += `Выберите отдел:`;
 
     const buttons = chats.map((c, idx) => [
@@ -429,7 +429,7 @@ function register(bot) {
     ]);
     buttons.push([Markup.button.callback('⬅️ Назад', `dept:view:${orderId}`)]);
 
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
   });
 
   // --- ПРИВЯЗКА К ОТДЕЛУ: установка чата ---
@@ -535,11 +535,11 @@ function register(bot) {
         if (isReassignment && oldExecutorId) {
           try {
             await bot.telegram.sendMessage(oldExecutorId,
-              `⚠️ *Заказ передан другому исполнителю*\n\n` +
-              `🆔 *Номер заказа:* №${orderNumber}\n` +
-              `📚 *Работа:* ${order.workTitle}\n\n` +
+              `⚠️ <b>Заказ передан другому исполнителю</b>\n\n` +
+              `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+              `📚 <b>Работа:</b> ${order.workTitle}\n\n` +
               `Управляющий отделом назначил нового исполнителя.`,
-              { parse_mode: 'Markdown' }
+              { parse_mode: 'HTML' }
             );
           } catch (e) {
             console.log('Не удалось уведомить старого исполнителя:', e.message);
@@ -555,10 +555,10 @@ function register(bot) {
         }, ctx);
 
         await ctx.reply(
-          `✅ *Исполнитель успешно назначен!*\n\n` +
-          `📦 *Заказ:* №${orderNumber}\n` +
-          `👷 *ID исполнителя:* \`${executorId}\``,
-          { parse_mode: 'Markdown' }
+          `✅ <b>Исполнитель успешно назначен!</b>\n\n` +
+          `📦 <b>Заказ:</b> №${orderNumber}\n` +
+          `👷 <b>ID исполнителя:</b> \`${executorId}\``,
+          { parse_mode: 'HTML' }
         );
 
         await showOrderCard(ctx, orderId);
@@ -569,9 +569,9 @@ function register(bot) {
           orderNumber: orderNumber
         });
         await ctx.reply(
-          `❌ *Ошибка назначения:*\n\n${err.message}`,
+          `❌ <b>Ошибка назначения:</b>\n\n${err.message}`,
           {
-            parse_mode: 'Markdown',
+            parse_mode: 'HTML',
             ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `dept:view:${orderId}`)]])
           }
         );
@@ -594,8 +594,8 @@ function register(bot) {
       try {
         await ctx.telegram.sendMessage(
           order.customerId,
-          `📬 *Сообщение от руководителя отдела по заказу №${order.orderNumber}*\n\n${text}`,
-          { parse_mode: 'Markdown' }
+          `📬 <b>Сообщение от руководителя отдела по заказу №${order.orderNumber}</b>\n\n${text}`,
+          { parse_mode: 'HTML' }
         );
         await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}`);
       } catch (err) {

@@ -1113,27 +1113,26 @@ async function showProfile(ctx) {
   const loyaltyInfo = loyalty.getLoyaltyInfo(ctx.from.id);
   const userName = ctx.from.first_name || 'Пользователь';
   
-  let profileText = `👤 *Профиль пользователя*\n\n`;
-  profileText += `*Имя:* ${userName}\n`;
-  profileText += `*ID:* \`${ctx.from.id}\`\n\n`;
+  let profileText = `👤 <b>Профиль пользователя</b>\n\n`;
+  profileText += `<b>Имя:</b> ${userName}\n`;
+  profileText += `<b>ID:</b> <code>${ctx.from.id}</code>\n\n`;
   
-  // Специальность пользователя
   const specialty = loyalty.getSpecialtyById(loyaltyInfo.specialty);
   if (specialty) {
-    profileText += `🎓 *Специальность:* ${specialty.name}\n\n`;
+    profileText += `🎓 <b>Специальность:</b> ${specialty.name}\n\n`;
   } else {
-    profileText += `🎓 *Специальность:* _не выбрана_\n\n`;
+    profileText += `🎓 <b>Специальность:</b> <i>не выбрана</i>\n\n`;
   }
   
-  profileText += `💵 *Программа лояльности*\n`;
-  profileText += `${loyaltyInfo.rank.emoji} *${loyaltyInfo.rank.name}*\n`;
-  profileText += `💰 *Сумма заказов:* ${loyaltyInfo.totalSpent} ₽\n`;
-  profileText += `🎉 *Текущая скидка:* ${loyaltyInfo.discountPercent}%\n`;
+  profileText += `💵 <b>Программа лояльности</b>\n`;
+  profileText += `${loyaltyInfo.rank.emoji} <b>${loyaltyInfo.rank.name}</b>\n`;
+  profileText += `💰 <b>Сумма заказов:</b> ${loyaltyInfo.totalSpent} ₽\n`;
+  profileText += `🎉 <b>Текущая скидка:</b> ${loyaltyInfo.discountPercent}%\n`;
   
   if (loyaltyInfo.progressToNext) {
-    profileText += `➡️ *До следующего ранга (${loyaltyInfo.progressToNext.nextName}):* ${loyaltyInfo.progressToNext.need} ₽\n`;
+    profileText += `➡️ <b>До следующего ранга (${loyaltyInfo.progressToNext.nextName}):</b> ${loyaltyInfo.progressToNext.need} ₽\n`;
   } else if (currentRankIsMaxPublic(loyaltyInfo.rank)) {
-    profileText += `👑 *Вы достигли максимального ранга!*\n`;
+    profileText += `👑 <b>Вы достигли максимального ранга!</b>\n`;
   }
   
   profileText += `\nВыберите раздел:`;
@@ -1144,15 +1143,12 @@ async function showProfile(ctx) {
     [Markup.button.callback('🎓 Изменить специальность', 'specialty:change')]
   ];
   
-  // 🌟 Добавлен hasManagerAccess — Управляющий тоже видит "Мои заказы"
   if (loyaltyInfo.hasExecutorAccess || loyaltyInfo.hasFullAccess || loyaltyInfo.hasManagerAccess) {
     profileButtons.push([Markup.button.callback('📋 Мои заказы (Исполнитель)', 'profile:my_orders')]);
   }
-  // 🌟 Кнопка "Заказы моего отдела" для Циклопа
   if (loyaltyInfo.hasManagerAccess) {
     profileButtons.push([Markup.button.callback('📦 Заказы моего отдела', 'dept:main')]);
   }
-  
   if (loyaltyInfo.hasFullAccess) {
     profileButtons.push([Markup.button.callback('🛠 Админ панель', 'profile:edit_works')]);
   }
@@ -1161,12 +1157,12 @@ async function showProfile(ctx) {
   
   if (ctx.callbackQuery) {
     await ctx.editMessageText(profileText, { 
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',  // ✅
       reply_markup: profileKeyboard.reply_markup
     });
   } else {
     await ctx.reply(profileText, { 
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',  // ✅
       reply_markup: profileKeyboard.reply_markup
     });
   }

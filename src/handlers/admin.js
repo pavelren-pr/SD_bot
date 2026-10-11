@@ -34,37 +34,34 @@ function getAvailableEnvVars() {
 // 🌟 Форматирование списка переменных для вывода
 function formatEnvVarsList(vars, type) {
   if (vars.length === 0) {
-    return `_⚠️ Переменные не найдены в .env_\n\n`;
+    return `<i>⚠️ Переменные не найдены в .env</i>\n\n`;
   }
-  
-  let text = type === 'chat' 
-    ? `💬 *Доступные переменные чатов:*\n` 
-    : `💳 *Доступные переменные оплаты:*\n`;
-  
+  let text = type === 'chat'
+    ? `💬 <b>Доступные переменные чатов:</b>\n`
+    : `💳 <b>Доступные переменные оплаты:</b>\n`;
   vars.forEach(v => {
     if (type === 'chat') {
-      // Для чатов показываем имя и значение (чтобы понимать, какая группа)
-      text += `• \`${v.name}\` — ID: ${v.value}\n`;
+      text += `• <code>${v.name}</code> — ID: ${v.value}\n`;
     } else {
-      // Для оплаты показываем только имя (без номера карты!)
-      text += `• \`${v.name}\`\n`;
+      text += `• <code>${v.name}</code>\n`;
     }
   });
-  
   return text;
 }
 
 // 🌟 Экранирование спецсимволов Markdown
-function escapeMarkdown(text) {
+function escapeHtml(text) {
   if (!text) return '';
-  return String(text).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 // 🌟 Безопасный вывод username (экранирование спецсимволов Markdown)
 function safeUsername(username) {
   if (!username || username === 'N/A') return 'не указан';
-  // Экранируем все спецсимволы Markdown
-  return '@' + String(username).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+  return '@' + String(username);
 }
 
 // 🌟 Парсинг чатов отделов из строки "Название=ПЕРЕМЕННАЯ, Название2=ПЕРЕМЕННАЯ2"
@@ -285,34 +282,33 @@ function getWorkCard(workId) {
   const specialty = work.specialty ? loyalty.getSpecialtyById(work.specialty) : null;
   const specialtyName = specialty ? specialty.name : 'Не указана';
   
-  let text = `✏️ *Редактирование работы*\n\n`;
-  text += `🎓 *Специальность:* ${specialtyName}\n`;
+  let text = `✏️ <b>Редактирование работы</b>\n\n`;
+  text += `🎓 <b>Специальность:</b> ${specialtyName}\n`;
   
   if (work.subjectId) {
     const subject = catalog.getSubject(work.subjectId);
     const course = subject ? catalog.getCourse(subject.courseId) : null;
-    text += `📚 *Курс:* ${course ? escapeMarkdown(course.name) : '_не указан_'}\n`;
-    text += `📖 *Предмет:* ${subject ? escapeMarkdown(subject.name) : '_не указан_'}\n\n`;
+    text += `📚 <b>Курс:</b> ${course ? escapeHtml(course.name) : '<i>не указан</i>'}\n`;
+    text += `📖 <b>Предмет:</b> ${subject ? escapeHtml(subject.name) : '<i>не указан</i>'}\n\n`;
   } else if (work.courseId) {
     const course = catalog.getCourse(work.courseId);
-    text += `📚 *Курс:* ${course ? escapeMarkdown(course.name) : '_не указан_'}\n`;
-    text += `📋 *Тип:* Общая работа курса (без предмета)\n\n`;
+    text += `📚 <b>Курс:</b> ${course ? escapeHtml(course.name) : '<i>не указан</i>'}\n`;
+    text += `📋 <b>Тип:</b> Общая работа курса (без предмета)\n\n`;
   } else {
-    text += `📋 *Тип:* Общая работа специальности (без курса/предмета)\n\n`;
+    text += `📋 <b>Тип:</b> Общая работа специальности (без курса/предмета)\n\n`;
   }
   
-  text += `📝 *Название:* ${escapeMarkdown(work.title)}\n`;
-  if (work.description && work.description.trim() !== '') text += `📄 *Описание:* ${escapeMarkdown(work.description)}\n`;
-  text += `💰 *Цена:* ${work.price} ₽\n`;
-  text += `📊 *Комиссия:* ${work.commission}%\n`;
-  text += `💳 *Оплата:* \`${work.paymentEnv}\`\n`;
-  text += `💬 *Чат:* \`${work.chatEnv}\`\n`;
-  text += `📋 *Требования:* ${Array.isArray(work.needs) && work.needs.length > 0 ? work.needs.join(', ') : 'нет'}\n`;
-  text += `🌟 *Индивидуальный заказ:* ${work.isCustomOrder ? 'Да' : 'Нет'}\n`;
-  if (work.exampleUrl && work.exampleUrl.trim() !== '') text += `🔗 *Примеры:* ${escapeMarkdown(work.exampleUrl)}\n`;
-  text += `\n📌 *Подсказка:*\n${escapeMarkdown(work.prompt)}`;
+  text += `📝 <b>Название:</b> ${escapeHtml(work.title)}\n`;
+  if (work.description && work.description.trim() !== '') text += `📄 <b>Описание:</b> ${escapeHtml(work.description)}\n`;
+  text += `💰 <b>Цена:</b> ${work.price} ₽\n`;
+  text += `📊 <b>Комиссия:</b> ${work.commission}%\n`;
+  text += `💳 <b>Оплата:</b> <code>${work.paymentEnv}</code>\n`;
+  text += `💬 <b>Чат:</b> <code>${work.chatEnv}</code>\n`;
+  text += `📋 <b>Требования:</b> ${Array.isArray(work.needs) && work.needs.length > 0 ? work.needs.join(', ') : 'нет'}\n`;
+  text += `🌟 <b>Индивидуальный заказ:</b> ${work.isCustomOrder ? 'Да' : 'Нет'}\n`;
+  if (work.exampleUrl && work.exampleUrl.trim() !== '') text += `🔗 <b>Примеры:</b> ${escapeHtml(work.exampleUrl)}\n`;
+  text += `\n📌 <b>Подсказка:</b>\n${escapeHtml(work.prompt)}`;
   
-  // 🌟 Кнопка "Назад" зависит от типа работы
   let backCallback;
   if (work.subjectId) {
     backCallback = `admin:catalog_subject:${work.subjectId}`;
@@ -405,8 +401,8 @@ async function showAdminMenu(ctx) {
   }
   ctx.session = ctx.session || {};
   ctx.session.adminState = null;
-  await ctx.reply('🛠 *Панель управления*', {
-    parse_mode: 'Markdown',
+  await ctx.reply('🛠 <b>Панель управления</b>', {
+    parse_mode: 'HTML',
     ...getAdminMainMenu()
   });
 }
@@ -612,7 +608,7 @@ function register(bot) {
     if (!isAdmin(ctx.from.id)) return ctx.reply('❌ У вас нет прав для доступа к этой панели.');
     ctx.session = ctx.session || {};
     ctx.session.adminState = null;
-    await ctx.reply('🛠 *Панель управления*', { parse_mode: 'Markdown', ...getAdminMainMenu() });
+    await ctx.reply('🛠 <b>Панель управления</b>', { parse_mode: 'HTML', ...getAdminMainMenu() });
   });
 
   // ==========================================
@@ -641,7 +637,7 @@ function register(bot) {
       
       const dateMatch = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
       if (!dateMatch) {
-        return ctx.reply('❌ Неверный формат даты. Введите в формате `ДД.ММ.ГГГГ`, например: `01.09.2026`', { parse_mode: 'Markdown' });
+        return ctx.reply('❌ Неверный формат даты. Введите в формате <code>ДД.ММ.ГГГГ</code>, например: <code>01.09.2026</code>', { parse_mode: 'HTML' });
       }
       
       const [, day, month, year] = dateMatch;
@@ -663,11 +659,11 @@ function register(bot) {
       };
       
       await ctx.reply(
-        `✅ *Начальная дата:* ${fromDate.toLocaleDateString('ru-RU')}\n\n` +
-        `📝 *Шаг 2/2: Введите КОНЕЧНУЮ дату*\n` +
-        `Формат: \`ДД.ММ.ГГГГ\`\nНапример: \`30.09.2026\``,
+        `✅ <b>Начальная дата:</b> ${fromDate.toLocaleDateString('ru-RU')}\n\n` +
+        `📝 <b>Шаг 2/2: Введите КОНЕЧНУЮ дату</b>\n` +
+        `Формат: <code>ДД.ММ.ГГГГ</code>\nНапример: <code>30.09.2026</code>`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:finance_${section}`)]])
         }
       );
@@ -682,7 +678,7 @@ function register(bot) {
       
       const dateMatch = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
       if (!dateMatch) {
-        return ctx.reply('❌ Неверный формат даты. Введите в формате `ДД.ММ.ГГГГ`, например: `30.09.2026`', { parse_mode: 'Markdown' });
+        return ctx.reply('❌ Неверный формат даты. Введите в формате <code>ДД.ММ.ГГГГ</code>, например: <code>30.09.2026</code>', { parse_mode: 'HTML' });
       }
       
       const [, day, month, year] = dateMatch;
@@ -712,56 +708,56 @@ function register(bot) {
       
       if (section === 'revenue') {
         backAction = 'finance_revenue';
-        textMsg = `📊 *Выручка*\n${periodLabel}\n\n`;
-        textMsg += `💰 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
-        textMsg += `📦 *Заказов:* ${stats.ordersCount}\n`;
-        textMsg += `👷 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
-        textMsg += `📈 *Валовая комиссия:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+        textMsg = `📊 <b>Выручка</b>\n${periodLabel}\n\n`;
+        textMsg += `💰 <b>Выручка:</b> ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📦 <b>Заказов:</b> ${stats.ordersCount}\n`;
+        textMsg += `👷 <b>Выплачено исполнителям:</b> ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📈 <b>Валовая комиссия:</b> ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
       } else if (section === 'profit') {
         backAction = 'finance_profit';
-        textMsg = `📈 *Прибыль*\n${periodLabel}\n\n`;
-        textMsg += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
-        textMsg += `🎁 *Покрытие скидок:* -${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
-        textMsg += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+        textMsg = `📈 <b>Прибыль</b>\n${periodLabel}\n\n`;
+        textMsg += `📊 <b>Комиссия общая:</b> ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `🎁 <b>Покрытие скидок:</b> -${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📊 <b>Комиссия чистая:</b> ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
         
         if (stats.coOwnersShares.length > 0) {
-          textMsg += `👥 *Совладельцы:*\n`;
+          textMsg += `👥 <b>Совладельцы:</b>\n`;
           stats.coOwnersShares.forEach(co => {
             const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
             textMsg += `  • ${name}: ${co.percent}% = ${co.share.toLocaleString('ru-RU')} ₽\n`;
           });
-          textMsg += `  *Итого совладельцам:* ${stats.coOwnersTotal.toLocaleString('ru-RU')} ₽\n\n`;
+          textMsg += `  <b>Итого совладельцам:</b> ${stats.coOwnersTotal.toLocaleString('ru-RU')} ₽\n\n`;
         }
         
-        textMsg += `⚙️ *Константа расходов (${stats.expenseConstant}%):* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
-        textMsg += `💰 *Чистая прибыль:* ${stats.netProfit.toLocaleString('ru-RU')} ₽\n`;
-        if (stats.netProfit < 0) textMsg += `\n⚠️ *Внимание: убыток!*`;
+        textMsg += `⚙️ <b>Константа расходов (${stats.expenseConstant}%):</b> ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+        textMsg += `💰 <b>Чистая прибыль:</b> ${stats.netProfit.toLocaleString('ru-RU')} ₽\n`;
+        if (stats.netProfit < 0) textMsg += `\n⚠️ <b>Внимание: убыток!</b>`;
       } else if (section === 'expenses') {
         backAction = 'finance_expenses';
-        textMsg = `📉 *Расход комиссии*\n${periodLabel}\n\n`;
-        textMsg += `🎁 *Покрытие скидок:* ${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
-        textMsg += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
-        textMsg += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
-        textMsg += `⚙️ *Константа расходов:* ${stats.expenseConstant}%\n`;
-        textMsg += `💸 *Сумма константы:* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+        textMsg = `📉 <b>Расход комиссии</b>\n${periodLabel}\n\n`;
+        textMsg += `🎁 <b>Покрытие скидок:</b> ${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📊 <b>Комиссия общая:</b> ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📊 <b>Комиссия чистая:</b> ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+        textMsg += `⚙️ <b>Константа расходов:</b> ${stats.expenseConstant}%\n`;
+        textMsg += `💸 <b>Сумма константы:</b> ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
         const remainingFund = stats.expenseConstantAmount - stats.discountCoverage;
         if (remainingFund >= 0) {
-          textMsg += `✅ *Остаток фонда:* ${remainingFund.toLocaleString('ru-RU')} ₽`;
+          textMsg += `✅ <b>Остаток фонда:</b> ${remainingFund.toLocaleString('ru-RU')} ₽`;
         } else {
-          textMsg += `⚠️ *Перерасход фонда:* ${Math.abs(remainingFund).toLocaleString('ru-RU')} ₽`;
+          textMsg += `⚠️ <b>Перерасход фонда:</b> ${Math.abs(remainingFund).toLocaleString('ru-RU')} ₽`;
         }
       } else if (section === 'executors') {
         backAction = 'finance_executors';
-        textMsg = `👷 *Заработок исполнителей*\n${periodLabel}\n\n`;
-        textMsg += `💰 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
-        textMsg += `📦 *Заказов:* ${stats.ordersCount}\n`;
-        textMsg += `💵 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+        textMsg = `👷 <b>Заработок исполнителей</b>\n${periodLabel}\n\n`;
+        textMsg += `💰 <b>Выплачено исполнителям:</b> ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📦 <b>Заказов:</b> ${stats.ordersCount}\n`;
+        textMsg += `💵 <b>Выручка:</b> ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
         const avgEarning = stats.ordersCount > 0 ? Math.round(stats.executorEarnings / stats.ordersCount) : 0;
-        textMsg += `📊 *Средний заработок за заказ:* ${avgEarning.toLocaleString('ru-RU')} ₽\n`;
+        textMsg += `📊 <b>Средний заработок за заказ:</b> ${avgEarning.toLocaleString('ru-RU')} ₽\n`;
       }
       
       await ctx.reply(textMsg, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('🔄 Другой период', `admin:${backAction}`)],
           [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
@@ -780,8 +776,8 @@ function register(bot) {
       ctx.session.adminState = 'finance_add_coowner_username';
       
       await ctx.reply(
-        `👤 *ID принят:* \`${text}\`\n\n📝 *Шаг 2/3: Введите username совладельца (без @):*`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+        `👤 <b>ID принят:</b> \`${text}\`\n\n📝 <b>Шаг 2/3: Введите username совладельца (без @):</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
       );
       return;
     }
@@ -797,8 +793,8 @@ function register(bot) {
       ctx.session.adminState = 'finance_add_coowner_percent';
       
       await ctx.reply(
-        `📛 *Username принят:* @${username}\n\n📊 *Шаг 3/3: Введите процент дохода совладельца (0-100):*\n\n_Процент считается от изначальной комиссии до вычета скидок._`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+        `📛 <b>Username принят:</b> @${username}\n\n📊 <b>Шаг 3/3: Введите процент дохода совладельца (0-100):</b>\n\n<i>Процент считается от изначальной комиссии до вычета скидок.</i>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
       );
       return;
     }
@@ -824,7 +820,7 @@ function register(bot) {
       
       if (newTotal > 100) {
         return ctx.reply(
-          `❌ *Превышен лимит 100%!*\n\n` +
+          `❌ <b>Превышен лимит 100%!</b>\n\n` +
           `Текущая сумма: ${currentTotal}% (совладельцы) + ${expenseConstant}% (константа) = ${currentTotal + expenseConstant}%\n` +
           `Новый процент: ${percent}%\n` +
           `Итого будет: ${newTotal}%\n\n` +
@@ -848,12 +844,12 @@ function register(bot) {
       ctx.session.adminState = null;
       
       await ctx.reply(
-        `✅ *Совладелец добавлен!*\n\n` +
-        `👤 *ID:* \`${coOwnerId}\`\n` +
-        `📛 *Username:* @${coOwnerUsername}\n` +
-        `📊 *Процент:* ${percent}%`,
+        `✅ <b>Совладелец добавлен!</b>\n\n` +
+        `👤 <b>ID:</b> \`${coOwnerId}\`\n` +
+        `📛 <b>Username:</b> @${coOwnerUsername}\n` +
+        `📊 <b>Процент:</b> ${percent}%`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
             [Markup.button.callback('👥 К списку совладельцев', 'admin:finance_coowners')],
             [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
@@ -893,7 +889,7 @@ function register(bot) {
       
       if (newTotal > 100) {
         return ctx.reply(
-          `❌ *Превышен лимит 100%!*\n\n` +
+          `❌ <b>Превышен лимит 100%!</b>\n\n` +
           `Другие совладельцы: ${otherCoOwnersTotal}%\n` +
           `Константа: ${expenseConstant}%\n` +
           `Новый процент: ${newPercent}%\n` +
@@ -914,12 +910,12 @@ function register(bot) {
       
       const name = coOwner.username ? `@${coOwner.username}` : coOwnerId;
       await ctx.reply(
-        `✅ *Процент совладельца изменён!*\n\n` +
-        `👤 *Совладелец:* ${name}\n` +
-        `📊 *Было:* ${oldPercent}%\n` +
-        `📊 *Стало:* ${newPercent}%`,
+        `✅ <b>Процент совладельца изменён!</b>\n\n` +
+        `👤 <b>Совладелец:</b> ${name}\n` +
+        `📊 <b>Было:</b> ${oldPercent}%\n` +
+        `📊 <b>Стало:</b> ${newPercent}%`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
             [Markup.button.callback('👥 К списку совладельцев', 'admin:finance_coowners')],
             [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
@@ -946,7 +942,7 @@ function register(bot) {
       
       if (newTotal > 100) {
         return ctx.reply(
-          `❌ *Превышен лимит 100%!*\n\n` +
+          `❌ <b>Превышен лимит 100%!</b>\n\n` +
           `Совладельцы: ${coOwnersTotal}%\n` +
           `Новая константа: ${newConstant}%\n` +
           `Итого будет: ${newTotal}%\n\n` +
@@ -965,15 +961,15 @@ function register(bot) {
       ctx.session.adminState = null;
       
       await ctx.reply(
-        `✅ *Константа расходов изменена!*\n\n` +
-        `📊 *Было:* ${oldConstant}%\n` +
-        `📊 *Стало:* ${newConstant}%\n\n` +
+        `✅ <b>Константа расходов изменена!</b>\n\n` +
+        `📊 <b>Было:</b> ${oldConstant}%\n` +
+        `📊 <b>Стало:</b> ${newConstant}%\n\n` +
         `Константа используется для:\n` +
         `• Покрытия скидок пользователей\n` +
         `• Оплаты бота\n` +
         `• Прочих расходов`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
             [Markup.button.callback('📉 Расход комиссии', 'admin:finance_expenses')],
             [Markup.button.callback('📈 Прибыль', 'admin:finance_profit')],
@@ -989,8 +985,8 @@ function register(bot) {
       ctx.session.tempSpecialtyName = text;
       ctx.session.adminState = 'awaiting_specialty_emoji';
       await ctx.reply(
-        `🎓 *Специальность:* ${text}\n\nТеперь введите эмодзи (например: 🚢, ⚙️, 📐):`,
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        `🎓 <b>Специальность:</b> ${text}\n\nТеперь введите эмодзи (например: 🚢, ⚙️, 📐):`,
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
       return;
     }
@@ -1024,11 +1020,11 @@ function register(bot) {
       }, ctx);
 
       await ctx.reply(
-        `✅ *Заказ привязан к чату!*\n\n` +
-        `📦 *Заказ:* №${order.orderNumber}\n` +
-        `💬 *Чат:* \`${chatEnv}\` (ID: ${chatId})`,
+        `✅ <b>Заказ привязан к чату!</b>\n\n` +
+        `📦 <b>Заказ:</b> №${order.orderNumber}\n` +
+        `💬 <b>Чат:</b> \`${chatEnv}\` (ID: ${chatId})`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К заказу', `admin:order_view:${orderId}`)]])
         }
       );
@@ -1042,8 +1038,8 @@ function register(bot) {
       const newSpecialty = catalog.addSpecialty(name, emoji);
       logger.logAdminAction('specialty_added', { specialtyId: newSpecialty.id, name }, ctx);
       await ctx.reply(
-        `✅ *Специальность добавлена!*\n\n${emoji} *Название:* ${name}\n*ID:* \`${newSpecialty.id}\``,
-        { parse_mode: 'Markdown', ...getCatalogSpecialtiesMenu() }
+        `✅ <b>Специальность добавлена!</b>\n\n${emoji} <b>Название:</b> ${name}\n<b>ID:</b> \`${newSpecialty.id}\``,
+        { parse_mode: 'HTML', ...getCatalogSpecialtiesMenu() }
       );
       ctx.session.tempSpecialtyName = null;
       ctx.session.adminState = null;
@@ -1055,8 +1051,8 @@ function register(bot) {
       const specialtyId = state.split(':')[1];
       catalog.updateSpecialty(specialtyId, { name: text });
       await ctx.reply(
-        `✅ Название специальности изменено на: *${text}*`,
-        { parse_mode: 'Markdown', ...getCatalogSpecialtiesMenu() }
+        `✅ <b>Название специальности изменено на:</b> *${text}*`,
+        { parse_mode: 'HTML', ...getCatalogSpecialtiesMenu() }
       );
       ctx.session.adminState = null;
       return;
@@ -1072,8 +1068,8 @@ function register(bot) {
       
       const specialty = catalog.getSpecialtyById(specialtyId);
       await ctx.reply(
-        `✅ Курс добавлен!\n\n*Название:* ${text}\n*Специальность:* ${specialty ? specialty.name : specialtyId}\n*ID:* \`${newId}\``,
-        { parse_mode: 'Markdown', ...getSpecialtyCourses(specialtyId) }
+        `✅ <b>Курс добавлен!</b>\n\n<b>Название:</b> ${text}\n<b>Специальность:</b> ${specialty ? specialty.name : specialtyId}\n<b>ID:</b> \`${newId}\``,
+        { parse_mode: 'HTML', ...getSpecialtyCourses(specialtyId) }
       );
       ctx.session.tempCourseSpecialty = null;
       ctx.session.adminState = null;
@@ -1090,7 +1086,7 @@ function register(bot) {
         specialty: course ? course.specialty : 'navigation'
       });
       catalog.saveData({ ...catalog.getData(), subjects });
-      await ctx.reply(`✅ Предмет добавлен!\n\n*Название:* ${text}`, { parse_mode: 'Markdown', ...getCourseSubjects(courseId) });
+      await ctx.reply(`✅ <b>Предмет добавлен!</b>\n\n<b>Название:</b> ${text}`, { parse_mode: 'HTML', ...getCourseSubjects(courseId) });
       ctx.session.adminState = null; return;
     }
     if (state.startsWith('edit_course_name:')) {
@@ -1102,7 +1098,7 @@ function register(bot) {
         data.courses[idx].name = text;
         catalog.saveData(data);
         const specialtyId = catalog.getCourse(courseId) ? catalog.getCourse(courseId).specialty : 'navigation';
-        await ctx.reply(`✅ Название курса изменено!\n\n📝 *Было:* ${oldName}\n📝 *Стало:* ${text}`, { parse_mode: 'Markdown', ...getSpecialtyCourses(specialtyId) });
+        await ctx.reply(`✅ <b>Название курса изменено!</b>\n\n📝 <b>Было:</b> ${oldName}\n📝 <b>Стало:</b> ${text}`, { parse_mode: 'HTML', ...getSpecialtyCourses(specialtyId) });
       }
       ctx.session.adminState = null; return;
     }
@@ -1115,7 +1111,7 @@ function register(bot) {
         const courseId = data.subjects[idx].courseId;
         data.subjects[idx].name = text;
         catalog.saveData(data);
-        await ctx.reply(`✅ Название предмета изменено!\n\n📝 *Было:* ${oldName}\n📝 *Стало:* ${text}`, { parse_mode: 'Markdown', ...getCourseSubjects(courseId) });
+        await ctx.reply(`✅ <b>Название предмета изменено!</b>\n\n📝 <b>Было:</b> ${oldName}\n📝 <b>Стало:</b> ${text}`, { parse_mode: 'HTML', ...getCourseSubjects(courseId) });
       }
       ctx.session.adminState = null; return;
     }
@@ -1127,20 +1123,20 @@ function register(bot) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.title = text;
       ctx.session.adminState = `add_general_work_description:${specialtyId}`;
-      await ctx.reply('📄 *Шаг 2/9: Введите описание работы (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 <b>Шаг 2/9: Введите описание работы (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_work_description:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_general_work_price:${specialtyId}`;
-      await ctx.reply('💵 *Шаг 3/9: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💵 <b>Шаг 3/9: Введите цену (только число):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_work_price:')) {
       if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.price = parseInt(text);
       ctx.session.adminState = `add_general_work_commission:${specialtyId}`;
-      await ctx.reply('📊 *Шаг 4/9: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 <b>Шаг 4/9: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_work_commission:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
@@ -1148,34 +1144,34 @@ function register(bot) {
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_general_work_chatEnv:${specialtyId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💬 *Шаг 5/9: Имя переменной окружения для чата*\n\n';
+      let message = '💬 <b>Шаг 5/9: Имя переменной окружения для чата</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_work_chatEnv:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_general_work_paymentEnv:${specialtyId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💳 *Шаг 6/9: Имя переменной окружения для оплаты*\n\n';
+      let message = '💳 <b>Шаг 6/9: Имя переменной окружения для оплаты</b>\n\n';
       message += formatEnvVarsList(envVars.paymentVars, 'payment');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_work_paymentEnv:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_general_work_needs:${specialtyId}`;
       await ctx.reply(
-        '📎 *Шаг 7/9: Требования к заказу*\n\n' +
+        '📎 <b>Шаг 7/9: Требования к заказу</b>\n\n' +
         'Отправьте через запятую или напишите "нет":\n\n' +
-        '• `photo`\n' +
-        '• `details`\n' +
-        '• `variant`\n' +
-        '• `details, photo`\n\n' +
+        '• <code>photo</code>\n' +
+        '• <code>details</code>\n' +
+        '• <code>variant</code>\n' +
+        '• <code>details, photo</code>\n\n' +
         'Введите требования:',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       ); return;
     }
     if (state.startsWith('add_general_work_needs:')) {
@@ -1183,13 +1179,13 @@ function register(bot) {
       ctx.session.tempWorkData.needs = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
       ctx.session.tempWorkData.id = `work_${Date.now()}`;
       ctx.session.adminState = `add_general_work_prompt:${specialtyId}`;
-      await ctx.reply('📌 *Шаг 8/9: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 <b>Шаг 8/9: Введите подсказку для заказчика (prompt):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_work_prompt:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
       ctx.session.adminState = `add_general_work_exampleUrl:${specialtyId}`;
-      await ctx.reply('🔗 *Шаг 9/9: Ссылка на примеры работ (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('🔗 <b>Шаг 9/9: Ссылка на примеры работ (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_work_exampleUrl:')) {
       const specialtyId = state.split(':')[1];
@@ -1205,8 +1201,8 @@ function register(bot) {
         specialty: specialtyId
       }, ctx);
       await ctx.reply(
-        `✅ *Общая работа добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`,
-        { parse_mode: 'Markdown', ...getGeneralWorks(specialtyId) }
+        `✅ <b>Общая работа добавлена!</b>\n\n📝 <b>${ctx.session.tempWorkData.title}</b>\n💰 ${ctx.session.tempWorkData.price} ₽`,
+        { parse_mode: 'HTML', ...getGeneralWorks(specialtyId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -1218,13 +1214,13 @@ function register(bot) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.title = text;
       ctx.session.adminState = `add_general_custom_work_description:${specialtyId}`;
-      await ctx.reply('📄 *Шаг 2/7: Введите описание (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 <b>Шаг 2/7: Введите описание (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_custom_work_description:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_general_custom_work_commission:${specialtyId}`;
-      await ctx.reply('📊 *Шаг 3/7: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 <b>Шаг 3/7: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_custom_work_commission:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
@@ -1232,32 +1228,32 @@ function register(bot) {
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_general_custom_work_chatEnv:${specialtyId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💬 *Шаг 4/7: Имя переменной окружения для чата*\n\n';
+      let message = '💬 <b>Шаг 4/7: Имя переменной окружения для чата</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_custom_work_chatEnv:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_general_custom_work_paymentEnv:${specialtyId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💳 *Шаг 5/7: Имя переменной окружения для оплаты*\n\n';
+      let message = '💳 <b>Шаг 5/7: Имя переменной окружения для оплаты</b>\n\n';
       message += formatEnvVarsList(envVars.paymentVars, 'payment');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_custom_work_paymentEnv:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_general_custom_work_prompt:${specialtyId}`;
-      await ctx.reply('📌 *Шаг 6/7: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 <b>Шаг 6/7: Введите подсказку для заказчика (prompt):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_custom_work_prompt:')) {
       const specialtyId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
       ctx.session.adminState = `add_general_custom_work_exampleUrl:${specialtyId}`;
-      await ctx.reply('🔗 *Шаг 7/7: Ссылка на примеры работ (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('🔗 <b>Шаг 7/7: Ссылка на примеры работ (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_general_custom_work_exampleUrl:')) {
       const specialtyId = state.split(':')[1];
@@ -1270,8 +1266,8 @@ function register(bot) {
       works.push(ctx.session.tempWorkData);
       catalog.saveData({ ...catalog.getData(), works });
       await ctx.reply(
-        `✅ *Общий индивидуальный заказ добавлен!*\n\n🌟 *${escapeMarkdown(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
-        { parse_mode: 'Markdown', ...getGeneralWorks(specialtyId) }
+        `✅ <b>Общий индивидуальный заказ добавлен!</b>\n\n🌟 <b>${escapeHtml(ctx.session.tempWorkData.title)}</b>\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
+        { parse_mode: 'HTML', ...getGeneralWorks(specialtyId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -1283,20 +1279,20 @@ function register(bot) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.title = text;
       ctx.session.adminState = `add_course_general_work_desc:${courseId}`;
-      await ctx.reply('📄 *Шаг 2/9: Введите описание работы (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 <b>Шаг 2/9: Введите описание работы (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_work_desc:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_course_general_work_price:${courseId}`;
-      await ctx.reply('💵 *Шаг 3/9: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💵 <b>Шаг 3/9: Введите цену (только число):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_work_price:')) {
       if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.price = parseInt(text);
       ctx.session.adminState = `add_course_general_work_comm:${courseId}`;
-      await ctx.reply('📊 *Шаг 4/9: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 <b>Шаг 4/9: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_work_comm:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
@@ -1304,34 +1300,34 @@ function register(bot) {
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_course_general_work_chat:${courseId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💬 *Шаг 5/9: Имя переменной окружения для чата*\n\n';
+      let message = '💬 <b>Шаг 5/9: Имя переменной окружения для чата</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_work_chat:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_course_general_work_pay:${courseId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💳 *Шаг 6/9: Имя переменной окружения для оплаты*\n\n';
+      let message = '💳 <b>Шаг 6/9: Имя переменной окружения для оплаты</b>\n\n';
       message += formatEnvVarsList(envVars.paymentVars, 'payment');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_work_pay:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_course_general_work_needs:${courseId}`;
       await ctx.reply(
-        '📎 *Шаг 7/9: Требования к заказу*\n\n' +
+        '📎 <b>Шаг 7/9: Требования к заказу</b>\n\n' +
         'Отправьте через запятую или напишите "нет":\n\n' +
-        '• `photo`\n' +
-        '• `details`\n' +
-        '• `variant`\n' +
-        '• `details, photo`\n\n' +
+        '• <code>photo</code>\n' +
+        '• <code>details</code>\n' +
+        '• <code>variant</code>\n' +
+        '• <code>details, photo</code>\n\n' +
         'Введите требования:',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       ); return;
     }
     if (state.startsWith('add_course_general_work_needs:')) {
@@ -1339,13 +1335,13 @@ function register(bot) {
       ctx.session.tempWorkData.needs = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
       ctx.session.tempWorkData.id = `work_${Date.now()}`;
       ctx.session.adminState = `add_course_general_work_prompt:${courseId}`;
-      await ctx.reply('📌 *Шаг 8/9: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 <b>Шаг 8/9: Введите подсказку для заказчика (prompt):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_work_prompt:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
       ctx.session.adminState = `add_course_general_work_url:${courseId}`;
-      await ctx.reply('🔗 *Шаг 9/9: Ссылка на примеры работ (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('🔗 <b>Шаг 9/9: Ссылка на примеры работ (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_work_url:')) {
       const courseId = state.split(':')[1];
@@ -1365,7 +1361,7 @@ function register(bot) {
       }, ctx);
       await ctx.reply(
         `✅ *Общая работа курса добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`,
-        { parse_mode: 'Markdown', ...getCourseGeneralWorks(courseId) }
+        { parse_mode: 'HTML', ...getCourseGeneralWorks(courseId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -1377,13 +1373,13 @@ function register(bot) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.title = text;
       ctx.session.adminState = `add_course_general_custom_work_desc:${courseId}`;
-      await ctx.reply('📄 *Шаг 2/7: Введите описание (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 <b>Шаг 2/7: Введите описание (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_custom_work_desc:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_course_general_custom_work_comm:${courseId}`;
-      await ctx.reply('📊 *Шаг 3/7: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 <b>Шаг 3/7: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_custom_work_comm:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
@@ -1391,32 +1387,32 @@ function register(bot) {
       ctx.session.tempWorkData.commission = parseInt(text);
       ctx.session.adminState = `add_course_general_custom_work_chat:${courseId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💬 *Шаг 4/7: Имя переменной окружения для чата*\n\n';
+      let message = '💬 <b>Шаг 4/7: Имя переменной окружения для чата</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_custom_work_chat:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.chatEnv = text;
       ctx.session.adminState = `add_course_general_custom_work_pay:${courseId}`;
       const envVars = getAvailableEnvVars();
-      let message = '💳 *Шаг 5/7: Имя переменной окружения для оплаты*\n\n';
+      let message = '💳 <b>Шаг 5/7: Имя переменной окружения для оплаты</b>\n\n';
       message += formatEnvVarsList(envVars.paymentVars, 'payment');
       message += `\nОтправьте имя переменной:`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_custom_work_pay:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_course_general_custom_work_prompt:${courseId}`;
-      await ctx.reply('📌 *Шаг 6/7: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 <b>Шаг 6/7: Введите подсказку для заказчика (prompt):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_custom_work_prompt:')) {
       const courseId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
       ctx.session.adminState = `add_course_general_custom_work_url:${courseId}`;
-      await ctx.reply('🔗 *Шаг 7/7: Ссылка на примеры работ (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('🔗 <b>Шаг 7/7: Ссылка на примеры работ (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_course_general_custom_work_url:')) {
       const courseId = state.split(':')[1];
@@ -1437,8 +1433,8 @@ function register(bot) {
         courseId: courseId
       }, ctx);
       await ctx.reply(
-        `✅ *Общий индивидуальный заказ добавлен!*\n\n🌟 *${escapeMarkdown(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
-        { parse_mode: 'Markdown', ...getCourseGeneralWorks(courseId) }
+        `✅ *Общий индивидуальный заказ добавлен!*\n\n🌟 *${escapeHtml(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
+        { parse_mode: 'HTML', ...getCourseGeneralWorks(courseId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
@@ -1448,25 +1444,25 @@ function register(bot) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData = { subjectId, title: text };
       ctx.session.adminState = `add_work_description:${subjectId}`;
-      await ctx.reply('📄 *Шаг 2/9: Введите описание работы (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 <b>Шаг 2/9: Введите описание работы (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
      if (state.startsWith('add_work_description:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_work_price:${subjectId}`;
-      await ctx.reply('💵 *Шаг 3/9: Введите цену (только число):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('💵 <b>Шаг 3/9: Введите цену (только число):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_title:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData = { subjectId, title: text, isCustomOrder: true };
       ctx.session.adminState = `add_custom_work_description:${subjectId}`;
-      await ctx.reply('📄 *Шаг 2/7: Введите описание индивидуального заказа (или "нет"):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📄 <b>Шаг 2/7: Введите описание индивидуального заказа (или "нет"):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
      if (state.startsWith('add_custom_work_description:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.description = text.toLowerCase() === 'нет' ? '' : text;
       ctx.session.adminState = `add_custom_work_commission:${subjectId}`;
-      await ctx.reply('📊 *Шаг 3/7: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 <b>Шаг 3/7: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_commission:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
@@ -1475,11 +1471,11 @@ function register(bot) {
       
       // 🌟 Показываем доступные переменные чатов
       const envVars = getAvailableEnvVars();
-      let message = '💬 *Шаг 4/7: Имя переменной окружения для чата исполнителей*\n\n';
+      let message = '💬 <b>Шаг 4/7: Имя переменной окружения для чата исполнителей</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
       
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_chatEnv:')) {
       ctx.session.tempWorkData.chatEnv = text;
@@ -1487,22 +1483,22 @@ function register(bot) {
       
       // 🌟 Показываем доступные переменные оплаты
       const envVars = getAvailableEnvVars();
-      let message = '💳 *Шаг 5/7: Имя переменной окружения для оплаты*\n\n';
+      let message = '💳 <b>Шаг 5/7: Имя переменной окружения для оплаты</b>\n\n';
       message += formatEnvVarsList(envVars.paymentVars, 'payment');
       message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
       
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_custom_work_prompt:${state.split(':')[1]}`;
-      await ctx.reply('📌 *Шаг 6/7: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 <b>Шаг 6/7: Введите подсказку для заказчика (prompt):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_custom_work_prompt:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
       ctx.session.adminState = `add_custom_work_exampleUrl:${subjectId}`;
-      await ctx.reply('🔗 *Шаг 7/7: Ссылка на примеры работ (или "нет", если нет):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('🔗 <b>Шаг 7/7: Ссылка на примеры работ (или "нет", если нет):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     // 🌟 НОВЫЙ ШАГ: exampleUrl для индивидуального заказа
     if (state.startsWith('add_custom_work_exampleUrl:')) {
@@ -1521,14 +1517,14 @@ function register(bot) {
       works.push(ctx.session.tempWorkData);
       catalog.saveData({ ...catalog.getData(), works });
       
-      await ctx.reply(`✅ *Индивидуальный заказ добавлен!*\n\n🌟 *${escapeMarkdown(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`, { parse_mode: 'Markdown', ...getSubjectWorks(subjectId) });
+      await ctx.reply(`✅ *Индивидуальный заказ добавлен!*\n\n🌟 *${escapeHtml(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`, { parse_mode: 'HTML', ...getSubjectWorks(subjectId) });
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
     if (state.startsWith('add_work_price:')) {
       if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
       ctx.session.tempWorkData.price = parseInt(text);
       ctx.session.adminState = `add_work_commission:${state.split(':')[1]}`;
-      await ctx.reply('📊 *Шаг 4/9: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 <b>Шаг 4/9: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_commission:')) {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
@@ -1537,11 +1533,11 @@ function register(bot) {
       
       // 🌟 Показываем доступные переменные чатов
       const envVars = getAvailableEnvVars();
-      let message = '💬 *Шаг 5/9: Имя переменной окружения для чата*\n\n';
+      let message = '💬 <b>Шаг 5/9: Имя переменной окружения для чата</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
       
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_chatEnv:')) {
       ctx.session.tempWorkData.chatEnv = text;
@@ -1549,37 +1545,37 @@ function register(bot) {
       
       // 🌟 Показываем доступные переменные оплаты
       const envVars = getAvailableEnvVars();
-      let message = '💳 *Шаг 6/9: Имя переменной окружения для оплаты*\n\n';
+      let message = '💳 <b>Шаг 6/9: Имя переменной окружения для оплаты</b>\n\n';
       message += formatEnvVarsList(envVars.paymentVars, 'payment');
       message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
       
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_paymentEnv:')) {
       ctx.session.tempWorkData.paymentEnv = text;
       ctx.session.adminState = `add_work_needs:${state.split(':')[1]}`;
       await ctx.reply(
-        '📎 *Шаг 7/9: Требования к заказу*\n\n' +
+        '📎 <b>Шаг 7/9: Требования к заказу</b>\n\n' +
         'Отправьте через запятую или напишите "нет":\n\n' +
-        '• `photo`\n' +
-        '• `details`\n' +
-        '• `variant`\n' +
-        '• `details, photo`\n\n' +
+        '• <code>photo</code>\n' +
+        '• <code>details</code>\n' +
+        '• <code>variant</code>\n' +
+        '• <code>details, photo</code>\n\n' +
         'Введите требования:',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       ); return;
     }
     if (state.startsWith('add_work_needs:')) {
       ctx.session.tempWorkData.needs = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
       ctx.session.tempWorkData.id = `work_${Date.now()}`;
       ctx.session.adminState = `add_work_prompt:${state.split(':')[1]}`;
-      await ctx.reply('📌 *Шаг 8/9: Введите подсказку для заказчика (prompt):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📌 <b>Шаг 8/9: Введите подсказку для заказчика (prompt):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state.startsWith('add_work_prompt:')) {
       const subjectId = state.split(':')[1];
       ctx.session.tempWorkData.prompt = text;
       ctx.session.adminState = `add_work_exampleUrl:${subjectId}`;
-      await ctx.reply('🔗 *Шаг 9/9: Ссылка на примеры работ (или "нет", если нет):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('🔗 <b>Шаг 9/9: Ссылка на примеры работ (или "нет", если нет):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     // 🌟 НОВЫЙ ШАГ: exampleUrl для обычной работы
     if (state.startsWith('add_work_exampleUrl:')) {
@@ -1601,7 +1597,7 @@ function register(bot) {
         price: ctx.session.tempWorkData.price
       }, ctx);
       
-      await ctx.reply(`✅ *Работа добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`, { parse_mode: 'Markdown', ...getSubjectWorks(subjectId) });
+      await ctx.reply(`✅ <b>Работа добавлена!</b>\n\n📝 <b>${ctx.session.tempWorkData.title}</b>\n💰 ${ctx.session.tempWorkData.price} ₽`, { parse_mode: 'HTML', ...getSubjectWorks(subjectId) });
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
 
@@ -1658,14 +1654,14 @@ function register(bot) {
           // Цена назначена/изменена и заказ НЕ оплачен → уведомляем заказчика
           const isNewPrice = (!oldPrice || oldPrice <= 0);
           const title = isNewPrice
-            ? '💰 *Назначена цена за ваш заказ*'
-            : '💰 *Цена за ваш заказ изменена*';
+            ? '💰 <b>Назначена цена за ваш заказ</b>'
+            : '💰 <b>Цена за ваш заказ изменена</b>';
 
           const customerMessage =
             `${title}\n\n` +
-            `🆔 *Номер заказа:* №${orderNumber}\n` +
-            `📚 *Предмет:* ${order.subjectName || order.workTitle}\n` +
-            `💵 *Цена:* ${value} ₽\n\n` +
+            `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+            `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n` +
+            `💵 <b>Цена:</b> ${value} ₽\n\n` +
             `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
 
           const customerKeyboard = Markup.inlineKeyboard([
@@ -1675,7 +1671,7 @@ function register(bot) {
 
           try {
             await ctx.telegram.sendMessage(order.customerId, customerMessage, {
-              parse_mode: 'Markdown',
+              parse_mode: 'HTML',
               reply_markup: customerKeyboard.reply_markup
             });
           } catch (e) {
@@ -1686,9 +1682,9 @@ function register(bot) {
       }
 
       await ctx.reply(
-        `✅ Поле "${field}" обновлено!\n\nНовое значение: \`${value}\``,
+        `✅ Поле "${field}" обновлено!\n\nНовое значение: <code>${value}</code>`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
             [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
           ])
@@ -1717,7 +1713,7 @@ function register(bot) {
 
       await ctx.reply(
         `✅ Сумма выкупа для заказчика ${customerId} изменена на ${newAmount} ₽`,
-        { parse_mode: 'Markdown', ...getAdminMainMenu() }
+        { parse_mode: 'HTML', ...getAdminMainMenu() }
       );
       ctx.session.adminState = null; return;
     }
@@ -1752,19 +1748,19 @@ function register(bot) {
       const loyaltyData = loyalty.loadData();
       const userData = loyaltyData[customerId] || {};
       
-      let successMessage = `✅ *Специальная скидка успешно ${discountPercent === 0 ? 'отменена' : 'установлена'}!*\n\n`;
-      successMessage += `👤 *Заказчик:* \`${customerId}\`\n`;
-      successMessage += `📛 *Username:* ${safeUsername(userData.username)}\n\n`;
+      let successMessage = `✅ <b>Специальная скидка успешно ${discountPercent === 0 ? 'отменена' : 'установлена'}!</b>\n\n`;
+      successMessage += `👤 <b>Заказчик:</b> <code>${customerId}</code>\n`;
+      successMessage += `📛 <b>Username:</b> ${safeUsername(userData.username)}\n\n`;
       
       if (discountPercent === 0) {
-        successMessage += `🏅 *Возврат к ранговой скидке:* ${updatedLoyalty.discountPercent}% (${updatedLoyalty.rank.name})\n`;
+        successMessage += `🏅 <b>Возврат к ранговой скидке:</b> ${updatedLoyalty.discountPercent}% (${updatedLoyalty.rank.name})\n`;
       } else {
-        successMessage += `🎯 *Специальная скидка:* ${discountPercent}%\n`;
-        successMessage += `⚠️ *Переопределяет ранговую скидку*\n`;
+        successMessage += `🎯 <b>Специальная скидка:</b> ${discountPercent}%\n`;
+        successMessage += `⚠️ <b>Переопределяет ранговую скидку</b>\n`;
       }
       
       await ctx.reply(successMessage, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('⬅️ Вернуться к карточке заказчика', `admin:customer_view:${customerId}`)],
           [Markup.button.callback('👥 К списку заказчиков', 'admin:customers')]
@@ -1783,10 +1779,10 @@ function register(bot) {
       ctx.session.tempRankUserId = text;
       ctx.session.adminState = 'awaiting_new_executor_username';
       await ctx.reply(
-        '🔥 *Назначение исполнителя (Прометей)*\n\n' +
-        `👤 *ID:* \`${text}\`\n\n` +
-        '📝 *Шаг 2/2: Введите username пользователя (без @):*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '🔥 <b>Назначение исполнителя (Прометей)</b>\n\n' +
+        `👤 <b>ID:</b> <code>${text}</code>\n\n` +
+        '📝 <b>Шаг 2/2: Введите username пользователя (без @):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
       return;
     }
@@ -1811,11 +1807,11 @@ function register(bot) {
       }, ctx);
 
       await ctx.reply(
-        `🔥 *Исполнитель назначен!*\n\n` +
-        `👤 *ID:* \`${userId}\`\n` +
-        `📛 *Username:* @${username}\n` +
-        `🏅 *Ранг:* Прометей (исполнитель)`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) }
+        `🔥 <b>Исполнитель назначен!</b>\n\n` +
+        `👤 <b>ID:</b> <code>${userId}</code>\n` +
+        `📛 <b>Username:</b> @${username}\n` +
+        `🏅 <b>Ранг:</b> Прометей (исполнитель)`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) }
       );
 
       ctx.session.adminState = null;
@@ -1831,10 +1827,10 @@ function register(bot) {
       ctx.session.tempRankUserId = text;
       ctx.session.adminState = 'awaiting_new_admin_username';
       await ctx.reply(
-        '👑 *Назначение администратора (Посейдон)*\n\n' +
-        `👤 *ID:* \`${text}\`\n\n` +
-        '📝 *Шаг 2/2: Введите username пользователя (без @):*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '👑 <b>Назначение администратора (Посейдон)</b>\n\n' +
+        `👤 <b>ID:</b> <code>${text}</code>\n\n` +
+        '📝 <b>Шаг 2/2: Введите username пользователя (без @):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
       return;
     }
@@ -1859,11 +1855,11 @@ function register(bot) {
       }, ctx);
 
       await ctx.reply(
-        `👑 *Администратор назначен!*\n\n` +
-        `👤 *ID:* \`${userId}\`\n` +
-        `📛 *Username:* @${username}\n` +
-        `🏅 *Ранг:* Посейдон (администратор)`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) }
+        `👑 <b>Администратор назначен!</b>\n\n` +
+        `👤 <b>ID:</b> <code>${userId}</code>\n` +
+        `📛 <b>Username:</b> @${username}\n` +
+        `🏅 <b>Ранг:</b> Посейдон (администратор)`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]]) }
       );
 
       ctx.session.adminState = null;
@@ -1879,10 +1875,10 @@ function register(bot) {
       ctx.session.tempRankUserId = text;
       ctx.session.adminState = 'awaiting_new_manager_username';
       await ctx.reply(
-        '👁️ *Назначение управляющего отделом (Циклоп)*\n\n' +
-        `👤 *ID:* \`${text}\`\n\n` +
-        '📝 *Шаг 2/3: Введите username пользователя (без @):*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '👁️ <b>Назначение управляющего отделом (Циклоп)</b>\n\n' +
+        `👤 <b>ID:</b> <code>${text}</code>\n\n` +
+        '📝 <b>Шаг 2/3: Введите username пользователя (без @):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
       return;
     }
@@ -1893,12 +1889,12 @@ function register(bot) {
       ctx.session.adminState = 'awaiting_new_manager_chats';
 
       const envVars = getAvailableEnvVars();
-      let message = '🏢 *Шаг 3/3: Чаты отделов*\n\n';
+      let message = '🏢 <b>Шаг 3/3: Чаты отделов</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nВведите отделы в формате \`Название=ПЕРЕМЕННАЯ\` через запятую:\n`;
       message += `Пример: \`Математика=EXEC_MATH, Физика=EXEC_PHYS\`\n\n`;
       message += `Или отправьте \`нет\`, чтобы назначить без чатов (добавите позже).`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() });
       return;
     }
 
@@ -1927,21 +1923,21 @@ function register(bot) {
         managedChats: managedChats
       }, ctx);
 
-      let successMsg = `👁️ *Управляющий отделом назначен!*\n\n`;
-      successMsg += `👤 *ID:* \`${userId}\`\n`;
-      successMsg += `📛 *Username:* @${username}\n`;
-      successMsg += `🏅 *Ранг:* Циклоп (управляющий отделом)\n`;
+      let successMsg = `👁️ <b>Управляющий отделом назначен!</b>\n\n`;
+      successMsg += `👤 <b>ID:</b> <code>${userId}</code>\n`;
+      successMsg += `📛 <b>Username:</b> @${username}\n`;
+      successMsg += `🏅 <b>Ранг:</b> Циклоп (управляющий отделом)\n`;
       if (managedChats.length > 0) {
-        successMsg += `🏢 *Отделы:*\n`;
+        successMsg += `🏢 <b>Отделы:</b>\n`;
         managedChats.forEach(c => {
-          successMsg += `  • ${c.name} (\`${c.chatEnv}\`)\n`;
+          successMsg += `  • ${c.name} (<code>${c.chatEnv}</code>)\n`;
         });
       } else {
         successMsg += `\n⚠️ Чаты отделов не назначены. Добавьте их через "Управление пользователями".`;
       }
 
       await ctx.reply(successMsg, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К управлению рангами', 'admin:set_user_rank')]])
       });
 
@@ -1973,19 +1969,19 @@ function register(bot) {
         managedChats: managedChats
       }, ctx);
 
-      let successMsg = `✅ *Чаты отделов обновлены!*\n\n`;
-      successMsg += `👤 *Пользователь:* \`${userId}\`\n`;
+      let successMsg = `✅ <b>Чаты отделов обновлены!</b>\n\n`;
+      successMsg += `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
       if (managedChats.length > 0) {
-        successMsg += `🏢 *Отделы:*\n`;
+        successMsg += `🏢 <b>Отделы:</b>\n`;
         managedChats.forEach(c => {
-          successMsg += `  • ${c.name} (\`${c.chatEnv}\`)\n`;
+          successMsg += `  • ${c.name} (<code>${c.chatEnv}</code>)\n`;
         });
       } else {
         successMsg += `⚠️ Все чаты отделов удалены.`;
       }
 
       await ctx.reply(successMsg, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${userId}`)]])
       });
 
@@ -2034,12 +2030,12 @@ function register(bot) {
       }, ctx);
 
       await ctx.reply(
-        `✅ *ID пользователя изменён!*\n\n` +
-        `👤 *Старый ID:* \`${oldUserId}\`\n` +
-        `👤 *Новый ID:* \`${newUserId}\`\n` +
-        `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n` +
-        `🏅 *Ранг:* ${userData.rank}`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${newUserId}`)]]) }
+        `✅ <b>ID пользователя изменён!</b>\n\n` +
+        `👤 <b>Старый ID:</b> <code>${oldUserId}</code>\n` +
+        `👤 <b>Новый ID:</b> <code>${newUserId}</code>\n` +
+        `📛 <b>Username:</b> ${userData.username ? '@' + userData.username : 'не указан'}\n` +
+        `🏅 <b>Ранг:</b> ${userData.rank}`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${newUserId}`)]]) }
       );
 
       ctx.session.adminState = null;
@@ -2069,12 +2065,12 @@ function register(bot) {
       }, ctx);
 
       await ctx.reply(
-        `✅ *Username пользователя изменён!*\n\n` +
-        `👤 *ID:* \`${userId}\`\n` +
-        `📛 *Старый username:* ${oldUsername ? '@' + oldUsername : 'не указан'}\n` +
-        `📛 *Новый username:* @${newUsername}\n` +
-        `🏅 *Ранг:* ${loyaltyData[userId].rank}`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${userId}`)]]) }
+        `✅ <b>Username пользователя изменён!</b>\n\n` +
+        `👤 <b>ID:</b> <code>${userId}</code>\n` +
+        `📛 <b>Старый username:</b> ${oldUsername ? '@' + oldUsername : 'не указан'}\n` +
+        `📛 <b>Новый username:</b> @${newUsername}\n` +
+        `🏅 <b>Ранг:</b> ${loyaltyData[userId].rank}`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ К карточке пользователя', `admin:set_user_rank:user:${userId}`)]]) }
       );
 
       ctx.session.adminState = null;
@@ -2090,41 +2086,41 @@ function register(bot) {
         [Markup.button.callback('🌟 Индивидуальный заказ', 'admin:add_order_type:custom')],
         [Markup.button.callback('❌ Отмена', 'admin:orders')]
       ]);
-      await ctx.reply('📋 *Шаг 2: Выберите тип заказа:*', { parse_mode: 'Markdown', ...typeKeyboard });
+      await ctx.reply('📋 <b>Шаг 2: Выберите тип заказа:</b>', { parse_mode: 'HTML', ...typeKeyboard });
       ctx.session.adminState = null; return;
     }
     if (state === 'add_order:title') {
       ctx.session.newOrder.workTitle = text;
       ctx.session.adminState = 'add_order:subject';
-      await ctx.reply('📖 *Шаг 4: Введите название предмета:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📖 <b>Шаг 4: Введите название предмета:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state === 'add_order:subject') {
       ctx.session.newOrder.subjectName = text;
       ctx.session.adminState = 'add_order:course';
-      await ctx.reply('🎓 *Шаг 5: Введите название курса:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('🎓 <b>Шаг 5: Введите название курса:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state === 'add_order:course') {
       ctx.session.newOrder.courseName = text;
       // 🌟 Для обоих типов запрашиваем описание
       ctx.session.adminState = 'add_order:description';
-      await ctx.reply('📝 *Шаг 6: Введите описание задания (или "нет", если не требуется):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.reply('📝 <b>Шаг 6: Введите описание задания (или "нет", если не требуется):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
       return;
     }
     if (state === 'add_order:price') {
       if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
       ctx.session.newOrder.price = parseInt(text);
       ctx.session.adminState = 'add_order:commission';
-       await ctx.reply('📊 *Шаг 8: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+       await ctx.reply('📊 <b>Шаг 8: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state === 'add_order:description') {
       // 🌟 Если пользователь ввёл "нет", сохраняем null
       ctx.session.newOrder.description = text.toLowerCase() === 'нет' ? null : text;
       if (ctx.session.newOrder.isCustomOrder) {
         ctx.session.adminState = 'add_order:price_custom';
-        await ctx.reply('💰 *Шаг 7: Введите цену заказа (0 если ещё не назначена):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+        await ctx.reply('💰 <b>Шаг 7: Введите цену заказа (0 если ещё не назначена):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
       } else {
         ctx.session.adminState = 'add_order:price';
-        await ctx.reply('💰 *Шаг 7: Введите цену заказа (число в рублях):*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+        await ctx.reply('💰 <b>Шаг 7: Введите цену заказа (число в рублях):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
       }
       return;
     }
@@ -2132,17 +2128,17 @@ function register(bot) {
       if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
       ctx.session.newOrder.price = parseInt(text);
       ctx.session.adminState = 'add_order:commission';
-      await ctx.reply('📊 *Шаг 8: Введите комиссию в %:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() }); return;
+      await ctx.reply('📊 <b>Шаг 8: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
     }
     if (state === 'add_order:commission') {
       if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
       ctx.session.newOrder.commission = parseInt(text);
       ctx.session.adminState = 'add_order:chat';
       const envVars = getAvailableEnvVars();
-      let message = '💬 *Шаг 9: Чат исполнителей*\n\n';
+      let message = '💬 <b>Шаг 9: Чат исполнителей</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной чата (или \`нет\`, если не требуется):`;
-      await ctx.reply(message, { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() });
       return;
     }
     if (state === 'add_order:chat') {
@@ -2153,7 +2149,7 @@ function register(bot) {
         chatEnv = text.trim();
         managerChatId = process.env[chatEnv];
         if (!managerChatId) {
-          return ctx.reply(`❌ Переменная \`${chatEnv}\` не найдена в .env. Попробуйте другое имя или отправьте \`нет\`.`);
+          return ctx.reply(`❌ Переменная <code>${chatEnv}</code> не найдена в .env. Попробуйте другое имя или отправьте <code>нет</code>.`);
         }
       }
 
@@ -2161,23 +2157,23 @@ function register(bot) {
       ctx.session.newOrder.managerChatId = managerChatId;
 
       const newOrder = ctx.session.newOrder;
-      let confirmText = `📋 *Подтверждение нового заказа*\n\n`;
-      confirmText += `👤 *Заказчик ID:* ${newOrder.customerId}\n`;
-      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} *Тип:* ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
-      confirmText += `📚 *Работа:* ${newOrder.workTitle}\n`;
-      confirmText += `📖 *Предмет:* ${newOrder.subjectName}\n`;
-      confirmText += `🎓 *Курс:* ${newOrder.courseName}\n`;
-      confirmText += `💰 *Цена:* ${newOrder.price} ₽\n`;
-      confirmText += `📊 *Комиссия:* ${newOrder.commission}%\n`;
-      confirmText += `💬 *Чат:* ${chatEnv ? `\`${chatEnv}\`` : '_не назначен_'}\n`;
-      if (newOrder.description) confirmText += `📝 *Описание:* ${newOrder.description.substring(0, 100)}...\n`;
+      let confirmText = `📋 <b>Подтверждение нового заказа</b>\n\n`;
+      confirmText += `👤 <b>Заказчик ID:</b> <code>${newOrder.customerId}</code>\n`;
+      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} <b>Тип:</b> ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
+      confirmText += `📚 <b>Работа:</b> <code>${newOrder.workTitle}</code>\n`;
+      confirmText += `📖 <b>Предмет:</b> <code>${newOrder.subjectName}</code>\n`;
+      confirmText += `🎓 <b>Курс:</b> <code>${newOrder.courseName}</code>\n`;
+      confirmText += `💰 <b>Цена:</b> <code>${newOrder.price}</code> ₽\n`;
+      confirmText += `📊 <b>Комиссия:</b> <code>${newOrder.commission}%</code>\n`;
+      confirmText += `💬 <b>Чат:</b> ${chatEnv ? `<code>${chatEnv}</code>` : '<i>не назначен</i>'}\n`;
+      if (newOrder.description) confirmText += `📝 <b>Описание:</b> <code>${newOrder.description.substring(0, 100)}...</code>\n`;
       confirmText += `\nСоздать заказ?`;
 
       const confirmKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Создать заказ', 'admin:add_order_confirm')],
         [Markup.button.callback('❌ Отмена', 'admin:orders')]
       ]);
-      await ctx.reply(confirmText, { parse_mode: 'Markdown', ...confirmKeyboard });
+      await ctx.reply(confirmText, { parse_mode: 'HTML', ...confirmKeyboard });
       ctx.session.adminState = null;
       return;
     }
@@ -2197,23 +2193,23 @@ function register(bot) {
       ctx.session.newOrder.managerChatId = managerChatId;
 
       const newOrder = ctx.session.newOrder;
-      let confirmText = `📋 *Подтверждение нового заказа*\n\n`;
-      confirmText += `👤 *Заказчик ID:* ${newOrder.customerId}\n`;
-      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} *Тип:* ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
-      confirmText += `📚 *Работа:* ${newOrder.workTitle}\n`;
-      confirmText += `📖 *Предмет:* ${newOrder.subjectName}\n`;
-      confirmText += `🎓 *Курс:* ${newOrder.courseName}\n`;
-      confirmText += `💰 *Цена:* ${newOrder.price} ₽\n`;
-      confirmText += `📊 *Комиссия:* ${newOrder.commission}%\n`;
-      confirmText += `💬 *Чат:* ${chatEnv ? `\`${chatEnv}\`` : '_не назначен_'}\n`;
-      if (newOrder.description) confirmText += `📝 *Описание:* ${newOrder.description.substring(0, 100)}...\n`;
+      let confirmText = `📋 <b>Подтверждение нового заказа</b>\n\n`;
+      confirmText += `👤 <b>Заказчик ID:</b> <code>${newOrder.customerId}</code>\n`;
+      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} <b>Тип:</b> <code>${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}</code>\n`;
+      confirmText += `📚 <b>Работа:</b> <code>${newOrder.workTitle}</code>\n`;
+      confirmText += `📖 <b>Предмет:</b> <code>${newOrder.subjectName}</code>\n`;
+      confirmText += `🎓 <b>Курс:</b> <code>${newOrder.courseName}</code>\n`;
+      confirmText += `💰 <b>Цена:</b> <code>${newOrder.price}</code> ₽\n`;
+      confirmText += `📊 <b>Комиссия:</b> <code>${newOrder.commission}%</code>\n`;
+      confirmText += `💬 <b>Чат:</b> ${chatEnv ? `<code>${chatEnv}</code>` : '<i>не назначен</i>'}\n`;
+      if (newOrder.description) confirmText += `📝 <b>Описание:</b> <code>${newOrder.description.substring(0, 100)}...</code>\n`;
       confirmText += `\nСоздать заказ?`;
 
       const confirmKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Создать заказ', 'admin:add_order_confirm')],
         [Markup.button.callback('❌ Отмена', 'admin:orders')]
       ]);
-      await ctx.reply(confirmText, { parse_mode: 'Markdown', ...confirmKeyboard });
+      await ctx.reply(confirmText, { parse_mode: 'HTML', ...confirmKeyboard });
       ctx.session.adminState = null;
       return;
     }
@@ -2231,13 +2227,13 @@ function register(bot) {
         ctx.session.newCustomer = { id: id };
         ctx.session.adminState = 'add_customer:confirm_overwrite';
         await ctx.reply(
-          `⚠️ *Заказчик с ID \`${id}\` уже существует!*\n\n` +
-          `📛 Username: ${existing.username ? '@' + existing.username : 'не указан'}\n` +
-          `💰 Сумма выкупа: ${existing.totalSpent || 0} ₽\n` +
-          `${existing.specialty ? '🎓 Специальность: ' + (loyalty.getSpecialtyById(existing.specialty)?.name || existing.specialty) + '\n' : ''}\n` +
-          `Продолжить и перезаписать данные?`,
+          `⚠️ <b>Заказчик с ID <code>${id}</code> уже существует!</b>\n\n` +
+          `📛 <b>Username:</b> <code>${existing.username ? '@' + existing.username : 'не указан'}</code>\n` +
+          `💰 <b>Сумма выкупа:</b> <code>${existing.totalSpent || 0}</code> ₽\n` +
+          `${existing.specialty ? '🎓 <b>Специальность:</b> <code>' + (loyalty.getSpecialtyById(existing.specialty)?.name || existing.specialty) + '</code>\n' : ''}\n` +
+          `<b>Продолжить и перезаписать данные?</b>`,
           {
-            parse_mode: 'Markdown',
+            parse_mode: 'HTML',
             ...Markup.inlineKeyboard([
               [Markup.button.callback('✅ Да, перезаписать', 'admin:add_customer:overwrite_yes')],
               [Markup.button.callback('❌ Отмена', 'admin:customers')]
@@ -2250,8 +2246,8 @@ function register(bot) {
       ctx.session.newCustomer = { id: id };
       ctx.session.adminState = 'add_customer:username';
       await ctx.reply(
-        '📝 *Шаг 2/3: Введите username заказчика (без @):*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '📝 <b>Шаг 2/3: Введите username заказчика (без @):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
       return;
     }
@@ -2262,8 +2258,8 @@ function register(bot) {
       ctx.session.newCustomer.username = username;
       ctx.session.adminState = 'add_customer:spent';
       await ctx.reply(
-        '📝 *Шаг 3/4: Введите сумму выкупа заказчика (число в рублях):*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '📝 <b>Шаг 3/4: Введите сумму выкупа заказчика (число в рублях):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
       return;
     }
@@ -2273,10 +2269,10 @@ function register(bot) {
       ctx.session.newCustomer.totalSpent = parseInt(text);
       ctx.session.adminState = 'add_customer:special_discount';
       await ctx.reply(
-        '🎯 *Шаг 4/4: Специальная скидка*\n\n' +
+        '🎯 <b>Шаг 4/4: Специальная скидка</b>\n\n' +
         'Введите процент скидки (число от 1 до 100) или отправьте `0`, если специальная скидка не требуется.\n\n' +
         '⚠️ _Специальная скидка переопределяет скидку по рангу._',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
       return;
     }
@@ -2315,15 +2311,15 @@ function register(bot) {
         totalSpent: newCustomer.totalSpent,
         specialDiscount: discountPercent > 0 ? discountPercent : null
       }, ctx);
-      let successMessage = `✅ *Заказчик успешно добавлен/обновлён!*\n\n`;
-      successMessage += `👤 *ID:* \`${newCustomer.id}\`\n`;
-      successMessage += `📛 *Username:* @${newCustomer.username}\n`;
-      successMessage += `💰 *Сумма выкупа:* ${newCustomer.totalSpent} ₽\n`;
+      let successMessage = `✅ <b>Заказчик успешно добавлен/обновлён!</b>\n\n`;
+      successMessage += `👤 <b>ID:</b> <code>${newCustomer.id}</code>\n`;
+      successMessage += `📛 <b>Username:</b> @<code>${newCustomer.username}</code>\n`;
+      successMessage += `💰 <b>Сумма выкупа:</b> <code>${newCustomer.totalSpent}</code> ₽\n`;
       if (discountPercent > 0) {
-        successMessage += `🎯 *Специальная скидка:* ${discountPercent}%\n`;
+        successMessage += `🎯 <b>Специальная скидка:</b> <code>${discountPercent}%</code>\n`;
       }
       await ctx.reply(successMessage, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('👥 К списку заказчиков', 'admin:customers')],
           [Markup.button.callback('➕ Добавить ещё', 'admin:add_customer_start')]
@@ -2347,7 +2343,7 @@ function register(bot) {
           [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${order.id}`)],
           [Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]
         ];
-        await ctx.reply(cardText, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+        await ctx.reply(cardText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
       }
       ctx.session.adminState = null; return;
     }
@@ -2415,18 +2411,18 @@ function register(bot) {
       const customerOrders = allOrders.filter(o => String(o.customerId) === String(foundCustomer.id));
       const loyaltyInfo = loyalty.getLoyaltyInfo(foundCustomer.id);
       
-      let textMsg = `👤 *Информация о заказчике*\n\n`;
-      textMsg += `ID: \`${foundCustomer.id}\`\n`;
-      textMsg += `Username: ${safeUsername(foundCustomer.username)}\n`;
-      textMsg += `Сумма выкупа: ${loyaltyInfo.totalSpent} ₽\n`;
-      textMsg += `Количество заказов: ${foundCustomer.orderCount}\n\n`;
+      let textMsg = `👤 <b>Информация о заказчике</b>\n\n`;
+      textMsg += `ID: <code>${foundCustomer.id}</code>\n`;
+      textMsg += `Username: <code>${safeUsername(foundCustomer.username)}</code>\n`;
+      textMsg += `Сумма выкупа: <code>${loyaltyInfo.totalSpent}</code> ₽\n`;
+      textMsg += `Количество заказов: <code>${foundCustomer.orderCount}</code>\n\n`;
       
       if (loyaltyInfo.specialDiscount !== null) {
-        textMsg += `\n🎯 *Специальная скидка:* ${loyaltyInfo.specialDiscount}% _(переопределяет ранговую)_\n`;
+        textMsg += `\n🎯 <b>Специальная скидка:</b> <code>${loyaltyInfo.specialDiscount}%</code> <i>(переопределяет ранговую)</i>\n`;
       }
 
       if (customerOrders.length > 0) {
-        textMsg += `📦 *Последние заказы:*\n`;
+        textMsg += `📦 <b>Последние заказы:</b>\n`;
         customerOrders.slice(0, 5).forEach((o, i) => {
           textMsg += `${i + 1}. №${o.orderNumber} | ${o.workTitle} | ${o.price} ₽ | ${o.status}\n`;
         });
@@ -2442,7 +2438,7 @@ function register(bot) {
         [Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]
       ];
       
-      await ctx.reply(textMsg, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.reply(textMsg, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
       ctx.session.adminState = null;
       return;
     }
@@ -2465,8 +2461,8 @@ function register(bot) {
         try {
           await ctx.telegram.sendMessage(
             customerId,
-            `📬 *Сообщение от администрации по заказу №${order.orderNumber}*\n\n${messageText}`,
-            { parse_mode: 'Markdown', reply_markup: replyKeyboard.reply_markup }
+            `📬 <b>Сообщение от администрации по заказу №${order.orderNumber}</b>\n\n${messageText}`,
+            { parse_mode: 'HTML', reply_markup: replyKeyboard.reply_markup }
           );
           await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
         } catch (err) {
@@ -2483,8 +2479,8 @@ function register(bot) {
             try {
               await ctx.telegram.sendMessage(
                 customerId,
-                `📬 *Сообщение от администрации*\n\n${messageText}`,
-                { parse_mode: 'Markdown' }
+                `📬 <b>Сообщение от администрации</b>\n\n${messageText}`,
+                { parse_mode: 'HTML' }
               );
               await ctx.reply(`✅ Сообщение отправлено заказчику ID: ${customerId}`);
             } catch (err) {
@@ -2559,11 +2555,11 @@ function register(bot) {
                   const isPaid = order.status === 'paid';
                   
                   const privateText =
-                    `✅ *Вам назначен индивидуальный заказ!*\n\n` +
-                    `🆔 *Номер заказа:* №${orderNumber}\n` +
-                    `📚 *Предмет:* ${order.subjectName || order.workTitle}\n` +
-                    `👤 *Заказчик:* ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n` +
-                    (isPaid ? `💰 *Цена:* ${order.price} ₽\n` : '') +
+                    `✅ <b>Вам назначен индивидуальный заказ!</b>\n\n` +
+                    `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                    `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n` +
+                    `👤 <b>Заказчик:</b> ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n` +
+                    (isPaid ? `💰 <b>Цена:</b> ${order.price} ₽\n` : '') +
                     `\n${isPaid ? 'Свяжитесь с заказчиком:' : 'Назначьте цену или свяжитесь с заказчиком:'}`;
 
                   // 🌟 Если заказ уже оплачен — кнопку "Назначить цену" не показываем
@@ -2578,7 +2574,7 @@ function register(bot) {
 
                   try {
                     await bot.telegram.sendMessage(executorId, privateText, {
-                      parse_mode: 'Markdown',
+                      parse_mode: 'HTML',
                       reply_markup: privateKeyboard.reply_markup
                     });
                   } catch (e) {
@@ -2604,9 +2600,9 @@ function register(bot) {
                 if (order.customerId) {
                   const actionWord = isReassignment ? 'изменён' : 'назначен';
                   const customerMessage =
-                    `👷 *По вашему заказу ${actionWord} исполнитель*\n\n` +
-                    `🆔 *Номер заказа:* №${orderNumber}\n` +
-                    `📚 *Предмет:* ${order.subjectName || order.workTitle}\n\n` +
+                    `👷 <b>По вашему заказу ${actionWord} исполнитель</b>\n\n` +
+                    `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                    `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n\n` +
                     `Вы можете связаться с исполнителем для обсуждения деталей:`;
 
                   const customerKeyboard = Markup.inlineKeyboard([
@@ -2615,7 +2611,7 @@ function register(bot) {
 
                   try {
                     await bot.telegram.sendMessage(order.customerId, customerMessage, {
-                      parse_mode: 'Markdown',
+                      parse_mode: 'HTML',
                       reply_markup: customerKeyboard.reply_markup
                     });
                   } catch (e) {
@@ -2627,11 +2623,11 @@ function register(bot) {
                 if (isReassignment && oldExecutorId) {
                   try {
                     await bot.telegram.sendMessage(oldExecutorId,
-                      `⚠️ *Заказ передан другому исполнителю*\n\n` +
-                      `🆔 *Номер заказа:* №${orderNumber}\n` +
-                      `📚 *Предмет:* ${order.subjectName || order.workTitle}\n\n` +
+                      `⚠️ <b>Заказ передан другому исполнителю</b>\n\n` +
+                      `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                      `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n\n` +
                       `Администратор назначил нового исполнителя. Вы больше не являетесь исполнителем по этому заказу.`,
-                      { parse_mode: 'Markdown' }
+                      { parse_mode: 'HTML' }
                     );
                   } catch (e) {
                     console.log('Не удалось уведомить старого исполнителя:', e.message);
@@ -2648,11 +2644,11 @@ function register(bot) {
                 if (isReassignment && oldExecutorId) {
                   try {
                     await bot.telegram.sendMessage(oldExecutorId,
-                      `⚠️ *Заказ передан другому исполнителю*\n\n` +
-                      `🆔 *Номер заказа:* №${orderNumber}\n` +
-                      `📚 *Работа:* ${order.workTitle}\n\n` +
+                      `⚠️ <b>Заказ передан другому исполнителю</b>\n\n` +
+                      `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                      `📚 <b>Работа:</b> ${order.workTitle}\n\n` +
                       `Администратор назначил нового исполнителя. Вы больше не являетесь исполнителем по этому заказу.`,
-                      { parse_mode: 'Markdown' }
+                      { parse_mode: 'HTML' }
                     );
                   } catch (e) {
                     console.log('Не удалось уведомить старого исполнителя:', e.message);
@@ -2675,11 +2671,11 @@ function register(bot) {
                 : 'исполнителю и заказчику';
 
               await ctx.reply(
-                `✅ *Исполнитель успешно ${actionLabel}!*\n\n` +
-                `👷 *Исполнитель:* ${executorName}\n` +
-                `📦 *Заказ:* №${orderNumber}\n\n` +
+                `✅ <b>Исполнитель успешно ${actionLabel}!</b>\n\n` +
+                `👷 <b>Исполнитель:</b> ${executorName}\n` +
+                `📦 <b>Заказ:</b> №${orderNumber}\n\n` +
                 `Уведомления отправлены ${notifyDetails}.`,
-                { parse_mode: 'Markdown' }
+                { parse_mode: 'HTML' }
               );
 
               // Перерисовываем карточку заказа
@@ -2694,13 +2690,13 @@ function register(bot) {
               newButtons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
               newButtons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
               newButtons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
-              await ctx.reply(cardText, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(newButtons) });
+              await ctx.reply(cardText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(newButtons) });
 
             } catch (err) {
               await ctx.reply(
-                `❌ *Ошибка назначения:*\n\n${err.message}`,
+                `❌ <b>Ошибка назначения:</b>\n\n${err.message}`,
                 {
-                  parse_mode: 'Markdown',
+                  parse_mode: 'HTML',
                   ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `admin:order_view:${orderId}`)]])
                 }
               );
@@ -2743,12 +2739,12 @@ const backKeyboard = Markup.inlineKeyboard([
 ]);
 
       await ctx.reply(
-        `💬 *Режим ответа заказчику*\n\n` +
-        `🆔 *Номер заказа:* №${orderNumber}\n` +
-        `📚 *Заказ:* ${escapeMarkdown(orderTitle)}\n\n` +
+        `💬 <b>Режим ответа заказчику</b>\n\n` +
+        `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+        `📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\n` +
         `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.`,
         { 
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           reply_markup: backKeyboard.reply_markup
         }
       );
@@ -2772,8 +2768,8 @@ const backKeyboard = Markup.inlineKeyboard([
       ctx.session.adminState = null;
       clearAdminReplySession(ctx);
 
-      await ctx.editMessageText('🛠 *Панель управления*', { 
-        parse_mode: 'Markdown', 
+      await ctx.editMessageText('🛠 <b>Панель управления</b>', { 
+        parse_mode: 'HTML', 
         ...getAdminMainMenu() 
       });
     }
@@ -2782,8 +2778,8 @@ const backKeyboard = Markup.inlineKeyboard([
     if (action === 'catalog') {
       ctx.session.adminState = null;
       await ctx.editMessageText(
-        '🗂 *Управление каталогом*\n\nВыберите специальность:',
-        { parse_mode: 'Markdown', ...getCatalogSpecialtiesMenu() }
+        '🗂 <b>Управление каталогом</b>\n\nВыберите специальность:',
+        { parse_mode: 'HTML', ...getCatalogSpecialtiesMenu() }
       );
     }
     else if (action.startsWith('catalog_specialty:')) {
@@ -2792,8 +2788,8 @@ const backKeyboard = Markup.inlineKeyboard([
       if (!specialty) { await ctx.answerCbQuery('❌ Специальность не найдена'); return; }
       ctx.session.adminState = null;
       await ctx.editMessageText(
-        `${specialty.emoji} *Специальность: ${specialty.name}*\n\nВыберите курс:`,
-        { parse_mode: 'Markdown', ...getSpecialtyCourses(specialtyId) }
+        `${specialty.emoji} <b>Специальность: ${specialty.name}</b>\n\nВыберите курс:`,
+        { parse_mode: 'HTML', ...getSpecialtyCourses(specialtyId) }
       );
     }
     // 🌟 Общие работы специальности
@@ -2801,31 +2797,31 @@ const backKeyboard = Markup.inlineKeyboard([
       const specialtyId = action.split(':')[1];
       ctx.session.adminState = null;
       await ctx.editMessageText(
-        '📋 *Общие работы (без курса/предмета)*\n\nВыберите работу:',
-        { parse_mode: 'Markdown', ...getGeneralWorks(specialtyId) }
+        '📋 <b>Общие работы (без курса/предмета)</b>\n\nВыберите работу:',
+        { parse_mode: 'HTML', ...getGeneralWorks(specialtyId) }
       );
     }
     else if (action.startsWith('catalog_course:')) {
       ctx.session.adminState = null;
-      await ctx.editMessageText('📖 *Предметы курса*\n\nВыберите предмет:', { parse_mode: 'Markdown', ...getCourseSubjects(action.split(':')[1]) });
+      await ctx.editMessageText('📖 <b>Предметы курса</b>\n\nВыберите предмет:', { parse_mode: 'HTML', ...getCourseSubjects(action.split(':')[1]) });
     }
     else if (action.startsWith('catalog_subject:')) {
       ctx.session.adminState = null;
-      await ctx.editMessageText('📝 *Работы предмета*\n\nВыберите работу:', { parse_mode: 'Markdown', ...getSubjectWorks(action.split(':')[1]) });
+      await ctx.editMessageText('📝 <b>Работы предмета</b>\n\nВыберите работу:', { parse_mode: 'HTML', ...getSubjectWorks(action.split(':')[1]) });
     }
     // 🌟 Общие работы курса
     else if (action.startsWith('catalog_course_general:')) {
       const courseId = action.split(':')[1];
       ctx.session.adminState = null;
       await ctx.editMessageText(
-        '📋 *Общие работы курса (без предмета)*\n\nВыберите работу:',
-        { parse_mode: 'Markdown', ...getCourseGeneralWorks(courseId) }
+        '📋 <b>Общие работы курса (без предмета)</b>\n\nВыберите работу:',
+        { parse_mode: 'HTML', ...getCourseGeneralWorks(courseId) }
       );
     }
     else if (action.startsWith('catalog_work:')) {
       ctx.session.adminState = null;
       const card = getWorkCard(action.split(':')[1]);
-      await ctx.editMessageText(card.text, { parse_mode: 'Markdown', ...card.keyboard });
+      await ctx.editMessageText(card.text, { parse_mode: 'HTML', ...card.keyboard });
     }
 
     // --- КАТАЛОГ: Добавление ---
@@ -2834,20 +2830,20 @@ const backKeyboard = Markup.inlineKeyboard([
       const specialtyId = action.split(':')[1];
       ctx.session.tempCourseSpecialty = specialtyId;
       ctx.session.adminState = 'awaiting_course_name';
-      await ctx.editMessageText('✏️ *Введите название нового курса:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✏️ <b>Введите название нового курса:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     // Добавление специальности
     else if (action === 'add_specialty') {
       ctx.session.adminState = 'awaiting_specialty_name';
       await ctx.editMessageText(
-        '✏️ *Введите название новой специальности:*\n\nНапример: 🚢 Судомеханика',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '✏️ <b>Введите название новой специальности:</b>\n\nНапример: 🚢 Судомеханика',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
     }
     // Изменение специальности: выбор
     else if (action === 'edit_specialty') {
       ctx.session.adminState = null;
-      await ctx.editMessageText('✏️ *Изменение специальности*\n\nВыберите специальность:', { parse_mode: 'Markdown', ...getEditSpecialtyList() });
+      await ctx.editMessageText('✏️ <b>Изменение специальности</b>\n\nВыберите специальность:', { parse_mode: 'HTML', ...getEditSpecialtyList() });
     }
     else if (action.startsWith('edit_specialty_select:')) {
       const specialtyId = action.split(':')[1];
@@ -2855,14 +2851,14 @@ const backKeyboard = Markup.inlineKeyboard([
       if (!specialty) { await ctx.answerCbQuery('❌ Не найдено'); return; }
       ctx.session.adminState = `edit_specialty_name:${specialtyId}`;
       await ctx.editMessageText(
-        `✏️ *Текущее название:* ${specialty.name}\n\nВведите новое:`,
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        `✏️ <b>Текущее название:</b> ${specialty.name}\n\nВведите новое:`,
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
     }
     // Удаление специальности: выбор
     else if (action === 'delete_specialty') {
       ctx.session.adminState = null;
-      await ctx.editMessageText('🗑 *Удаление специальности*\n\nВыберите специальность:', { parse_mode: 'Markdown', ...getDeleteSpecialtyList() });
+      await ctx.editMessageText('🗑 <b>Удаление специальности</b>\n\nВыберите специальность:', { parse_mode: 'HTML', ...getDeleteSpecialtyList() });
     }
     else if (action.startsWith('delete_specialty_confirm:')) {
       const specialtyId = action.split(':')[1];
@@ -2871,8 +2867,8 @@ const backKeyboard = Markup.inlineKeyboard([
       const linkedCourses = catalog.getCourses(specialtyId);
       if (linkedCourses.length > 0) {
         await ctx.editMessageText(
-          `⚠️ *Нельзя удалить специальность*\n\nК специальности «${specialty.name}» привязано курсов: *${linkedCourses.length}*.\n\nСначала удалите или перенесите эти курсы.`,
-          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:catalog')]]) }
+          `⚠️ <b>Нельзя удалить специальность</b>\n\nК специальности «${specialty.name}» привязано курсов: <b>${linkedCourses.length}</b>.\n\nСначала удалите или перенесите эти курсы.`,
+          { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:catalog')]]) }
         );
       } else {
         const keyboard = Markup.inlineKeyboard([
@@ -2880,8 +2876,8 @@ const backKeyboard = Markup.inlineKeyboard([
           [Markup.button.callback('❌ Отмена', 'admin:catalog')]
         ]);
         await ctx.editMessageText(
-          `⚠️ *Подтверждение удаления*\n\nСпециальность: *${specialty.name}*`,
-          { parse_mode: 'Markdown', ...keyboard }
+          `⚠️ <b>Подтверждение удаления</b>\n\nСпециальность: <b>${specialty.name}</b>\n\n`,
+          { parse_mode: 'HTML', ...keyboard }
         );
       }
     }
@@ -2891,7 +2887,7 @@ const backKeyboard = Markup.inlineKeyboard([
       const result = catalog.deleteSpecialty(specialtyId);
       if (result.success) {
         logger.logAdminAction('specialty_deleted', { specialtyId }, ctx);
-        await ctx.editMessageText(`✅ Специальность "${specialty.name}" удалена!`, { parse_mode: 'Markdown', ...getCatalogSpecialtiesMenu() });
+        await ctx.editMessageText(`✅ Специальность "${specialty.name}" удалена!`, { parse_mode: 'HTML', ...getCatalogSpecialtiesMenu() });
       } else {
         await ctx.answerCbQuery(`❌ ${result.reason}`);
       }
@@ -2901,54 +2897,54 @@ const backKeyboard = Markup.inlineKeyboard([
       const specialtyId = action.split(':')[1];
       ctx.session.tempWorkData = { subjectId: null, courseId: null, specialty: specialtyId };
       ctx.session.adminState = `add_general_work_title:${specialtyId}`;
-      await ctx.editMessageText('✍️ *Шаг 1/9: Введите название общей работы:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ <b>Шаг 1/9: Введите название общей работы:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('add_general_custom_work:')) {
       const specialtyId = action.split(':')[1];
       ctx.session.tempWorkData = { subjectId: null, courseId: null, specialty: specialtyId, isCustomOrder: true };
       ctx.session.adminState = `add_general_custom_work_title:${specialtyId}`;
-      await ctx.editMessageText('✍️ *Шаг 1/7: Введите название общего индивидуального заказа:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ <b>Шаг 1/7: Введите название общего индивидуального заказа:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('add_subject:')) {
       ctx.session.adminState = `awaiting_subject_name:${action.split(':')[1]}`;
-      await ctx.editMessageText('✏️ *Введите название нового предмета:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✏️ <b>Введите название нового предмета:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     // 🌟 Добавление общей работы курса
     else if (action.startsWith('add_course_general_work:')) {
       const courseId = action.split(':')[1];
       ctx.session.tempWorkData = { subjectId: null, courseId: courseId };
       ctx.session.adminState = `add_course_general_work_title:${courseId}`;
-      await ctx.editMessageText('✍️ *Шаг 1/9: Введите название общей работы курса:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ <b>Шаг 1/9: Введите название общей работы курса:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('add_work:')) {
       ctx.session.adminState = `add_work_title:${action.split(':')[1]}`;
-      await ctx.editMessageText('✍️ *Шаг 1/9: Введите название работы:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ <b>Шаг 1/9: Введите название работы:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('add_custom_work:')) {
       const subjectId = action.split(':')[1];
       ctx.session.adminState = `add_custom_work_title:${subjectId}`;
-      await ctx.editMessageText('✍️ *Шаг 1/6: Введите название индивидуального заказа:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ <b>Шаг 1/6: Введите название индивидуального заказа:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
 
     // --- КАТАЛОГ: Изменение ---
     else if (action === 'edit_course' || action.startsWith('edit_course:')) {
       const specialtyId = action.includes(':') ? action.split(':')[1] : null;
       ctx.session.adminState = null;
-      await ctx.editMessageText('✏️ *Изменение курса*\n\nВыберите курс:', { parse_mode: 'Markdown', ...getEditCourseList(specialtyId) });
+      await ctx.editMessageText('✏️ <b>Изменение курса</b>\n\nВыберите курс:', { parse_mode: 'HTML', ...getEditCourseList(specialtyId) });
     }
     else if (action.startsWith('edit_course_select:')) {
       const courseId = action.split(':')[1];
       ctx.session.adminState = `edit_course_name:${courseId}`;
-      await ctx.editMessageText(`✏️ *Текущее название:* ${catalog.getCourse(courseId).name}\n\nВведите новое:`, { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText(`✏️ <b>Текущее название:</b> ${catalog.getCourse(courseId).name}\n\nВведите новое:`, { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('edit_subject:')) {
       ctx.session.adminState = null;
-      await ctx.editMessageText('✏️ *Изменение предмета*\n\nВыберите предмет:', { parse_mode: 'Markdown', ...getEditSubjectList(action.split(':')[1]) });
+      await ctx.editMessageText('✏️ <b>Изменение предмета</b>\n\nВыберите предмет:', { parse_mode: 'HTML', ...getEditSubjectList(action.split(':')[1]) });
     }
     else if (action.startsWith('edit_subject_select:')) {
       const subjectId = action.split(':')[1];
       ctx.session.adminState = `edit_subject_name:${subjectId}`;
-      await ctx.editMessageText(`✏️ *Текущее название:* ${catalog.getSubject(subjectId).name}\n\nВведите новое:`, { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText(`✏️ <b>Текущее название:</b>   ${catalog.getSubject(subjectId).name}\n\nВведите новое:`, { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('edit_work:')) {
       const workId = action.split(':')[1];
@@ -2964,7 +2960,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('🔗 Ссылка на примеры', 'admin:edit_field:exampleUrl:' + workId)],
         [Markup.button.callback('⬅️ Назад', `admin:catalog_work:${workId}`)]
       ]);
-      await ctx.editMessageText('✏️ *Выберите поле для изменения:*', { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText('✏️ <b>Выберите поле для изменения:</b>', { parse_mode: 'HTML', ...keyboard });
     }
     else if (action.startsWith('edit_field:')) {
       const parts = action.split(':');
@@ -2978,7 +2974,7 @@ const backKeyboard = Markup.inlineKeyboard([
       ctx.session.adminState = `edit_work_input:${workId}:${field}`;
       
       // 🌟 Базовое сообщение
-      let message = `✏️ *Введите новое значение для поля "${field}":*\n\n📌 *Текущее:* \`${oldValue}\`\n\n`;
+      let message = `✏️ <b>Введите новое значение для поля "${field}":</b>\n\n📌 <b>Текущее:</b> <code>${oldValue}</code>\n\n`;
       
       // 🌟 Для переменных окружения показываем список доступных
       if (field === 'chatEnv') {
@@ -2991,14 +2987,14 @@ const backKeyboard = Markup.inlineKeyboard([
         message += `\nОтправьте имя переменной (можно скопировать из списка выше):`;
       }
       
-      await ctx.editMessageText(message, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:edit_work:${workId}`)]]) });
+      await ctx.editMessageText(message, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:edit_work:${workId}`)]]) });
     }
 
     // --- КАТАЛОГ: Удаление ---
     else if (action === 'delete_course' || action.startsWith('delete_course:')) {
       const specialtyId = action.includes(':') ? action.split(':')[1] : null;
       ctx.session.adminState = null;
-      await ctx.editMessageText('🗑 *Удаление курса*\n\nВыберите курс:', { parse_mode: 'Markdown', ...getDeleteCourseList(specialtyId) });
+      await ctx.editMessageText('🗑 <b>Удаление курса</b>\n\nВыберите курс:', { parse_mode: 'HTML', ...getDeleteCourseList(specialtyId) });
     }
     else if (action.startsWith('delete_course_confirm:')) {
       const courseId = action.split(':')[1];
@@ -3007,7 +3003,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback(`✅ Да, удалить "${course.name}"`, `admin:delete_course_execute:${courseId}`)],
         [Markup.button.callback('❌ Отмена', 'admin:catalog')]
       ]);
-      await ctx.editMessageText(`⚠️ *Подтверждение*\n\nКурс: *${course.name}*\nВсе предметы и работы будут удалены!`, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(`⚠️ <b>Подтверждение</b>\n\nКурс: <b>${course.name}</b>\nВсе предметы и работы будут удалены!`, { parse_mode: 'HTML', ...keyboard });
     }
     else if (action.startsWith('delete_course_execute:')) {
       const courseId = action.split(':')[1];
@@ -3020,11 +3016,11 @@ const backKeyboard = Markup.inlineKeyboard([
       catalog.saveData(data);
       const specialtyId = course ? course.specialty : null;
       const backKeyboard = specialtyId ? getSpecialtyCourses(specialtyId) : getCatalogSpecialtiesMenu();
-      await ctx.editMessageText(`✅ Курс "${course.name}" удалён!`, { parse_mode: 'Markdown', ...backKeyboard });
+      await ctx.editMessageText(`✅ Курс "${course.name}" удалён!`, { parse_mode: 'HTML', ...backKeyboard });
     }
     else if (action.startsWith('delete_subject:')) {
       ctx.session.adminState = null;
-      await ctx.editMessageText('🗑 *Удаление предмета*\n\nВыберите предмет:', { parse_mode: 'Markdown', ...getDeleteSubjectList(action.split(':')[1]) });
+      await ctx.editMessageText('🗑 <b>Удаление предмета</b>\n\nВыберите предмет:', { parse_mode: 'HTML', ...getDeleteSubjectList(action.split(':')[1]) });
     }
     else if (action.startsWith('delete_subject_confirm:')) {
       const subjectId = action.split(':')[1];
@@ -3034,7 +3030,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback(`✅ Да, удалить "${subject.name}"`, `admin:delete_subject_execute:${subjectId}`)],
         [Markup.button.callback('❌ Отмена', `admin:catalog_course:${subject.courseId}`)]
       ]);
-      await ctx.editMessageText(`⚠️ *Подтверждение*\n\nПредмет: *${subject.name}*\nРабот: ${works.length}\nВсе работы будут удалены!`, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(`⚠️ <b>Подтверждение</b>\n\nПредмет: <b>${subject.name}</b>\nРабот: ${works.length}\nВсе работы будут удалены!`, { parse_mode: 'HTML', ...keyboard });
     }
     else if (action.startsWith('delete_subject_execute:')) {
       const subjectId = action.split(':')[1];
@@ -3043,30 +3039,30 @@ const backKeyboard = Markup.inlineKeyboard([
       data.works = data.works.filter(w => w.subjectId !== subjectId);
       data.subjects = data.subjects.filter(s => s.id !== subjectId);
       catalog.saveData(data);
-      await ctx.editMessageText(`✅ Предмет "${subject.name}" удалён!`, { parse_mode: 'Markdown', ...getCourseSubjects(subject.courseId) });
+      await ctx.editMessageText(`✅ Предмет "${subject.name}" удалён!`, { parse_mode: 'HTML', ...getCourseSubjects(subject.courseId) });
     }
      // 🌟 Удаление общих работ специальности
     else if (action.startsWith('delete_general_work:')) {
       const specialtyId = action.split(':')[1];
       ctx.session.adminState = null;
-      await ctx.editMessageText('🗑 *Удаление общей работы*\n\nВыберите работу:', { parse_mode: 'Markdown', ...getDeleteGeneralWorkList(specialtyId) });
+      await ctx.editMessageText('🗑 <b>Удаление общей работы</b>\n\nВыберите работу:', { parse_mode: 'HTML', ...getDeleteGeneralWorkList(specialtyId) });
     }
     // 🌟 Удаление общих работ курса
     else if (action.startsWith('delete_course_general_work:')) {
       const courseId = action.split(':')[1];
       ctx.session.adminState = null;
-      await ctx.editMessageText('🗑 *Удаление общей работы курса*\n\nВыберите работу:', { parse_mode: 'Markdown', ...getDeleteCourseGeneralWorkList(courseId) });
+      await ctx.editMessageText('🗑 <b>Удаление общей работы курса</b>\n\nВыберите работу:', { parse_mode: 'HTML', ...getDeleteCourseGeneralWorkList(courseId) });
     }
     // 🌟 Добавление общего индивидуального заказа курса
     else if (action.startsWith('add_course_general_custom_work:')) {
       const courseId = action.split(':')[1];
       ctx.session.tempWorkData = { subjectId: null, courseId: courseId, isCustomOrder: true };
       ctx.session.adminState = `add_course_general_custom_work_title:${courseId}`;
-      await ctx.editMessageText('✍️ *Шаг 1/7: Введите название общего индивидуального заказа:*', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('✍️ <b>Шаг 1/7: Введите название общего индивидуального заказа:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('delete_work:')) {
       ctx.session.adminState = null;
-      await ctx.editMessageText('🗑 *Удаление работы*\n\nВыберите работу:', { parse_mode: 'Markdown', ...getDeleteWorkList(action.split(':')[1]) });
+      await ctx.editMessageText('🗑 <b>Удаление работы</b>\n\nВыберите работу:', { parse_mode: 'HTML', ...getDeleteWorkList(action.split(':')[1]) });
     }
     else if (action.startsWith('delete_work_confirm:')) {
       const workId = action.split(':')[1];
@@ -3075,7 +3071,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Да, удалить', `admin:delete_work_execute:${workId}`)],
         [Markup.button.callback('❌ Отмена', `admin:catalog_subject:${work.subjectId}`)]
       ]);
-      await ctx.editMessageText(`⚠️ *Подтверждение*\n\nРабота: *${work.title}*\nЦена: ${work.price} ₽`, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(`⚠️ <b>Подтверждение</b>\n\nРабота: <b>${work.title}</b>\nЦена: ${work.price} ₽`, { parse_mode: 'HTML', ...keyboard });
     }
     else if (action.startsWith('delete_work_execute:')) {
       const workId = action.split(':')[1];
@@ -3098,7 +3094,7 @@ const backKeyboard = Markup.inlineKeyboard([
         backKeyboard = getSubjectWorks(work.subjectId);
       }
       
-      await ctx.editMessageText(`✅ Работа удалена!`, { parse_mode: 'Markdown', ...backKeyboard });
+      await ctx.editMessageText(`✅ Работа удалена!`, { parse_mode: 'HTML', ...backKeyboard });
     }
 
     // ==========================================
@@ -3119,18 +3115,18 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('🔍 Поиск по номеру', 'admin:search_order_prompt')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
-      await ctx.editMessageText(`📦 *Управление заказами*\n\nВсего: *${all.length}*\n⏳ Ожидают: *${p}*\n🔨 В работе: *${a}*\n✅ Выполнены: *${c}*`, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(`📦 <b>Управление заказами</b>\n\nВсего: <b>${all.length}</b>\n⏳ Ожидают: <b>${p}</b>\n🔨 В работе: <b>${a}</b>\n✅ Выполнены: <b>${c}</b>`, { parse_mode: 'HTML', ...keyboard });
     }
     else if (action === 'add_order_start') {
       ctx.session.adminState = 'add_order:customer_id';
       await ctx.editMessageText(
-        '✏️ *Добавление нового заказа*\n\n📝 *Шаг 1: Введите Telegram ID заказчика:*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '✏️ <b>Добавление нового заказа</b>\n\n📝 <b>Шаг 1: Введите Telegram ID заказчика:</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
     }
     else if (action === 'search_order_prompt') {
       ctx.session.adminState = 'search_order_prompt';
-      await ctx.editMessageText('🔍 *Поиск заказа по номеру*\n\nВведите номер заказа:', { parse_mode: 'Markdown', ...getBackToAdminMenu() });
+      await ctx.editMessageText('🔍 <b>Поиск заказа по номеру</b>\n\nВведите номер заказа:', { parse_mode: 'HTML', ...getBackToAdminMenu() });
     }
     else if (action.startsWith('orders_list:')) {
       const parts = action.split(':');
@@ -3178,7 +3174,7 @@ const backKeyboard = Markup.inlineKeyboard([
       buttons.push(navRow);
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:orders')]);
       
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('order_view:')) {
       const orderId = action.split(':')[1];
@@ -3228,7 +3224,7 @@ const backKeyboard = Markup.inlineKeyboard([
       }
       buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('order_edit:')) {
       const orderId = action.split(':')[1];
@@ -3251,8 +3247,8 @@ const backKeyboard = Markup.inlineKeyboard([
       keyboardButtons.push([Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]);
       const typeLabel = order.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
       await ctx.editMessageText(
-        `✏️ *Редактирование заказа №${order.orderNumber}*\n${typeLabel}\n\nВыберите поле для изменения:`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard(keyboardButtons) }
+        `✏️ <b>Редактирование заказа №${order.orderNumber}</b>\n${typeLabel}\n\nВыберите поле для изменения:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(keyboardButtons) }
       );
     }
     // --- ПРИВЯЗКА ЗАКАЗА К ЧАТУ (АДМИН) ---
@@ -3262,14 +3258,14 @@ const backKeyboard = Markup.inlineKeyboard([
       if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
 
       const envVars = getAvailableEnvVars();
-      let message = `🏢 *Привязка заказа к чату*\n\n`;
-      message += `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n`;
+      let message = `🏢 <b>Привязка заказа к чату</b>\n\n`;
+      message += `📦 <b>Заказ:</b> №${order.orderNumber} | ${order.workTitle}\n\n`;
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной чата:`;
 
       ctx.session.adminState = `order_bind_chat:${orderId}`;
       await ctx.editMessageText(message, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:order_view:${orderId}`)]])
       });
     }
@@ -3285,7 +3281,7 @@ const backKeyboard = Markup.inlineKeyboard([
       else if (field === 'commission') oldValue = `${oldValue}%`;
       
       ctx.session.adminState = `edit_order_input:${orderId}:${field}`;
-      await ctx.editMessageText(`✏️ *Введите новое значение для поля "${field}":*\n\n📌 *Текущее:* \`${oldValue}\``, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]]) });
+      await ctx.editMessageText(`✏️ <b>Введите новое значение для поля "${field}":</b>\n\n📌 <b>Текущее:</b> \`${oldValue}\``, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]]) });
     }
     // ==========================================
     // 🌟 НАЗНАЧЕНИЕ ИСПОЛНИТЕЛЯ ВРУЧНУЮ
@@ -3312,22 +3308,22 @@ const backKeyboard = Markup.inlineKeyboard([
       // 🌟 Формируем текст со списком доступных пользователей
       let availableUsersText = '';
       if (executors.length > 0) {
-        availableUsersText += `🔥 *Исполнители (Прометей):*\n`;
+        availableUsersText += `🔥 <b>Исполнители (Прометей):</b>\n`;
         executors.forEach(e => {
           availableUsersText += `• \`${e.id}\`${e.username ? ` (\`@${e.username}\`)` : ''}\n`;
         });
       } else {
-        availableUsersText += `🔥 *Исполнители:* _нет назначенных рангов_\n`;
+        availableUsersText += `🔥 <b>Исполнители:</b> <i>нет назначенных рангов</i>\n`;
       }
       // 🌟 НОВОЕ: Управляющие (Циклоп)
       if (managers.length > 0) {
-        availableUsersText += `\n👁️ *Управляющие отделами (Циклоп):*\n`;
+        availableUsersText += `\n👁️ <b>Управляющие отделами (Циклоп):</b>\n`;
         managers.forEach(m => {
           availableUsersText += `• \`${m.id}\`${m.username ? ` (\`@${m.username}\`)` : ''}\n`;
         });
       }
       if (admins.length > 0) {
-        availableUsersText += `\n👑 *Администраторы (Посейдон):*\n`;
+        availableUsersText += `\n👑 <b>Администраторы (Посейдон):</b>\n`;
         admins.forEach(a => {
           availableUsersText += `• \`${a.id}\`${a.username ? ` (\`@${a.username}\`)` : ''}\n`;
         });
@@ -3335,13 +3331,13 @@ const backKeyboard = Markup.inlineKeyboard([
       
       ctx.session.adminState = `awaiting_executor_id_for_order:${orderId}`;
       await ctx.editMessageText(
-        `👷 *Назначение исполнителя*\n\n` +
-        `📦 *Заказ:* №${order.orderNumber} | ${order.workTitle}\n\n` +
-        `Введите Telegram ID исполнителя (число):\n\n` +
+        `👷 <b>Назначение исполнителя</b>\n\n` +
+        `📦 <b>Заказ:</b> №${order.orderNumber} | ${order.workTitle}\n\n` +
+        `<b>Введите Telegram ID исполнителя (число):</b>\n\n` +
         `${availableUsersText}\n` +
-        `_Или введите ID любого пользователя вручную_`,
+        `<i>Или введите ID любого пользователя вручную</i>`,
         { 
-          parse_mode: 'Markdown', 
+          parse_mode: 'HTML', 
           ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:order_view:${orderId}`)]]) 
         }
       );
@@ -3385,7 +3381,7 @@ const backKeyboard = Markup.inlineKeyboard([
               updatedOrderForGroup.managerMessageId,
               null,
               updatedGroupText,
-              { parse_mode: 'Markdown' }
+              { parse_mode: 'HTML' }
             );
           } catch (e) {
             console.log('Не удалось обновить сообщение в группе при смене статуса:', e.message);
@@ -3428,7 +3424,7 @@ const backKeyboard = Markup.inlineKeyboard([
    buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
       buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     // 💾 Просмотр сохранённых исходных данных заказа
     else if (action.startsWith('order_data:')) {
@@ -3439,23 +3435,23 @@ const backKeyboard = Markup.inlineKeyboard([
       const data = storage.readOrderData(order.orderNumber);
       const files = storage.getOrderFiles(order.orderNumber);
 
-      let text = `💾 *Исходные данные заказа №${order.orderNumber}*\n\n`;
+      let text = `💾 <b>Исходные данные заказа №${order.orderNumber}</b>\n\n`;
       if (data) {
-        text += `📝 *Текст задания:*\n\`${data.detailsText || data.description || '—'}\`\n\n`;
-        text += `👤 *Заказчик:* ${data.customerUsername ? '@' + data.customerUsername : data.customerId}\n`;
-        text += `💾 *Сохранено:* ${data.savedAt ? data.savedAt.substring(0, 10) : '—'}\n\n`;
+        text += `📝 <b>Текст задания:</b>\n\`${data.detailsText || data.description || '—'}\`\n\n`;
+        text += `👤 <b>Заказчик:</b> ${data.customerUsername ? '@' + data.customerUsername : data.customerId}\n`;
+        text += `💾 <b>Сохранено:</b> ${data.savedAt ? data.savedAt.substring(0, 10) : '—'}\n\n`;
       } else {
         text += `⚠️ Метаданные не найдены.\n\n`;
       }
 
       if (files.length > 0) {
-        text += `📎 *Файлы (${files.length}):*\n`;
+        text += `📎 <b>Файлы (${files.length}):</b>\n`;
         files.forEach(f => {
           const sizeKB = (f.size / 1024).toFixed(1);
           text += `• ${f.name} (${sizeKB} КБ)\n`;
         });
       } else {
-        text += `📎 *Файлы:* отсутствуют`;
+        text += `📎 <b>Файлы:</b> отсутствуют`;
       }
 
       // Кнопки для отправки файлов
@@ -3464,7 +3460,7 @@ const backKeyboard = Markup.inlineKeyboard([
       ]);
       buttons.push([Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]);
 
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     // 💾 Отправка сохранённого файла в чат админа
     else if (action.startsWith('order_data_send:')) {
@@ -3491,7 +3487,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Да, удалить', `admin:order_delete_confirm:${orderId}`)],
         [Markup.button.callback('❌ Отмена', `admin:order_view:${orderId}`)]
       ]);
-      await ctx.editMessageText(`⚠️ *Подтверждение удаления*\n\nЗаказ: *${order.workTitle}*\nЗаказчик: ${order.customerUsername ? `@${order.customerUsername}` : order.customerId}`, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(`⚠️ <b>Подтверждение удаления</b>\n\nЗаказ: <b>${order.workTitle}</b>\nЗаказчик: ${order.customerUsername ? `<i>@${order.customerUsername}</i>` : `<i>${order.customerId}</i>`}`, { parse_mode: 'HTML', ...keyboard });
     }
     
     else if (action.startsWith('order_delete_confirm:')) {
@@ -3524,7 +3520,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback(`✅ Выполнены (${c})`, 'admin:orders_list:completed:0')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
-      await ctx.editMessageText(`✅ *Заказ удалён!*\n\n📦 *Управление заказами*\n\nВсего заказов: *${all.length}*`, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(`✅ <b>Заказ удалён!</b>\n\n📦 <b>Управление заказами</b>\n\nВсего заказов: <b>${all.length}</b>`, { parse_mode: 'HTML', ...keyboard });
     }
 
     else if (action.startsWith('order_message_customer:')) {
@@ -3549,12 +3545,12 @@ const backKeyboard = Markup.inlineKeyboard([
       ]);
       
       await ctx.editMessageText(
-        `💬 *Режим ответа заказчику*\n\n` +
-        `📚 *Заказ:* ${order.workTitle}\n` +
-        `📅 *Дата:* ${order.createdAt}\n\n` +
+        `💬 <b>Режим ответа заказчику</b>\n\n` +
+        `📚 <b>Заказ:</b> ${order.workTitle}\n` +
+        `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
         `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.\n\n` +
-        `_(Для отмены нажмите "Отмена")_`,
-        { parse_mode: 'Markdown', ...keyboard }
+        `<i>(Для отмены нажмите "Отмена")</i>`,
+        { parse_mode: 'HTML', ...keyboard }
       );
       await ctx.answerCbQuery();
     }
@@ -3567,8 +3563,8 @@ const backKeyboard = Markup.inlineKeyboard([
       const typeLabel = type === 'custom' ? '🌟 Индивидуальный' : '📦 Обычный';
       ctx.session.adminState = 'add_order:title';
       await ctx.editMessageText(
-        `${typeLabel} заказ выбран\n\n📝 *Шаг 3: Введите название работы:*`,
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        `${typeLabel} заказ выбран\n\n📝 <b>Шаг 3: Введите название работы:</b>`,
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
     }
     // --- ДОБАВЛЕНИЕ ЗАКАЗА: подтверждение ---
@@ -3602,7 +3598,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${createdOrder.id}`)],
         [Markup.button.callback('📦 Все заказы', 'admin:orders')]
       ];
-      await ctx.editMessageText(`✅ *Заказ №${createdOrder.orderNumber} создан!*\n\n${cardText}`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(`✅ <b>Заказ №${createdOrder.orderNumber} создан!</b>\n\n${cardText}`, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
 
     // --- МЕНЮ СТАТУСОВ ДЛЯ CUSTOM ORDERS ---
@@ -3619,8 +3615,8 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
       ]);
       await ctx.editMessageText(
-        `🔄 *Смена статуса заказа №${order.orderNumber}*\n\nТекущий статус: *${order.status}*`,
-        { parse_mode: 'Markdown', ...statusKeyboard }
+        `🔄 <b>Смена статуса заказа №${order.orderNumber}</b>\n\nТекущий статус: <b>${order.status}</b>`,
+        { parse_mode: 'HTML', ...statusKeyboard }
       );
     }
 
@@ -3636,12 +3632,12 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
       await ctx.editMessageText(
-        '📊 *Экспорт данных*\n\nВыберите тип экспорта:\n\n' +
-        '• **Экспорт заказов и скидок** — 2 листа (заказы + лояльность)\n' +
-        '• **Экспорт логов** — 2 листа (взаимодействия + ошибки/события)\n' +
-        '• **Экспорт файлов БД** — полный бэкап архивом (БД + исходные данные + логи + .env)\n' +
-        '• **Очистить логи** — удалить файл логов',
-        { parse_mode: 'Markdown', ...keyboard }
+        '📊 <b>Экспорт данных</b>\n\nВыберите тип экспорта:\n\n' +
+        '• <b>Экспорт заказов и скидок</b> — 2 листа (заказы + лояльность)\n' +
+        '• <b>Экспорт логов</b> — 2 листа (взаимодействия + ошибки/события)\n' +
+        '• <b>Экспорт файлов БД</b> — полный бэкап архивом (БД + исходные данные + логи + .env)\n' +
+        '• <b>Очистить логи</b> — удалить файл логов',
+        { parse_mode: 'HTML', ...keyboard }
       );
     }
     else if (action === 'export_orders') {
@@ -3653,7 +3649,7 @@ const backKeyboard = Markup.inlineKeyboard([
         const today = new Date().toISOString().split('T')[0];
         await ctx.replyWithDocument(
           { source: excelBuffer, filename: `SD_Bot_Orders_${today}.xlsx` },
-          { caption: '📊 *Экспорт заказов и скидок*\n\n• Лист 1: Все заказы\n• Лист 2: Программа лояльности', parse_mode: 'Markdown' }
+          { caption: '📊 <b>Экспорт заказов и скидок</b>\n\n• Лист 1: Все заказы\n• Лист 2: Программа лояльности', parse_mode: 'HTML' }
         );
       } catch (error) {
         console.error('Ошибка при экспорте заказов:', error);
@@ -3670,10 +3666,10 @@ const backKeyboard = Markup.inlineKeyboard([
         await ctx.replyWithDocument(
           { source: excelBuffer, filename: `SD_Bot_Logs_${today}.xlsx` },
           { 
-            caption: '📋 *Экспорт логов*\n\n' +
+            caption: '📋 <b>Экспорт логов</b>\n\n' +
                     '• Лист 1: Взаимодействия пользователей (сообщения, кнопки, чаты)\n' +
                     '• Лист 2: Ошибки и системные события (запуски, остановки)',
-            parse_mode: 'Markdown' 
+            parse_mode: 'HTML' 
           }
         );
       } catch (error) {
@@ -3710,8 +3706,8 @@ const backKeyboard = Markup.inlineKeyboard([
         const requester = ctx.from.username ? `@${ctx.from.username}` : `ID: ${ctx.from.id}`;
         await ctx.telegram.sendMessage(
           backupChatId,
-          `📦 *Ручной бэкап данных (архив)*\n📅 ${new Date().toLocaleString('ru-RU')}\n👤 *Запрошен:* ${escapeMarkdown(requester)}\n💾 *Размер:* ${sizeMB.toFixed(2)} МБ`,
-          { parse_mode: 'Markdown' }
+          `📦 <b>Ручной бэкап данных (архив)</b>\n📅 ${new Date().toLocaleString('ru-RU')}\n👤 <b>Запрошен:</b> ${escapeHtml(requester)}\n💾 <b>Размер:</b> ${sizeMB.toFixed(2)} МБ`,
+          { parse_mode: 'HTML' }
         );
 
         // 🌟 Отправляем архив
@@ -3732,11 +3728,11 @@ const backKeyboard = Markup.inlineKeyboard([
         fs.unlinkSync(archiveInfo.path);
 
         await ctx.reply(
-          `✅ *Бэкап успешно создан и отправлен!*\n\n` +
-          `📁 *Файл:* ${escapeMarkdown(archiveInfo.name)}\n` +
-          `💾 *Размер:* ${sizeMB.toFixed(2)} МБ\n` +
-          `📍 *Отправлен в:* группу бэкапов`,
-          { parse_mode: 'Markdown' }
+          `✅ <b>Бэкап успешно создан и отправлен!</b>\n\n` +
+          `📁 <b>Файл:</b> ${escapeHtml(archiveInfo.name)}\n` +
+          `💾 <b>Размер:</b> ${sizeMB.toFixed(2)} МБ\n` +
+          `📍 <b>Отправлен в:</b> группу бэкапов`,
+          { parse_mode: 'HTML' }
         );
       } catch (error) {
         console.error('Ошибка при создании бэкапа:', error);
@@ -3750,8 +3746,8 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('❌ Отмена', 'admin:export_excel')]
       ]);
       await ctx.editMessageText(
-        '⚠️ *Подтверждение*\n\nВы уверены, что хотите очистить все логи?\n\nЭто действие необратимо!',
-        { parse_mode: 'Markdown', ...keyboard }
+        '⚠️ <b>Подтверждение</b>\n\nВы уверены, что хотите очистить все логи?\n\nЭто действие необратимо!',
+        { parse_mode: 'HTML', ...keyboard }
       );
     }
     else if (action === 'clear_logs_execute') {
@@ -3759,10 +3755,10 @@ const backKeyboard = Markup.inlineKeyboard([
       logger.logAdminAction('clear_logs', { success }, ctx);
       if (success) {
         await ctx.answerCbQuery('✅ Логи очищены');
-        await ctx.editMessageText('✅ *Логи успешно очищены!*\n\nФайл логов теперь пуст.', { parse_mode: 'Markdown', ...getAdminMainMenu() });
+        await ctx.editMessageText('✅ <b>Логи успешно очищены!</b>\n\nФайл логов теперь пуст.', { parse_mode: 'HTML', ...getAdminMainMenu() });
       } else {
         await ctx.answerCbQuery('❌ Ошибка очистки');
-        await ctx.editMessageText('❌ Не удалось очистить логи.', { parse_mode: 'Markdown', ...getAdminMainMenu() });
+        await ctx.editMessageText('❌ <b>Не удалось очистить логи.</b>', { parse_mode: 'HTML', ...getAdminMainMenu() });
       }
     }
 
@@ -3784,25 +3780,25 @@ const backKeyboard = Markup.inlineKeyboard([
           }
         }
         
-        let text = `🛠 *Управление рангами*\n\n`;
-        text += `👑 *Админы (Посейдон):* ${admins.length}\n`;
+        let text = `🛠 <b>Управление рангами</b>\n\n`;
+        text += `👑 <b>Админы (Посейдон):</b> ${admins.length}\n`;
         if (admins.length === 0) text += `  • нет\n`;
         admins.forEach(a => {
-          const usernameDisplay = a.username !== 'N/A' ? '@' + escapeMarkdown(a.username) : 'без username';
+          const usernameDisplay = a.username !== 'N/A' ? '@' + escapeHtml(a.username) : 'без username';
           text += `  • ${a.id} (${usernameDisplay})\n`;
         });
         // 🌟 ИСПРАВЛЕНО: сначала выводим заголовок И список исполнителей
-        text += `\n🔥 *Исполнители (Прометей):* ${executors.length}\n`;
+        text += `\n🔥 <b>Исполнители (Прометей):</b> ${executors.length}\n`;
         if (executors.length === 0) text += `  • нет\n`;
         executors.forEach(e => {
-          const usernameDisplay = e.username !== 'N/A' ? '@' + escapeMarkdown(e.username) : 'без username';
+          const usernameDisplay = e.username !== 'N/A' ? '@' + escapeHtml(e.username) : 'без username';
           text += `  • ${e.id} (${usernameDisplay})\n`;
         });
         // 🌟 ИСПРАВЛЕНО: затем выводим заголовок И список управляющих
-        text += `\n👁️ *Управляющие отделами (Циклоп):* ${managers.length}\n`;
+        text += `\n👁️ <b>Управляющие отделами (Циклоп):</b> ${managers.length}\n`;
         if (managers.length === 0) text += `  • нет\n`;
         managers.forEach(m => {
-          const usernameDisplay = m.username !== 'N/A' ? '@' + escapeMarkdown(m.username) : 'без username';
+          const usernameDisplay = m.username !== 'N/A' ? '@' + escapeHtml(m.username) : 'без username';
           text += `  • ${m.id} (${usernameDisplay})\n`;
         });
         
@@ -3814,7 +3810,7 @@ const backKeyboard = Markup.inlineKeyboard([
           [Markup.button.callback('📋 Управление пользователями', 'admin:set_user_rank:manage')],
           [Markup.button.callback('⬅️ Назад', 'admin:main')]
         ]);
-        await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+        await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
       } catch (error) {
         console.error('Ошибка при загрузке меню Управление рангами:', error);
         logger.logError(error, ctx);
@@ -3825,8 +3821,8 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'set_user_rank:new:executor') {
       ctx.session.adminState = 'awaiting_new_executor_id';
       await ctx.editMessageText(
-        '🔥 *Назначение исполнителя (Прометей)*\n\n👤 *Шаг 1/2: Введите Telegram ID пользователя:*',
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
+        '🔥 <b>Назначение исполнителя (Прометей)</b>\n\n👤 <b>Шаг 1/2: Введите Telegram ID пользователя:</b>',
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
       );
     }
 
@@ -3834,8 +3830,8 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'set_user_rank:new:admin') {
       ctx.session.adminState = 'awaiting_new_admin_id';
       await ctx.editMessageText(
-        '👑 *Назначение администратора (Посейдон)*\n\n👤 *Шаг 1/2: Введите Telegram ID пользователя:*',
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
+        '👑 <b>Назначение администратора (Посейдон)</b>\n\n👤 <b>Шаг 1/2: Введите Telegram ID пользователя:</b>',
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
       );
     }
 
@@ -3843,8 +3839,8 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'set_user_rank:new:manager') {
       ctx.session.adminState = 'awaiting_new_manager_id';
       await ctx.editMessageText(
-        '👁️ *Назначение управляющего отделом (Циклоп)*\n\n👤 *Шаг 1/3: Введите Telegram ID пользователя:*',
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
+        '👁️ <b>Назначение управляющего отделом (Циклоп)</b>\n\n👤 <b>Шаг 1/3: Введите Telegram ID пользователя:</b>',
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:set_user_rank')]]) }
       );
     }
     
@@ -3858,7 +3854,7 @@ const backKeyboard = Markup.inlineKeyboard([
           rankedUsers.push({ id: userId, username: userData.username || 'N/A', rank: userData.rank });
         }
       }
-      let text = `📋 *Управление пользователями с рангами*\n\nВыберите пользователя:\n`;
+      let text = `📋 <b>Управление пользователями с рангами</b>\n\nВыберите пользователя:\n`;
       const buttons = rankedUsers.map(u => {
         // 🌟 ИСПРАВЛЕНО: эмодзи для Циклопа
         const rankEmoji = u.rank === 'Посейдон' ? '👑' : (u.rank === 'Циклоп' ? '👁️' : '🔥');
@@ -3866,10 +3862,10 @@ const backKeyboard = Markup.inlineKeyboard([
         return [Markup.button.callback(`${rankEmoji} ${display}`, `admin:set_user_rank:user:${u.id}`)];
       });
       if (rankedUsers.length === 0) {
-        text += `_Пользователей с рангами не найдено_\n`;
+        text += `<i>Пользователей с рангами не найдено</i>\n`;
       }
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:set_user_rank')]);
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     // Действия над конкретным пользователем
     else if (action.startsWith('set_user_rank:user:')) {
@@ -3883,9 +3879,9 @@ const backKeyboard = Markup.inlineKeyboard([
       }
 
       const rankEmoji = userData.rank === 'Посейдон' ? '👑' : (userData.rank === 'Циклоп' ? '👁️' : '🔥');
-      let text = `👤 *Пользователь:* \`${userId}\`\n`;
-      text += `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
-      text += `${rankEmoji} *Текущий ранг:* ${userData.rank}\n\n`;
+      let text = `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Username:</b> <code>${userData.username ? '@' + userData.username : 'не указан'}</code>\n`;
+      text += `${rankEmoji} <b>Текущий ранг:</b> <code>${userData.rank}</code>\n\n`;
       text += `Выберите действие:`;
 
       const buttons = [];
@@ -3905,7 +3901,7 @@ const backKeyboard = Markup.inlineKeyboard([
       buttons.push([Markup.button.callback('🗑 Разжаловать (снять ранг)', `admin:set_user_rank:demote:${userId}`)]);
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:set_user_rank:manage')]);
 
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     // Понизить админа до исполнителя
     else if (action.startsWith('set_user_rank:lower:')) {
@@ -3922,9 +3918,9 @@ const backKeyboard = Markup.inlineKeyboard([
 
       await ctx.answerCbQuery('✅ Ранг понижен до Прометей');
       
-      let text = `👤 *Пользователь:* \`${userId}\`\n`;
-      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
-      text += `🔥 *Текущий ранг:* Прометей\n\n`;
+      let text = `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Username:</b> <code>${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}</code>\n`;
+      text += `🔥 <b>Текущий ранг:</b> <code>Прометей</code>\n\n`;
       text += `✅ Ранг успешно понижен до Прометей`;
       
       const buttons = [
@@ -3932,7 +3928,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Назад', 'admin:set_user_rank:manage')]
       ];
       
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     // ==========================================
     // 🌟 ИЗМЕНЕНИЕ РАНГА СУЩЕСТВУЮЩЕГО ПОЛЬЗОВАТЕЛЯ
@@ -3950,10 +3946,10 @@ const backKeyboard = Markup.inlineKeyboard([
       const currentRank = userData.rank;
       const rankEmoji = currentRank === 'Посейдон' ? '👑' : (currentRank === 'Циклоп' ? '👁️' : '🔥');
 
-      let text = `🔄 *Изменение ранга*\n\n`;
-      text += `👤 *Пользователь:* \`${userId}\`\n`;
-      text += `📛 *Username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
-      text += `${rankEmoji} *Текущий ранг:* ${currentRank}\n\n`;
+      let text = `🔄 <b>Изменение ранга</b>\n\n`;
+      text += `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Username:</b> <code>${userData.username ? '@' + userData.username : 'не указан'}</code>\n`;
+      text += `${rankEmoji} <b>Текущий ранг:</b> <code>${currentRank}</code>\n\n`;
       text += `Выберите новый ранг:`;
 
       const buttons = [];
@@ -3968,7 +3964,7 @@ const backKeyboard = Markup.inlineKeyboard([
         buttons.push([Markup.button.callback('👁️ Циклоп (управляющий отделом)', `admin:set_user_rank:set_rank:manager:${userId}`)]);
       }
       buttons.push([Markup.button.callback('⬅️ Назад', `admin:set_user_rank:user:${userId}`)]);
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
 
     // 🌟 Установить ранг Прометей (исполнитель)
@@ -3994,16 +3990,16 @@ const backKeyboard = Markup.inlineKeyboard([
 
       await ctx.answerCbQuery('✅ Ранг изменён на Прометей');
 
-      let text = `👤 *Пользователь:* \`${userId}\`\n`;
-      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
-      text += `🔥 *Текущий ранг:* Прометей (исполнитель)\n\n`;
+      let text = `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Username:</b> <code>${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}</code>\n`;
+      text += `🔥 <b>Текущий ранг:</b> <code>Прометей (исполнитель)</code>\n\n`;
       text += `✅ Ранг успешно изменён с "${oldRank}" на "Прометей"`;
 
       const buttons = [
         [Markup.button.callback('👑 Изменить на Посейдон', `admin:set_user_rank:set_rank:admin:${userId}`)],
         [Markup.button.callback('⬅️ Назад к карточке', `admin:set_user_rank:user:${userId}`)]
       ];
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
 
     // 🌟 Установить ранг Посейдон (администратор)
@@ -4029,16 +4025,16 @@ const backKeyboard = Markup.inlineKeyboard([
 
       await ctx.answerCbQuery('✅ Ранг изменён на Посейдон');
 
-      let text = `👤 *Пользователь:* \`${userId}\`\n`;
-      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
-      text += `👑 *Текущий ранг:* Посейдон (администратор)\n\n`;
+      let text = `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Username:</b> <code>${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}</code>\n`;
+      text += `👑 <b>Текущий ранг:</b> <code>Посейдон (администратор)</code>\n\n`;
       text += `✅ Ранг успешно изменён с "${oldRank}" на "Посейдон"`;
 
       const buttons = [
         [Markup.button.callback('🔥 Изменить на Прометей', `admin:set_user_rank:set_rank:executor:${userId}`)],
         [Markup.button.callback('⬅️ Назад к карточке', `admin:set_user_rank:user:${userId}`)]
       ];
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
 
     // 🌟 Установить ранг Циклоп (управляющий отделом)
@@ -4065,9 +4061,9 @@ const backKeyboard = Markup.inlineKeyboard([
 
       await ctx.answerCbQuery('✅ Ранг изменён на Циклоп');
 
-      let text = `👤 *Пользователь:* \`${userId}\`\n`;
-      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n`;
-      text += `👁️ *Текущий ранг:* Циклоп (управляющий отделом)\n\n`;
+      let text = `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Username:</b> <code>${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}</code>\n`;
+      text += `👁️ <b>Текущий ранг:</b> <code>Циклоп (управляющий отделом)</code>\n\n`;
       text += `✅ Ранг успешно изменён с "${oldRank}" на "Циклоп"\n\n`;
       text += `⚠️ Не забудьте назначить чаты отделов через "Управление чатами отдела".`;
 
@@ -4075,7 +4071,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('🏢 Управление чатами отдела', `admin:set_user_rank:edit_chats:${userId}`)],
         [Markup.button.callback('⬅️ Назад к карточке', `admin:set_user_rank:user:${userId}`)]
       ];
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
 
     // ==========================================
@@ -4093,10 +4089,10 @@ const backKeyboard = Markup.inlineKeyboard([
 
       const rankEmoji = userData.rank === 'Посейдон' ? '👑' : (userData.rank === 'Циклоп' ? '👁️' : '🔥');
 
-      let text = `✏️ *Изменение данных пользователя*\n\n`;
-      text += `👤 *Текущий ID:* \`${userId}\`\n`;
-      text += `📛 *Текущий username:* ${userData.username ? '@' + userData.username : 'не указан'}\n`;
-      text += `${rankEmoji} *Ранг:* ${userData.rank}\n\n`;
+      let text = `✏️ <b>Изменение данных пользователя</b>\n\n`;
+      text += `👤 <b>Текущий ID:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Текущий username:</b> <code>${userData.username ? '@' + userData.username : 'не указан'}</code>\n`;
+      text += `${rankEmoji} <b>Ранг:</b> <code>${userData.rank}</code>\n\n`;
       text += `Выберите, что изменить:`;
 
       const buttons = [
@@ -4105,7 +4101,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Назад', `admin:set_user_rank:user:${userId}`)]
       ];
 
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
 
     // 🌟 Изменить ID пользователя
@@ -4113,10 +4109,10 @@ const backKeyboard = Markup.inlineKeyboard([
       const userId = action.split(':')[2];
       ctx.session.adminState = `edit_rank_user_id:${userId}`;
       await ctx.editMessageText(
-        `🔢 *Изменение ID пользователя*\n\n` +
-        `👤 *Текущий ID:* \`${userId}\`\n\n` +
+        `🔢 <b>Изменение ID пользователя</b>\n\n` +
+        `👤 <b>Текущий ID:</b> <code>${userId}</code>\n\n` +
         `Введите новый Telegram ID (число):`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]]) }
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]]) }
       );
     }
 
@@ -4125,10 +4121,10 @@ const backKeyboard = Markup.inlineKeyboard([
       const userId = action.split(':')[2];
       ctx.session.adminState = `edit_rank_user_username:${userId}`;
       await ctx.editMessageText(
-        `📛 *Изменение username пользователя*\n\n` +
-        `👤 *ID:* \`${userId}\`\n\n` +
+        `📛 <b>Изменение username пользователя</b>\n\n` +
+        `👤 <b>ID:</b> <code>${userId}</code>\n\n` +
         `Введите новый username (без @):`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]]) }
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]]) }
       );
     }
 
@@ -4140,14 +4136,14 @@ const backKeyboard = Markup.inlineKeyboard([
       if (!userData) { await ctx.answerCbQuery('❌ Пользователь не найден'); return; }
 
       const envVars = getAvailableEnvVars();
-      let message = `🏢 *Управление чатами отдела*\n\n`;
-      message += `👤 *Пользователь:* \`${userId}\`\n`;
-      message += `📛 *Username:* ${safeUsername(userData.username)}\n\n`;
+      let message = `🏢 <b>Управление чатами отдела</b>\n\n`;
+      message += `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      message += `📛 <b>Username:</b> <code>${safeUsername(userData.username)}</code>\n\n`;
 
       if (userData.managedChats && userData.managedChats.length > 0) {
-        message += `🏢 *Текущие отделы:*\n`;
+        message += `🏢 <b>Текущие отделы:</b>\n`;
         userData.managedChats.forEach(c => {
-          message += `  • ${escapeMarkdown(c.name)} (\`${c.chatEnv}\`)\n`;
+          message += `  • ${escapeHtml(c.name)} (\`${c.chatEnv}\`)\n`;
         });
         message += `\n`;
       } else {
@@ -4161,7 +4157,7 @@ const backKeyboard = Markup.inlineKeyboard([
 
       ctx.session.adminState = `edit_rank_user_chats:${userId}`;
       await ctx.editMessageText(message, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:set_user_rank:user:${userId}`)]])
       });
     }
@@ -4182,15 +4178,15 @@ const backKeyboard = Markup.inlineKeyboard([
       
       await ctx.answerCbQuery('✅ Ранг снят');
       
-      let text = `👤 *Пользователь:* \`${userId}\`\n`;
-      text += `📛 *Username:* ${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}\n\n`;
-      text += `✅ Ранг "${oldRank}" успешно снят. Пользователь разжалован.`;
+      let text = `👤 <b>Пользователь:</b> <code>${userId}</code>\n`;
+      text += `📛 <b>Username:</b> <code>${loyaltyData[userId].username ? '@' + loyaltyData[userId].username : 'не указан'}</code>\n\n`;
+      text += `✅ <b>Ранг "${oldRank}" успешно снят. Пользователь разжалован.</b>`;
       
       const buttons = [
         [Markup.button.callback('⬅️ Назад к списку', 'admin:set_user_rank:manage')]
       ];
       
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     // --- БАЗА ЗАКАЗЧИКОВ ---
     else if (action === 'customers') {
@@ -4267,7 +4263,7 @@ const backKeyboard = Markup.inlineKeyboard([
       buttons.push([Markup.button.callback('🔍 Поиск по ID/username', 'admin:search_customer_prompt')]);
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
       
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('customers_page:')) {
       const page = parseInt(action.split(':')[1]);
@@ -4301,7 +4297,7 @@ const backKeyboard = Markup.inlineKeyboard([
       buttons.push([Markup.button.callback('🔍 Поиск по ID/username', 'admin:search_customer_prompt')]);
       buttons.push([Markup.button.callback('⬅️ Назад', 'admin:main')]);
       
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('customer_view:')) {
       ctx.session.adminState = null;
@@ -4316,7 +4312,7 @@ const backKeyboard = Markup.inlineKeyboard([
       const allOrders = ordersDb.getAllOrders();
       const customerOrders = allOrders.filter(o => String(o.customerId) === String(customerId));
       let text = `👤 Информация о заказчике\n\n`;
-      text += `ID: \`${customer.id}\`\n`;
+      text += `ID: <code>${customer.id}</code>\n`;
       text += `Username: ${safeUsername(customer.username)}\n`;
       text += `Сумма выкупа: ${customer.totalSpent} ₽\n`;
       text += `Количество заказов: ${customer.orderCount}\n\n`;
@@ -4331,7 +4327,7 @@ const backKeyboard = Markup.inlineKeyboard([
       const specialDiscount = loyaltyInfo.specialDiscount;
       // 🌟 Добавляем строку со специальной скидкой в текст карточки
       if (specialDiscount !== null) {
-        text += `\n🎯 *Специальная скидка:* ${specialDiscount}% _(переопределяет ранговую)_\n`;
+        text += `\n🎯 <b>Специальная скидка:</b> ${specialDiscount}% <i>(переопределяет ранговую)</i>\n`;
       }
       const buttons = [
         [Markup.button.callback('✏️ Изменить сумму выкупа', `admin:customer_edit_spent:${customerId}`)],
@@ -4343,7 +4339,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer_by_id:${customerId}`)],
         [Markup.button.callback('⬅️ Назад к списку', 'admin:customers')]
       ];
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('customer_edit_spent:')) {
       const customerId = action.split(':')[1];
@@ -4352,11 +4348,11 @@ const backKeyboard = Markup.inlineKeyboard([
       const currentAmount = userData.totalSpent || 0;
       
       ctx.session.adminState = `edit_customer_spent:${customerId}`;
-      await ctx.editMessageText(`✏️ Введите новую сумму выкупа для заказчика ${customerId}:\n\nТекущая сумма: ${currentAmount} ₽\n(Введите число в рублях)`, { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:customer_view:${customerId}`)]]) });
+      await ctx.editMessageText(`✏️ Введите новую сумму выкупа для заказчика ${customerId}:\n\nТекущая сумма: ${currentAmount} ₽\n(Введите число в рублях)`, { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:customer_view:${customerId}`)]]) });
     }
     else if (action === 'search_customer_prompt') {
       ctx.session.adminState = 'search_customer_prompt';
-      await ctx.editMessageText('🔍 Поиск заказчика\n\nВведите Telegram ID или @username (без @):', { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:customers')]]) });
+      await ctx.editMessageText('🔍 Поиск заказчика\n\nВведите Telegram ID или @username (без @):', { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:customers')]]) });
     }
     // 🌟 Установка/изменение специальной скидки
     else if (action.startsWith('customer_edit_special_discount:')) {
@@ -4366,22 +4362,22 @@ const backKeyboard = Markup.inlineKeyboard([
       const currentDiscount = userData.specialDiscount || null;
       const currentLoyalty = loyalty.getLoyaltyInfo(customerId);
       
-      let message = `🎯 *Установка специальной скидки*\n\n`;
-      message += `👤 *Заказчик:* \`${customerId}\`\n`;
-      message += `📛 *Username:* ${safeUsername(userData.username)}\n\n`;
+      let message = `🎯 <b>Установка специальной скидки</b>\n\n`;
+      message += `👤 <b>Заказчик:</b> <code>${customerId}</code>\n`;
+      message += `📛 <b>Username:</b> ${safeUsername(userData.username)}\n\n`;
       
       if (currentDiscount !== null) {
-        message += `🎯 *Текущая спец. скидка:* ${currentDiscount}%\n`;
+        message += `🎯 <b>Текущая спец. скидка:</b> ${currentDiscount}%\n`;
       } else {
-        message += `🏅 *Ранговая скидка:* ${currentLoyalty.discountPercent}% (${currentLoyalty.rank.name})\n`;
+        message += `🏅 <b>Ранговая скидка:</b> ${currentLoyalty.discountPercent}% (${currentLoyalty.rank.name})\n`;
       }
       
-      message += `\nВведите процент скидки (число от 1 до 100) или \`0\` для отмены специальной скидки:\n\n`;
-      message += `⚠️ *Внимание:* Специальная скидка переопределяет скидку по рангу.`;
+      message += `<i>Введите процент скидки (число от 1 до 100) или <code>0</code> для отмены специальной скидки:</i>\n\n`;
+      message += `⚠️ <b>Внимание:</b> Специальная скидка переопределяет скидку по рангу.`;
       
       ctx.session.adminState = `edit_special_discount:${customerId}`;
       await ctx.editMessageText(message, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('❌ Отмена', `admin:customer_view:${customerId}`)]
         ])
@@ -4391,16 +4387,16 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'add_customer_start') {
       ctx.session.adminState = 'add_customer:id';
       await ctx.editMessageText(
-        '✏️ *Добавление нового заказчика*\n\n📝 *Шаг 1/4: Введите Telegram ID заказчика (число):*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '✏️ <b>Добавление нового заказчика</b>\n\n📝 <b>Шаг 1/4: Введите Telegram ID заказчика (число):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
     }
     // 🌟 Подтверждение перезаписи существующего заказчика
     else if (action === 'add_customer:overwrite_yes') {
       ctx.session.adminState = 'add_customer:username';
       await ctx.editMessageText(
-        '📝 *Шаг 2/4: Введите username заказчика (без @):*',
-        { parse_mode: 'Markdown', ...getBackToAdminMenu() }
+        '📝 <b>Шаг 2/4: Введите username заказчика (без @):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
     }
     else if (action.startsWith('send_msg_customer:')) {
@@ -4414,10 +4410,10 @@ const backKeyboard = Markup.inlineKeyboard([
       await ctx.editMessageText(
         `💬 Отправка сообщения заказчику\n\n` +
         `Заказ №${order.orderNumber}\n` +
-        `Заказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\n` +
+        `Заказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: <code>' + order.customerId + '</code>'}\n\n` +
         `Введите текст сообщения:`,
         { 
-          parse_mode: 'Markdown', 
+          parse_mode: 'HTML', 
           ...Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', `admin:order_view:${orderId}`)]
           ])  
@@ -4429,10 +4425,10 @@ const backKeyboard = Markup.inlineKeyboard([
       ctx.session.adminState = `send_message_to_customer_by_id:${customerId}`;
       await ctx.editMessageText(
         `💬 Отправка сообщения заказчику\n\n` +
-        `ID заказчика: \`${customerId}\`\n\n` +
+        `ID заказчика: <code>${customerId}</code>\n\n` +
         `Введите текст сообщения:`,
         { 
-          parse_mode: 'Markdown', 
+          parse_mode: 'HTML', 
           ...Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'admin:customers')]
           ]) 
@@ -4445,15 +4441,15 @@ const backKeyboard = Markup.inlineKeyboard([
     // ==========================================
     else if (action === 'storage') {
       const stats = storage.getStorageStats();
-      let text = `💾 *Хранилище исходных данных*\n\n`;
-      text += `📦 *Сохранено заказов:* ${stats.ordersCount}\n`;
-      text += `📁 *Всего файлов:* ${stats.filesCount}\n`;
-      text += `💾 *Занято данными:* ${stats.totalSizeMB} МБ\n`;
-      text += `💿 *Диск:* ${stats.totalDiskGB} ГБ\n`;
-      text += `🆓 *Свободно:* ${stats.freeDiskGB} ГБ (${(100 - stats.usedPercent).toFixed(1)}%)\n\n`;
+      let text = `💾 <b>Хранилище исходных данных</b>\n\n`;
+      text += `📦 <b>Сохранено заказов:</b> ${stats.ordersCount}\n`;
+      text += `📁 <b>Всего файлов:</b> ${stats.filesCount}\n`;
+      text += `💾 <b>Занято данными:</b> ${stats.totalSizeMB} МБ\n`;
+      text += `💿 <b>Диск:</b> ${stats.totalDiskGB} ГБ\n`;
+      text += `🆓 <b>Свободно:</b> ${stats.freeDiskGB} ГБ (${(100 - stats.usedPercent).toFixed(1)}%)\n\n`;
 
       if (parseFloat(stats.freeDiskGB) < 1) {
-        text += `⚠️ *ВНИМАНИЕ:* Свободного места меньше 1 ГБ! Рекомендуется очистить старые данные.\n`;
+        text += `⚠️ <b>ВНИМАНИЕ:</b> Свободного места меньше 1 ГБ! Рекомендуется очистить старые данные.\n`;
       }
 
       const keyboard = Markup.inlineKeyboard([
@@ -4461,7 +4457,7 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('🔄 Обновить статистику', 'admin:storage')],
         [Markup.button.callback('⬅️ Назад', 'admin:main')]
       ]);
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
     }
     else if (action === 'storage_cleanup') {
       const keyboard = Markup.inlineKeyboard([
@@ -4469,10 +4465,10 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('❌ Отмена', 'admin:storage')]
       ]);
       await ctx.editMessageText(
-        '⚠️ *Подтверждение очистки*\n\n' +
+        '⚠️ <b>Подтверждение очистки</b>\n\n' +
         'Будут удалены данные заказов, выполненных более 180 дней назад.\n' +
         'Данные активных заказов НЕ будут удалены.\n\nЭто действие необратимо!',
-        { parse_mode: 'Markdown', ...keyboard }
+        { parse_mode: 'HTML', ...keyboard }
       );
     }
     else if (action === 'storage_cleanup_confirm') {
@@ -4483,15 +4479,15 @@ const backKeyboard = Markup.inlineKeyboard([
       await ctx.answerCbQuery(`✅ Удалено заказов: ${result.deletedCount}`);
       // Возвращаемся к статистике
       const stats = storage.getStorageStats();
-      let text = `💾 *Очистка завершена!*\n\n`;
-      text += `🗑 *Удалено заказов:* ${result.deletedCount}\n`;
-      text += `💾 *Освобождено:* ${freedMB} МБ\n\n`;
-      text += `🆓 *Свободно сейчас:* ${stats.freeDiskGB} ГБ из ${stats.totalDiskGB} ГБ\n`;
+      let text = `💾 <b>Очистка завершена!</b>\n\n`;
+      text += `🗑 <b>Удалено заказов:</b> ${result.deletedCount}\n`;
+      text += `💾 <b>Освобождено:</b> ${freedMB} МБ\n\n`;
+      text += `🆓 <b>Свободно сейчас:</b> ${stats.freeDiskGB} ГБ из ${stats.totalDiskGB} ГБ\n`;
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.callback('🔄 Статистика хранилища', 'admin:storage')],
         [Markup.button.callback('⬅️ Назад в меню', 'admin:main')]
       ]);
-      await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
+      await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
     }
 
     // ==========================================
@@ -4504,11 +4500,11 @@ const backKeyboard = Markup.inlineKeyboard([
       const expenseConstant = finance.getExpenseConstant();
       const coOwnersCount = finance.getCoOwners().length;
       
-      let text = `💰 *Финансы*\n\n`;
-      text += `📊 Выберите раздел для просмотра статистики:\n`;
+      let text = `💰 <b>Финансы</b>\n\n`;
+      text += `📊 <b>Выберите раздел для просмотра статистики:</b>\n`;
       
       await ctx.editMessageText(text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...getFinanceMenu()
       });
     }
@@ -4517,8 +4513,8 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'finance_revenue') {
       ctx.session.adminState = null;
       await ctx.editMessageText(
-        `📊 *Выручка*\n\nВыберите период:`,
-        { parse_mode: 'Markdown', ...getPeriodMenu('finance_revenue') }
+        `📊 <b>Выручка</b>\n\nВыберите период:`,
+        { parse_mode: 'HTML', ...getPeriodMenu('finance_revenue') }
       );
     }
     
@@ -4529,8 +4525,8 @@ const backKeyboard = Markup.inlineKeyboard([
       if (period === 'from_date') {
         ctx.session.adminState = 'finance_date_start:revenue';
         await ctx.editMessageText(
-          `📆 *Выручка: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.09.2026\``,
-          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_revenue')]]) }
+          `📆 <b>Выручка: выбор периода</b>\n\n📝 <b>Шаг 1/2: Введите НАЧАЛЬНУЮ дату</b>\nФормат: <code>ДД.ММ.ГГГГ</code>\nНапример: <code>01.09.2026</code>`,
+          { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_revenue')]]) }
         );
         return;
       }
@@ -4538,15 +4534,15 @@ const backKeyboard = Markup.inlineKeyboard([
       const stats = calculateFinancialStats(period);
       const periodLabel = getPeriodLabel(period);
       
-      let text = `📊 *Выручка*\n`;
+      let text = `📊 <b>Выручка</b>\n`;
       text += `${periodLabel}\n\n`;
-      text += `💰 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
-      text += `📦 *Заказов:* ${stats.ordersCount}\n`;
-      text += `👷 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
-      text += `📈 *Валовая комиссия:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+      text += `💰 <b>Выручка:</b> ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+      text += `📦 <b>Заказов:</b> ${stats.ordersCount}\n`;
+      text += `👷 <b>Выплачено исполнителям:</b> ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+      text += `📈 <b>Валовая комиссия:</b> ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
       
       await ctx.editMessageText(text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('🔄 Другой период', 'admin:finance_revenue')],
           [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
@@ -4558,8 +4554,8 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'finance_expenses') {
       ctx.session.adminState = null;
       await ctx.editMessageText(
-        `📉 *Расход комиссии*\n\nВыберите период:`,
-        { parse_mode: 'Markdown', ...getPeriodMenu('finance_expenses') }
+        `📉 <b>Расход комиссии</b>\n\nВыберите период:`,
+        { parse_mode: 'HTML', ...getPeriodMenu('finance_expenses') }
       );
     }
     
@@ -4570,8 +4566,8 @@ const backKeyboard = Markup.inlineKeyboard([
       if (period === 'from_date') {
         ctx.session.adminState = 'finance_date_start:expenses';
         await ctx.editMessageText(
-          `📆 *Расход комиссии: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.10.2026\``,
-          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_expenses')]]) }
+          `📆 <b>Расход комиссии: выбор периода</b>\n\n📝 <b>Шаг 1/2: Введите НАЧАЛЬНУЮ дату</b>\nФормат: <code>ДД.ММ.ГГГГ</code>\nНапример: <code>01.10.2026</code>`,
+          { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_expenses')]]) }
         );
         return;
       }
@@ -4579,23 +4575,23 @@ const backKeyboard = Markup.inlineKeyboard([
       const stats = calculateFinancialStats(period);
       const periodLabel = getPeriodLabel(period);
       
-      let text = `📉 *Расход комиссии*\n`;
+      let text = `📉 <b>Расход комиссии</b>\n`;
       text += `${periodLabel}\n\n`;
-      text += `🎁 *Покрытие скидок:* ${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
-      text += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
-      text += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
-      text += `⚙️ *Константа расходов:* ${stats.expenseConstant}%\n`;
-      text += `💸 *Сумма константы:* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+      text += `🎁 <b>Покрытие скидок:</b> ${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+      text += `📊 <b>Комиссия общая:</b> ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+      text += `📊 <b>Комиссия чистая:</b> ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+      text += `⚙️ <b>Константа расходов:</b> ${stats.expenseConstant}%\n`;
+      text += `💸 <b>Сумма константы:</b> ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
       
       const remainingFund = stats.expenseConstantAmount - stats.discountCoverage;
       if (remainingFund >= 0) {
-        text += `✅ *Остаток фонда:* ${remainingFund.toLocaleString('ru-RU')} ₽`;
+        text += `✅ <b>Остаток фонда:</b> ${remainingFund.toLocaleString('ru-RU')} ₽`;
       } else {
-        text += `⚠️ *Перерасход фонда:* ${Math.abs(remainingFund).toLocaleString('ru-RU')} ₽`;
+        text += `⚠️ <b>Перерасход фонда:</b> ${Math.abs(remainingFund).toLocaleString('ru-RU')} ₽`;
       }
       
       await ctx.editMessageText(text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('⚙️ Изменить константу', 'admin:finance_edit_constant')],
           [Markup.button.callback('🔄 Другой период', 'admin:finance_expenses')],
@@ -4608,8 +4604,8 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'finance_executors') {
       ctx.session.adminState = null;
       await ctx.editMessageText(
-        `👷 *Заработок исполнителей*\n\nВыберите период:`,
-        { parse_mode: 'Markdown', ...getPeriodMenu('finance_executors') }
+        `👷 <b>Заработок исполнителей</b>\n\nВыберите период:`,
+        { parse_mode: 'HTML', ...getPeriodMenu('finance_executors') }
       );
     }
     
@@ -4620,8 +4616,8 @@ const backKeyboard = Markup.inlineKeyboard([
       if (period === 'from_date') {
         ctx.session.adminState = 'finance_date_start:executors';
         await ctx.editMessageText(
-          `📆 *Заработок исполнителей: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.10.2026\``,
-          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_executors')]]) }
+          `📆 <b>Заработок исполнителей: выбор периода</b>\n\n📝 <b>Шаг 1/2: Введите НАЧАЛЬНУЮ дату</b>\nФормат: <code>ДД.ММ.ГГГГ</code>\nНапример: <code>01.10.2026</code>`,
+          { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_executors')]]) }
         );
         return;
       }
@@ -4629,17 +4625,17 @@ const backKeyboard = Markup.inlineKeyboard([
       const stats = calculateFinancialStats(period);
       const periodLabel = getPeriodLabel(period);
       
-      let text = `👷 *Заработок исполнителей*\n`;
+      let text = `👷 <b>Заработок исполнителей</b>\n`;
       text += `${periodLabel}\n\n`;
-      text += `💰 *Выплачено исполнителям:* ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
-      text += `📦 *Заказов:* ${stats.ordersCount}\n`;
-      text += `💵 *Выручка:* ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
+      text += `💰 <b>Выплачено исполнителям:</b> ${stats.executorEarnings.toLocaleString('ru-RU')} ₽\n`;
+      text += `📦 <b>Заказов:</b> ${stats.ordersCount}\n`;
+      text += `💵 <b>Выручка:</b> ${stats.revenue.toLocaleString('ru-RU')} ₽\n`;
       
       const avgEarning = stats.ordersCount > 0 ? Math.round(stats.executorEarnings / stats.ordersCount) : 0;
-      text += `📊 *Средний заработок за заказ:* ${avgEarning.toLocaleString('ru-RU')} ₽\n`;
+      text += `📊 <b>Средний заработок за заказ:</b> ${avgEarning.toLocaleString('ru-RU')} ₽\n`;
       
       await ctx.editMessageText(text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('🔄 Другой период', 'admin:finance_executors')],
           [Markup.button.callback('⬅️ Финансы', 'admin:finance')]
@@ -4663,8 +4659,8 @@ const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Назад к финансам', 'admin:finance')]
       ]);
       await ctx.editMessageText(
-        `📈 *Прибыль*\n\nВыберите период или настройте совладельцев:`,
-        { parse_mode: 'Markdown', ...keyboard }
+        `📈 <b>Прибыль</b>\n\nВыберите период или настройте совладельцев:`,
+        { parse_mode: 'HTML', ...keyboard }
       );
     }
     
@@ -4675,8 +4671,8 @@ const backKeyboard = Markup.inlineKeyboard([
       if (period === 'from_date') {
         ctx.session.adminState = 'finance_date_start:profit';
         await ctx.editMessageText(
-          `📆 *Прибыль: выбор периода*\n\n📝 *Шаг 1/2: Введите НАЧАЛЬНУЮ дату*\nФормат: \`ДД.ММ.ГГГГ\`\nНапример: \`01.10.2026\``,
-          { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_profit')]]) }
+          `📆 <b>Прибыль: выбор периода</b>\n\n📝 <b>Шаг 1/2: Введите НАЧАЛЬНУЮ дату</b>\nФормат: <code>ДД.ММ.ГГГГ</code>\nНапример: <code>01.10.2026</code>`,
+          { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', 'admin:finance_profit')]]) }
         );
         return;
       }
@@ -4684,34 +4680,34 @@ const backKeyboard = Markup.inlineKeyboard([
       const stats = calculateFinancialStats(period);
       const periodLabel = getPeriodLabel(period);
       
-      let text = `📈 *Прибыль*\n`;
+      let text = `📈 <b>Прибыль</b>\n`;
       text += `${periodLabel}\n\n`;
-      text += `📊 *Комиссия общая:* ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
-      text += `🎁 *Покрытие скидок:* -${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
-      text += `📊 *Комиссия чистая:* ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
+      text += `📊 <b>Комиссия общая:</b> ${stats.totalCommission.toLocaleString('ru-RU')} ₽\n`;
+      text += `🎁 <b>Покрытие скидок:</b> -${stats.discountCoverage.toLocaleString('ru-RU')} ₽\n`;
+      text += `📊 <b>Комиссия чистая:</b> ${stats.netCommission.toLocaleString('ru-RU')} ₽\n\n`;
       
       // Совладельцы
       if (stats.coOwnersShares.length > 0) {
-        text += `👥 *Совладельцы:*\n`;
+        text += `👥 <b>Совладельцы:</b>\n`;
         stats.coOwnersShares.forEach(co => {
           const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
           text += `  • ${name}: ${co.percent}% = ${co.share.toLocaleString('ru-RU')} ₽\n`;
         });
-        text += `  *Итого совладельцам:* ${stats.coOwnersTotal.toLocaleString('ru-RU')} ₽\n\n`;
+        text += `  <b>Итого совладельцам:</b> ${stats.coOwnersTotal.toLocaleString('ru-RU')} ₽\n\n`;
       }
       
       // Константа расходов
-      text += `⚙️ *Константа расходов (${stats.expenseConstant}%):* ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
+      text += `⚙️ <b>Константа расходов (${stats.expenseConstant}%):</b> ${stats.expenseConstantAmount.toLocaleString('ru-RU')} ₽\n\n`;
       
       // Чистая прибыль
-      text += `💰 *Чистая прибыль:* ${stats.netProfit.toLocaleString('ru-RU')} ₽\n`;
+      text += `💰 <b>Чистая прибыль:</b> ${stats.netProfit.toLocaleString('ru-RU')} ₽\n`;
       
       if (stats.netProfit < 0) {
-        text += `\n⚠️ *Внимание: убыток!*`;
+        text += `\n⚠️ <b>Внимание: убыток!</b>`;
       }
       
       await ctx.editMessageText(text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard([
           [Markup.button.callback('👥 Совладельцы', 'admin:finance_coowners')],
           [Markup.button.callback('🔄 Другой период', 'admin:finance_profit')],
@@ -4730,24 +4726,24 @@ const backKeyboard = Markup.inlineKeyboard([
       const totalPercent = finance.getTotalCoOwnersPercent();
       const expenseConstant = finance.getExpenseConstant();
       
-      let text = `👥 *Совладельцы*\n\n`;
-      text += `⚙️ *Константа расходов:* ${expenseConstant}%\n`;
-      text += `👥 *Сумма процентов совладельцев:* ${totalPercent}%\n`;
-      text += `💰 *Свободно:* ${100 - totalPercent - expenseConstant}%\n\n`;
+      let text = `👥 <b>Совладельцы</b>\n\n`;
+      text += `⚙️ <b>Константа расходов:</b> ${expenseConstant}%\n`;
+      text += `👥 <b>Сумма процентов совладельцев:</b> ${totalPercent}%\n`;
+      text += `💰 <b>Свободно:</b> ${100 - totalPercent - expenseConstant}%\n\n`;
       
       if (coOwners.length > 0) {
-        text += `*Список совладельцев:*\n`;
+        text += ` <b>Список совладельцев:</b>\n`;
         coOwners.forEach((co, idx) => {
-          const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
+          const name = co.username ? `@${co.username}` : `ID: <code>${co.id}</code>`;
           text += `${idx + 1}. ${name} — ${co.percent}%\n`;
         });
       } else {
-        text += `_Совладельцы не добавлены_\n`;
+        text += `<b>Совладельцы не добавлены</b>\n`;
       }
       
       const buttons = [];
       coOwners.forEach(co => {
-        const name = co.username ? `@${co.username}` : co.id;
+        const name = co.username ? `@${co.username}` : `ID: <code>${co.id}</code>`;
         buttons.push([
           Markup.button.callback(`✏️ ${name} (${co.percent}%)`, `admin:finance_edit_coowner:${co.id}`),
           Markup.button.callback('🗑', `admin:finance_delete_coowner:${co.id}`)
@@ -4758,7 +4754,7 @@ const backKeyboard = Markup.inlineKeyboard([
       buttons.push([Markup.button.callback('⬅️ Назад к прибыли', 'admin:finance_profit')]);
       
       await ctx.editMessageText(text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard(buttons)
       });
     }
@@ -4767,8 +4763,8 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'finance_add_coowner') {
       ctx.session.adminState = 'finance_add_coowner_id';
       await ctx.editMessageText(
-        `➕ *Добавление совладельца*\n\n📝 *Шаг 1/3: Введите Telegram ID совладельца (число):*`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+        `➕ <b>Добавление совладельца</b>\n\n📝 <b>Шаг 1/3: Введите Telegram ID совладельца (число):</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
       );
     }
     
@@ -4787,8 +4783,8 @@ const backKeyboard = Markup.inlineKeyboard([
       ctx.session.adminState = `finance_edit_coowner_percent:${coOwnerId}`;
       
       await ctx.editMessageText(
-        `✏️ *Изменение процента совладельца*\n\n👤 *Совладелец:* ${name}\n📊 *Текущий процент:* ${coOwner.percent}%\n\nВведите новый процент (0-100):`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
+        `✏️ <b>Изменение процента совладельца</b>\n\n👤 <b>Совладелец:</b> ${name}\n📊 <b>Текущий процент:</b> ${coOwner.percent}%\n\nВведите новый процент (0-100):`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_coowners')]]) }
       );
     }
     
@@ -4806,9 +4802,9 @@ const backKeyboard = Markup.inlineKeyboard([
       const name = coOwner.username ? `@${coOwner.username}` : coOwner.id;
       
       await ctx.editMessageText(
-        `⚠️ *Подтверждение удаления*\n\nУдалить совладельца ${name} (${coOwner.percent}%)?`,
+        `⚠️ <b>Подтверждение удаления</b>\n\nУдалить совладельца ${name} (${coOwner.percent}%)?`,
         {
-          parse_mode: 'Markdown',
+          parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
             [Markup.button.callback('✅ Да, удалить', `admin:finance_delete_coowner_confirm:${coOwnerId}`)],
             [Markup.button.callback('❌ Отмена', 'admin:finance_coowners')]
@@ -4829,24 +4825,24 @@ const backKeyboard = Markup.inlineKeyboard([
       const totalPercent = finance.getTotalCoOwnersPercent();
       const expenseConstant = finance.getExpenseConstant();
       
-      let text = `👥 *Совладельцы*\n\n`;
-      text += `⚙️ *Константа расходов:* ${expenseConstant}%\n`;
-      text += `👥 *Сумма процентов совладельцев:* ${totalPercent}%\n`;
-      text += `💰 *Свободно:* ${100 - totalPercent - expenseConstant}%\n\n`;
+      let text = `👥 <b>Совладельцы</b>\n\n`;
+      text += `⚙️ <b>Константа расходов:</b> ${expenseConstant}%\n`;
+      text += `👥 <b>Сумма процентов совладельцев:</b> ${totalPercent}%\n`;
+      text += `💰 <b>Свободно:</b> ${100 - totalPercent - expenseConstant}%\n\n`;
       
       if (coOwners.length > 0) {
-        text += `*Список совладельцев:*\n`;
+        text += `<b>Список совладельцев:</b>\n`;
         coOwners.forEach((co, idx) => {
-          const name = co.username ? `@${co.username}` : `ID: ${co.id}`;
+          const name = co.username ? `@${co.username}` : `ID: <code>${co.id}</code>`;
           text += `${idx + 1}. ${name} — ${co.percent}%\n`;
         });
       } else {
-        text += `_Совладельцы не добавлены_\n`;
+        text += `<b>Совладельцы не добавлены</b>\n`;
       }
       
       const buttons = [];
       coOwners.forEach(co => {
-        const name = co.username ? `@${co.username}` : co.id;
+        const name = co.username ? `@${co.username}` : `ID: <code>${co.id}</code>`;
         buttons.push([
           Markup.button.callback(`✏️ ${name} (${co.percent}%)`, `admin:finance_edit_coowner:${co.id}`),
           Markup.button.callback('🗑', `admin:finance_delete_coowner:${co.id}`)
@@ -4857,7 +4853,7 @@ const backKeyboard = Markup.inlineKeyboard([
       buttons.push([Markup.button.callback('⬅️ Назад к прибыли', 'admin:finance_profit')]);
       
       await ctx.editMessageText(text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...Markup.inlineKeyboard(buttons)
       });
     }
@@ -4871,14 +4867,14 @@ const backKeyboard = Markup.inlineKeyboard([
       ctx.session.adminState = 'finance_edit_constant';
       
       await ctx.editMessageText(
-        `⚙️ *Константа расходов*\n\n` +
-        `📊 *Текущее значение:* ${currentConstant}%\n\n` +
+        `⚙️ <b>Константа расходов</b>\n\n` +
+        `📊 <b>Текущее значение:</b> ${currentConstant}%\n\n` +
         `Константа входит в комиссию и используется для:\n` +
         `• Покрытия скидок пользователей\n` +
         `• Оплаты бота\n` +
         `• Прочих расходов\n\n` +
         `Введите новое значение (0-100):`,
-        { parse_mode: 'Markdown', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_profit')]]) }
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', 'admin:finance_profit')]]) }
       );
     }
 
