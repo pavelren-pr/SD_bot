@@ -894,13 +894,19 @@ function register(bot) {
   }
 
   if (order && order.step === 'awaiting_payment') {
-    const work = catalog.getWork(order.workId);
-    const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
-    const displayName = ctx.from.first_name || 'Пользователь';
-    const userLink = ctx.from.username ? `@${ctx.from.username}` : `<a href="tg://user?id=${ctx.from.id}">${displayName}</a>`;
-
+  const work = catalog.getWork(order.workId);
+  const targetChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
+  const displayName = (ctx.from.first_name || 'Пользователь').replace(/[_*~`>#+-=|{}.!]/g, ''); const userLink = ctx.from.username ?`@${ctx.from.username}`:`[${displayName}](tg://user?id=${ctx.from.id})`;
+  // 🌟 Удаляем уведомление из чата поддержки
+  if (order.supportMessageId && order.supportChatId) {
     try {
-      const now = new Date();
+      await ctx.telegram.deleteMessage(order.supportChatId, order.supportMessageId);
+    } catch (e) {
+      console.log('Не удалось удалить уведомление из поддержки:', e.message);
+    }
+  }
+  try {
+    const now = new Date();
       const paidTime = now.toLocaleString('ru-RU');
       order.status = 'paid'; order.paidAt = paidTime; order.step = 'completed';
       loyalty.addToTotal(ctx.from.id, ctx.from.username, order.finalPrice);
@@ -1145,10 +1151,13 @@ function register(bot) {
     supportButtons.push([Markup.button.callback('✏️ Ответить заказчику', `support_reply:${ctx.from.id}`)]);
 
     try {
-      await ctx.telegram.sendMessage(supportChatId, supportText, {
+      const supportMsg = await ctx.telegram.sendMessage(supportChatId, supportText, {
         parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard(supportButtons).reply_markup
       });
+      // 🌟 Сохраняем ID сообщения поддержки для удаления после оплаты
+      order.supportMessageId = supportMsg.message_id;
+      order.supportChatId = supportChatId;
     } catch (e) {
       console.error('Не удалось отправить уведомление в поддержку:', e.message);
     }
@@ -1352,6 +1361,31 @@ try {
      }
     }
 
+    // 🌟 Уведомление в чат поддержки о завершении заказа
+    const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
+    const completedOrder = chatData.orderId ? orders.getOrder(chatData.orderId) : null;
+    if (completedOrder && supportChatId) {
+      const executorPayout = completedOrder.executorPrice || Math.round((completedOrder.price || 0) * (1 - (completedOrder.commission || 0) / 100));
+      const supportText = `✅ <b>Заказ выполнен!</b>\n\n` +
+        `🆔 <b>Номер заказа:</b> №${completedOrder.orderNumber}\n` +
+        `📚 <b>Работа:</b> ${completedOrder.workTitle}\n` +
+        `👷 <b>Исполнитель:</b> ${completedOrder.executorUsername ? '@' + completedOrder.executorUsername : 'ID: ' + completedOrder.executorId}\n\n` +
+        `💰 <b>К выплате исполнителю:</b> ${executorPayout} ₽`;
+      
+      const paidKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Оплачено', `support_paid:${chatData.orderId}`)]
+      ]);
+      
+      try {
+        await ctx.telegram.sendMessage(supportChatId, supportText, {
+          parse_mode: 'HTML',
+          reply_markup: paidKeyboard.reply_markup
+        });
+      } catch (e) {
+        console.log('Не удалось отправить уведомление в поддержку о завершении:', e.message);
+      }
+    }
+
     await ctx.telegram.sendMessage(chatData.customerUserId, `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'HTML' });
     await ctx.editMessageText(`✅ <b>Заказ выполнен!</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML' });
     
@@ -1366,6 +1400,17 @@ try {
     }, ctx.from.id, ctx.from.username);
     
     await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
+  });
+
+  // 🌟 Кнопка "Оплачено" — удаление уведомления из поддержки
+  bot.action(/^support_paid:(.+)$/, async (ctx) => {
+    try {
+      await ctx.deleteMessage();
+      await ctx.answerCbQuery('✅ Отмечено как оплачено');
+    } catch (e) {
+      console.log('Не удалось удалить сообщение поддержки:', e.message);
+      await ctx.answerCbQuery('❌ Не удалось удалить сообщение');
+    }
   });
 
   async function handleExecutorMessage(ctx, chatData) {
