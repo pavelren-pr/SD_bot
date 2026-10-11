@@ -185,7 +185,7 @@ function register(bot) {
       text += `${work.description}\n\n`;
     }
     if (work.exampleUrl && work.exampleUrl.trim() !== '') {
-      text += `🔍 <b>Пример работы и методички</b> [доступны по ссылке](${work.exampleUrl})\n\n`;
+      text += `🔍 <b>Пример работы и методички</b> <a href="${work.exampleUrl}">доступны по ссылке</a>\n\n`;
     }
     text += `💰 <b>Стоимость:</b> ${work.price} ₽\n`;
     if (pricing.discountPercent > 0) {
