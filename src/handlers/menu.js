@@ -822,6 +822,14 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
       buttons.push([Markup.button.callback('✅ Отметить выполненным', `orders:executor:complete:${orderId}`)]);
     }
 
+    // 🌟 Кнопки просмотра исходных данных и файлов
+    if (order.detailsText || order.description) {
+      buttons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${orderId}`)]);
+    }
+    if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+      buttons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${orderId}:0`)]);
+    }
+
     const backStatus = EXECUTOR_ACTIVE_STATUSES.includes(order.status) ? 'active' : 'completed';
     buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${backStatus}`)]);
 

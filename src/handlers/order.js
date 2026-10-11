@@ -306,6 +306,69 @@ function register(bot) {
     }
   });
 
+  // 🌟 Показать исходные данные в личке (для панелей: Мои заказы, Все заказы, Заказы отдела)
+  bot.action(/^order_details_view:(.+)$/, async (ctx) => {
+    const order = ordersDb.getOrder(ctx.match[1]);
+    if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    const textToShow = order.detailsText || order.description || 'Нет данных';
+    const header = `📝 <b>Исходные данные к заказу №${order.orderNumber}</b>\n\n`;
+
+    // Если текст короткий — отправляем одним сообщением
+    if ((header + escapeHtml(textToShow)).length <= 4096) {
+      await ctx.reply(header + escapeHtml(textToShow), { parse_mode: 'HTML' });
+    } else {
+      // Если длинный — отправляем заголовок и текст частями
+      await ctx.reply(header, { parse_mode: 'HTML' });
+      const chunks = [];
+      for (let i = 0; i < textToShow.length; i += 3500) {
+        chunks.push(textToShow.substring(i, i + 3500));
+      }
+      for (const chunk of chunks) {
+        await ctx.reply(escapeHtml(chunk), { parse_mode: 'HTML' });
+      }
+    }
+    await ctx.answerCbQuery();
+  });
+
+  // 🌟 Показать файлы задания в личке (для панелей: Мои заказы, Все заказы, Заказы отдела)
+  bot.action(/^order_files_view:(.+):(\d+)$/, async (ctx) => {
+    const order = ordersDb.getOrder(ctx.match[1]);
+    const fileIdx = parseInt(ctx.match[2]);
+    if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    let files = order.taskFiles || [];
+    if (files.length === 0 && order.fileId) {
+      files = [{ type: order.fileType || 'document', fileId: order.fileId, fileName: order.fileName || 'Файл задания' }];
+    }
+    if (files.length === 0) return ctx.answerCbQuery('📭 Файлов нет');
+    if (fileIdx >= files.length) return ctx.answerCbQuery('❌ Файл не найден');
+
+    const file = files[fileIdx];
+    const caption = `📎 Файл ${fileIdx + 1}/${files.length}: ${file.fileName || 'Файл задания'} (Заказ №${order.orderNumber})`;
+
+    try {
+      if (file.type === 'photo') {
+        await ctx.telegram.sendPhoto(ctx.from.id, file.fileId, { caption });
+      } else {
+        await ctx.telegram.sendDocument(ctx.from.id, file.fileId, { caption });
+      }
+      // Навигация, если файлов больше одного
+      if (files.length > 1) {
+        const navButtons = [];
+        if (fileIdx > 0) navButtons.push(Markup.button.callback('◀️ Пред.', `order_files_view:${order.id}:${fileIdx - 1}`));
+        navButtons.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
+        if (fileIdx < files.length - 1) navButtons.push(Markup.button.callback('След. ▶️', `order_files_view:${order.id}:${fileIdx + 1}`));
+        await ctx.reply('Навигация по файлам:', {
+          reply_markup: Markup.inlineKeyboard([navButtons]).reply_markup
+        });
+      }
+      await ctx.answerCbQuery();
+    } catch (e) {
+      console.error('Не удалось отправить файл:', e.message);
+      await ctx.answerCbQuery('❌ Не удалось отправить файл');
+    }
+  });
 
   // 🌟 Назад — вернуть исходное состояние заказа (удалить старое, отправить новое)
   bot.action(/^order_back:(.+)$/, async (ctx) => {

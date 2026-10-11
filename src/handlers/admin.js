@@ -3198,6 +3198,15 @@ const backKeyboard = Markup.inlineKeyboard([
         buttons.push([Markup.button.callback('🏢 Привязать к чату', `admin:order_bind_chat:${orderId}`)]);
       }
       if (order.customerUsername) buttons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${order.customerUsername}`)]);
+
+      // 🌟 Кнопки просмотра исходных данных и файлов
+      if (order.detailsText || order.description) {
+        buttons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${orderId}`)]);
+      }
+      if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+        buttons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${orderId}:0`)]);
+      }
+
       // 🌟 Разные кнопки статусов для разных типов заказов
       if (order.isCustomOrder) {
         if (order.status !== 'completed') {

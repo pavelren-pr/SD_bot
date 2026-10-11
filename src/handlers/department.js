@@ -135,6 +135,14 @@ async function showOrderCard(ctx, orderId) {
     buttons.push([Markup.button.callback('🏢 Привязать к отделу', `dept:bind_chat:${orderId}`)]);
   }
 
+  // 🌟 Кнопки просмотра исходных данных и файлов
+  if (order.detailsText || order.description) {
+    buttons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${orderId}`)]);
+  }
+  if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+    buttons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${orderId}:0`)]);
+  }
+
   // Кнопки статусов (аналогично админ-панели, но БЕЗ редактирования и удаления)
   if (order.isCustomOrder) {
     if (order.status !== 'completed') {
