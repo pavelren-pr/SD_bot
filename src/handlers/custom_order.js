@@ -312,7 +312,7 @@ async function sendOrderForEvaluation(ctx) {
 
   try {
     const sentMsg = await ctx.telegram.sendMessage(chatId, orderText, {
-      parse_mode: "Markdown",
+      parse_mode: "HTML",
       reply_markup: {
         inline_keyboard: [
           [{ text: "✅ Принять заказ", callback_data: `accept_custom_order:${orderNumber}` }]
@@ -384,12 +384,12 @@ async function sendOrderForEvaluation(ctx) {
     }
 
     await ctx.reply(
-      `✅ *Ваш заказ отправлен на оценку!*\n\n` +
-      `🆔 *Номер заказа:* №${orderNumber}\n` +
-      `📚 *Предмет:* ${subjectName}\n\n` +
+      `✅ <b>Ваш заказ отправлен на оценку!</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+      `📚 <b>Предмет:</b> ${subjectName}\n\n` +
       `Ожидайте, исполнители ознакомятся с заданием и назначат цену.\n` +
       `Как только цена будет назначена, вы получите уведомление.`,
-      { parse_mode: "Markdown" }
+      { parse_mode: "HTML" }
     );
 
     ctx.session.customOrder = null;

@@ -38,14 +38,14 @@ function register(bot) {
       return ctx.answerCbQuery('📭 Для вашей специальности пока нет общих работ');
     }
     
-    let header = `📋 *Общие работы*\n`;
-    header += `📝 *Выберите работу:*`;
+    let header = `📋 <b>Общие работы</b>\n`;
+    header += `📝 <b>Выберите работу:</b>`;
     
     const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
     ctx.editMessageText(
       header,
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...createInlineKeyboard(buttons, 'catalog:courses')
       }
     );
@@ -77,9 +77,9 @@ function register(bot) {
     }
     
     ctx.editMessageText(
-      `📚 Курс: *${course.name}*\nВыберите предмет:`,
+      `📚 Курс: <b>${course.name}</b>\nВыберите предмет:`,
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...createInlineKeyboard(buttons, 'catalog:courses')
       }
     );
@@ -109,15 +109,15 @@ function register(bot) {
     }
     
     // Заголовок с информацией о курсе и предмете
-    let header = `🎯 *Выбран: ${course.name}*\n`;
-    header += `📖 *Предмет:* ${subject.name}\n\n`;
-    header += `📝 *Выберите работу:*`;
+    let header = `🎯 <b>Выбран: ${course.name}</b>\n`;
+    header += `📖 <b>Предмет:</b> ${subject.name}\n\n`;
+    header += `📝 <b>Выберите работу:</b>`;
     
     const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
     ctx.editMessageText(
       header, 
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...createInlineKeyboard(buttons, `catalog:subject:${subject.courseId}`)
       }
     );
@@ -139,15 +139,15 @@ function register(bot) {
       return ctx.answerCbQuery('📭 Для этого курса пока нет общих работ');
     }
     
-    let header = `📋 *Общие работы*\n`;
-    header += `📚 Курс: *${course.name}*\n\n`;
-    header += `📝 *Выберите работу:*`;
+    let header = `📋 <b>Общие работы</b>\n`;
+    header += `📚 Курс: <b>${course.name}</b>\n\n`;
+    header += `📝 <b>Выберите работу:</b>`;
     
     const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
     ctx.editMessageText(
       header,
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...createInlineKeyboard(buttons, `catalog:subject:${courseId}`)
       }
     );
@@ -180,19 +180,19 @@ function register(bot) {
     
     const pricing = require('../data/loyalty').calculatePrice(work.price, ctx.from.id);
     
-    let text = `🎯 *${work.title}*\n\n`;
+    let text = `🎯 <b>${work.title}</b>\n\n`;
     if (work.description && work.description.trim() !== '') {
       text += `${work.description}\n\n`;
     }
     if (work.exampleUrl && work.exampleUrl.trim() !== '') {
-      text += `🔍 *Пример работы и методички* [доступны по ссылке](${work.exampleUrl})\n\n`;
+      text += `🔍 <b>Пример работы и методички</b> [доступны по ссылке](${work.exampleUrl})\n\n`;
     }
-    text += `💰 *Стоимость:* ${work.price} ₽\n`;
+    text += `💰 <b>Стоимость:</b> ${work.price} ₽\n`;
     if (pricing.discountPercent > 0) {
-      text += `🎉 *Ваша скидка:* ${pricing.discountPercent}%\n`;
+      text += `🎉 <b>Ваша скидка:</b> ${pricing.discountPercent}%\n`;
     }
-    text += `✅ *Итого к оплате:* ${pricing.finalPrice} ₽\n\n`;
-    text += `📌 *Что нужно для заказа:*\n${work.prompt}`;
+    text += `✅ <b>Итого к оплате:</b> ${pricing.finalPrice} ₽\n\n`;
+    text += `📌 <b>Что нужно для заказа:</b>\n${work.prompt}`;
     
     // 🌟 Кнопка "Назад" зависит от типа работы
     let backCallback;
@@ -212,7 +212,7 @@ function register(bot) {
     await ctx.editMessageText(
       text,
       {
-        parse_mode: 'Markdown',
+        parse_mode: 'HTML',
         ...require('../utils/keyboard').createInlineKeyboard(buttons)
       }
     );

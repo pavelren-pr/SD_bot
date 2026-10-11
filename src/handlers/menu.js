@@ -41,17 +41,17 @@ function getSpecialtyKeyboard(showBack = false) {
 
 async function showSpecialtySelection(ctx, isChange = false) {
   const title = isChange 
-    ? '🎓 *Изменение специальности*\n\nВыберите новую специальность:' 
-    : '🎓 Добро пожаловать!\n\nДля начала выберите вашу специальность:';
+    ? '🎓 <b>Изменение специальности</b>\n\nВыберите новую специальность:' 
+    : '🎓 <b>Добро пожаловать!</b>\n\nДля начала выберите вашу специальность:';
   
   if (ctx.callbackQuery) {
     await ctx.editMessageText(title, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...getSpecialtyKeyboard(isChange)
     });
   } else {
     await ctx.reply(title, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...getSpecialtyKeyboard(isChange)
     });
   }
@@ -69,20 +69,20 @@ bot.command('start', async (ctx) => {
   // Если специальность не выбрана — показываем выбор
   if (!userSpecialty) {
     await ctx.reply(
-      `👋 *Добро пожаловать, ${userName}!*\n\n` +
-      `Я — бот для заказа учебных работ.`,
-      { parse_mode: 'Markdown' }
+      `👋 <b>Добро пожаловать, ${userName}!</b>\n\n` +
+      `Я — бот 🤖 для помощи с учебными работами.`, //
+      { parse_mode: 'HTML' }
     );
     await showSpecialtySelection(ctx);
     return;
   }
   
   await ctx.reply(
-    `👋 *Добро пожаловать, ${userName}!*\n\n` +
-    `Я — бот для заказа учебных работ.\n` +
+    `👋 <b>Добро пожаловать, ${userName}!</b>\n\n` +
+    `Я — бот 🤖 для помощи с учебными работами.\n` +
     `Выберите раздел в меню 👇`,
     { 
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...getMainMenuKeyboard()
     }
   );
@@ -96,15 +96,15 @@ bot.action(/^specialty:set:(.+)$/, async (ctx) => {
   const specialty = loyalty.getSpecialtyById(specialtyId);
   
   await ctx.editMessageText(
-    `✅ *Специальность выбрана:* ${specialty.name}\n\n` +
+    `✅ <b>Специальность выбрана:</b> ${specialty.name}\n\n` +
     `Теперь в каталоге вы будете видеть работы для вашей специальности.`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'HTML' }
   );
   
   await ctx.reply(
     `Выберите раздел в меню 👇`,
     { 
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...getMainMenuKeyboard()
     }
   );
@@ -135,7 +135,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     await ctx.reply(
       `📭 К сожалению, для вашей специальности пока нет работ в каталоге.\n\n` +
       `Вы можете изменить специальность через Профиль → Изменить специальность.`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     return;
   }
@@ -145,9 +145,9 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     courseButtons.push([{ text: `📋 Общие работы`, callback: `catalog:general_works` }]);
   }
   await ctx.reply(
-    `📚 *Каталог работ*\n\nВыберите курс, чтобы начать:`,
+    `📚 <b>Каталог работ</b>\n\nВыберите курс, чтобы начать:`,
     { 
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: createInlineKeyboard(courseButtons).reply_markup
     }
   );
@@ -222,7 +222,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     const allOrders = ordersDb.getAllOrders();
     const totalPages = Math.max(1, Math.ceil(allOrders.length / ORDERS_PER_PAGE));
     
-    const text = `📦 *Все заказы*\n\nСтраница 1 из ${totalPages}\nВсего: ${allOrders.length}`;
+    const text = `📦 <b>Все заказы</b>\n\nСтраница 1 из ${totalPages}\nВсего: ${allOrders.length}`;
     
     const pageOrders = allOrders.slice(0, ORDERS_PER_PAGE).reverse();
     const buttons = [];
@@ -250,7 +250,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     buttons.push([Markup.button.callback('⬅️ Назад в профиль', 'profile:back')]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -306,7 +306,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     buttons.push([Markup.button.callback('⬅️ Назад в профиль', 'profile:back')]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -359,7 +359,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     ]);
     
     await ctx.editMessageText(
-      `✏️ *Редактирование заказа*\n\nЗаказ: *${order.workTitle.substring(0, 30)}*\n\nВыберите поле:`,
+      `✏️ <b>Редактирование заказа</b>\n\nЗаказ: <b>${order.workTitle.substring(0, 30)}</b>\n\nВыберите поле:`,
       { parse_mode: 'HTML', ...keyboard }
     );
     await ctx.answerCbQuery();
@@ -386,11 +386,11 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     ]);
     
     await ctx.editMessageText(
-      `💬 *Режим ответа заказчику*\n\n` +
-      `📚 *Заказ:* ${order.workTitle}\n` +
-      `📅 *Дата:* ${order.createdAt}\n\n` +
+      `💬 <b>Режим ответа заказчику</b>\n\n` +
+      `📚 <b>Заказ:</b> ${order.workTitle}\n` +
+      `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
       `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.\n\n` +
-      `_(Для отмены нажмите "Отмена")_`,
+      `<i>(Для отмены нажмите "Отмена")</i>`,
       { parse_mode: 'HTML', ...keyboard }
     );
     await ctx.answerCbQuery();
@@ -401,7 +401,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     const allOrders = ordersDb.getAllOrders();
     const totalPages = Math.max(1, Math.ceil(allOrders.length / ORDERS_PER_PAGE));
     
-    const text = `📦 *Все заказы*\n\nСтраница 1 из ${totalPages}\nВсего: ${allOrders.length}`;
+    const text = `📦 <b>Все заказы</b>\n\nСтраница 1 из ${totalPages}\nВсего: ${allOrders.length}`;
     
     const pageOrders = allOrders.slice(0, ORDERS_PER_PAGE).reverse();
     const buttons = [];
@@ -471,11 +471,11 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     ]);
 
     await ctx.editMessageText(
-        `💬 *Режим ответа исполнителю*\n\n` +
-        `📚 *Заказ:* ${order.workTitle}\n` +
-        `📅 *Дата:* ${order.createdAt}\n\n` +
+        `💬 <b>Режим ответа исполнителю</b>\n\n` +
+        `📚 <b>Заказ:</b> ${order.workTitle}\n` +
+        `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
         `Напишите сообщение или прикрепите файл.\n\n` +
-        `_(Для отмены нажмите "Отмена")_`,
+        `<i>(Для отмены нажмите "Отмена")</i>`,
         { parse_mode: 'HTML', ...keyboard }
     );
     await ctx.answerCbQuery();
@@ -492,11 +492,11 @@ const active = userOrders.filter(o => ACTIVE_STATUSES.includes(o.status)).length
 const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).length;
     
     const text = 
-      `📜 *История заказов*\n\n` +
-      `📦 *Всего заказов:* ${userOrders.length}\n\n` +
-      `⏳ *Ожидают принятия:* ${pending}\n` +
-      `🔨 *В работе:* ${active}\n` +
-      `✅ *Выполнено:* ${completed}`;
+      `📜 <b>История заказов</b>\n\n` +
+      `📦 <b>Всего заказов:</b> ${userOrders.length}\n\n` +
+      `⏳ <b>Ожидают принятия:</b> ${pending}\n` +
+      `🔨 <b>В работе:</b> ${active}\n` +
+      `✅ <b>Выполнено:</b> ${completed}`;
     
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback(`⏳ Ожидают (${pending})`, 'orders:customer:list:pending:0')],
@@ -598,7 +598,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     }
 
     const backStatus = PENDING_STATUSES.includes(order.status) ? 'pending' :
-                      ACTIVE_STATUSES.includes(order.status) ? 'active' : 'completed';
+      ACTIVE_STATUSES.includes(order.status) ? 'active' : 'completed';
     buttons.push([Markup.button.callback('⬅️ Назад', `orders:customer:back:${backStatus}`)]);
 
     await ctx.editMessageText(text, {
@@ -668,8 +668,8 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     const chatData = chatInfo.chatData;
     
     const text = 
-      `💬 *Чат с исполнителем*\n\n` +
-      `📚 *Заказ:* ${chatData.workTitle}\n\n` +
+      `💬 <b>Чат с исполнителем</b>\n\n` +
+      `📚 <b>Заказ:</b> ${chatData.workTitle}\n\n` +
       `Выберите действие:`;
     
     const keyboard = Markup.inlineKeyboard([
@@ -711,11 +711,11 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     });
     
     const text = 
-      `📋 *Мои заказы (Исполнитель)*\n\n` +
-      `📦 *Всего принятых:* ${executorOrders.length}\n\n` +
-      `🔨 *В работе:* ${active}\n` +
-      `✅ *Выполнено:* ${completed}\n\n` +
-      `💰 *Общий заработок:* ${totalEarnings} ₽`;
+      `📋 <b>Мои заказы (Исполнитель)</b>\n\n` +
+      `📦 <b>Всего принятых:</b> ${executorOrders.length}\n\n` +
+      `🔨 <b>В работе:</b> ${active}\n` +
+      `✅ <b>Выполнено:</b> ${completed}\n\n` +
+      `💰 <b>Общий заработок:</b> ${totalEarnings} ₽`;
     
     const keyboard = Markup.inlineKeyboard([
       [Markup.button.callback(`🔨 Активные (${active})`, 'orders:executor:list:active:0')],
@@ -897,11 +897,11 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     [Markup.button.callback('❌ Отмена', `orders:executor:view:${orderId}`)]
   ]);
   await ctx.editMessageText(
-    `💬 *Режим ответа заказчику*\n\n` +
-    `📚 *Заказ:* ${order.workTitle}\n` +
-    `📅 *Дата:* ${order.createdAt}\n\n` +
+    `💬 <b>Режим ответа заказчику</b>\n\n` +
+    `📚 <b>Заказ:</b> ${order.workTitle}\n` +
+    `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
     `Напишите сообщение или прикрепите файл.\n\n` +
-    `_(Для отмены нажмите "Отмена")_`,
+    `<i>(Для отмены нажмите "Отмена")</i>`,
     { parse_mode: 'HTML', ...keyboard }
   );
   await ctx.answerCbQuery();
@@ -946,9 +946,9 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     try {
       await ctx.telegram.sendMessage(
         order.customerId,
-        `✅ *Ваш заказ выполнен!*\n\n` +
-        `🆔 *Номер заказа:* №${order.orderNumber}\n` +
-        `📚 *Работа:* ${order.workTitle}\n\n` +
+        `✅ <b>Ваш заказ выполнен!</b>\n\n` +
+        `🆔 <b>Номер заказа:</b> №${order.orderNumber}\n` +
+        `📚 <b>Работа:</b> ${order.workTitle}\n\n` +
         `Спасибо за использование нашего сервиса! 🌊`,
         { parse_mode: 'HTML' }
       );
@@ -964,9 +964,9 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
       try {
         await ctx.telegram.sendMessage(
           chatInfo.chatData.customerUserId,
-          `✅ *Ваш заказ выполнен!*\n\n` +
-          `🆔 *Номер заказа:* №${order.orderNumber}\n` +
-          `📚 *Работа:* ${order.workTitle}\n\n` +
+          `✅ <b>Ваш заказ выполнен!</b>\n\n` +
+          `🆔 <b>Номер заказа:</b> №${order.orderNumber}\n` +
+          `📚 <b>Работа:</b> ${order.workTitle}\n\n` +
           `Спасибо за использование нашего сервиса! 🌊`,
           { parse_mode: 'HTML' }
         );

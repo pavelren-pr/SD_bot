@@ -1051,7 +1051,7 @@ function register(bot) {
       const specialtyId = state.split(':')[1];
       catalog.updateSpecialty(specialtyId, { name: text });
       await ctx.reply(
-        `✅ <b>Название специальности изменено на:</b> *${text}*`,
+        `✅ <b>Название специальности изменено на:</b> <b>${text}</b>`,
         { parse_mode: 'HTML', ...getCatalogSpecialtiesMenu() }
       );
       ctx.session.adminState = null;
@@ -1360,7 +1360,7 @@ function register(bot) {
         courseId: courseId
       }, ctx);
       await ctx.reply(
-        `✅ *Общая работа курса добавлена!*\n\n📝 *${ctx.session.tempWorkData.title}*\n💰 ${ctx.session.tempWorkData.price} ₽`,
+        `✅ <b>Общая работа курса добавлена!</b>\n\n📝 <b>${ctx.session.tempWorkData.title}</b>\n💰 ${ctx.session.tempWorkData.price} ₽`,
         { parse_mode: 'HTML', ...getCourseGeneralWorks(courseId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
@@ -1433,7 +1433,7 @@ function register(bot) {
         courseId: courseId
       }, ctx);
       await ctx.reply(
-        `✅ *Общий индивидуальный заказ добавлен!*\n\n🌟 *${escapeHtml(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
+        `✅ <b>Общий индивидуальный заказ добавлен!</b>\n\n🌟 <b>${escapeHtml(ctx.session.tempWorkData.title)}</b>\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`,
         { parse_mode: 'HTML', ...getCourseGeneralWorks(courseId) }
       );
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
@@ -1517,7 +1517,7 @@ function register(bot) {
       works.push(ctx.session.tempWorkData);
       catalog.saveData({ ...catalog.getData(), works });
       
-      await ctx.reply(`✅ *Индивидуальный заказ добавлен!*\n\n🌟 *${escapeHtml(ctx.session.tempWorkData.title)}*\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`, { parse_mode: 'HTML', ...getSubjectWorks(subjectId) });
+      await ctx.reply(`✅ <b>Индивидуальный заказ добавлен!</b>\n\n🌟 <b>${escapeHtml(ctx.session.tempWorkData.title)}</b>\n📊 Комиссия: ${ctx.session.tempWorkData.commission}%`, { parse_mode: 'HTML', ...getSubjectWorks(subjectId) });
       ctx.session.adminState = null; ctx.session.tempWorkData = null; return;
     }
     if (state.startsWith('add_work_price:')) {
