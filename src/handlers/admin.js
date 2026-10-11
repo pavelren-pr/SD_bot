@@ -396,15 +396,28 @@ function getEditSubjectList(courseId) {
 // ==========================================
 async function showAdminMenu(ctx) {
   if (!isAdmin(ctx.from.id)) {
+  if (ctx.callbackQuery) {
+    await ctx.answerCbQuery('❌ У вас нет прав для доступа к этой панели.');
+  } else {
     await ctx.reply('❌ У вас нет прав для доступа к этой панели.');
-    return;
+  }
+  return;
   }
   ctx.session = ctx.session || {};
   ctx.session.adminState = null;
-  await ctx.reply('🛠 <b>Панель управления</b>', {
-    parse_mode: 'HTML',
-    ...getAdminMainMenu()
-  });
+
+  const text = '🛠 <b>Панель управления</b>';
+  const options = {
+  parse_mode: 'HTML',
+  ...getAdminMainMenu()
+  };
+
+  // 🌟 Если вызов из кнопки — редактируем текущее сообщение, иначе отправляем новое
+  if (ctx.callbackQuery) {
+    await ctx.editMessageText(text, options);
+  } else {
+    await ctx.reply(text, options);
+  }
 }
 
 // ==========================================
