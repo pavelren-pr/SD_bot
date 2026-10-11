@@ -1014,45 +1014,37 @@ function formatOrderCard(order, role) {
   let statusText = 'Ожидает принятия';
   if (ACTIVE_STATUSES.includes(order.status)) { statusEmoji = '🔨'; statusText = 'В работе'; }
   if (COMPLETED_STATUSES.includes(order.status)) { statusEmoji = '✅'; statusText = 'Выполнен'; }
-  // 🌟 Детализация для custom orders
   if (order.status === 'waiting_acceptance') statusText = 'Ожидает оценки';
   if (order.status === 'waiting_price') statusText = 'Ожидает цену';
   if (order.status === 'price_negotiating') statusText = 'Согласование цены';
   if (order.status === 'paid' && order.isCustomOrder) statusText = 'Оплачен — в работе';
 
-  // 🌟 REFACTOR: новая финансовая модель
-  // 🌟 ИЗВЛЕЧЕНИЕ ФИНАНСОВЫХ ДАННЫХ С ФОЛЛБЭКОМ
   const basePrice = order.basePrice !== undefined ? order.basePrice : (order.price || 0);
   const finalPrice = order.finalPrice !== undefined ? order.finalPrice : (order.price || 0);
   const discountPercent = order.discountPercent || 0;
   const discountAmount = order.discountAmount || 0;
   const commissionPercent = order.commissionPercent !== undefined ? order.commissionPercent : (order.commission || 0);
   const commissionExpense = order.commissionExpense || 0;
-  const expenseConstantPercent = order.expenseConstantPercent || 0;
   const expenseConstantAmount = order.expenseConstantAmount || 0;
   const executorPrice = order.executorPrice !== undefined ? order.executorPrice : Math.round(basePrice * (1 - commissionPercent / 100));
 
-  // 🌟 ОБРАБОТКА СОВЛАДЕЛЬЦЕВ
   let coOwnersText = '';
   if (order.coOwnerShares && Array.isArray(order.coOwnerShares) && order.coOwnerShares.length > 0) {
     coOwnersText = order.coOwnerShares.map(co =>
-      `   • ${co.username ? '@' + co.username : 'ID: ' + co.id} — ${co.amount || 0} ₽`
+      `• ${co.username ? '@' + co.username : 'ID: ' + co.id} — ${co.amount || 0} ₽`
     ).join('\n');
   }
 
-  // 🌟 REFACTOR: переход на HTML
   let text = `📦 <b>Заказ №${order.orderNumber}</b>\n\n`;
   text += `${statusEmoji} <b>Статус:</b> ${statusText}\n\n`;
   text += `📚 <b>Работа:</b> ${order.workTitle}\n`;
   text += `📖 <b>Предмет:</b> ${order.subjectName}\n`;
   text += `🎓 <b>Курс:</b> ${order.courseName}\n\n`;
 
-  // 🌟 ОТОБРАЖЕНИЕ СТОИМОСТИ ДЛЯ ЗАКАЗЧИКА
   if (role === 'customer') {
     text += `💰 <b>Стоимость:</b> ${finalPrice} ₽\n\n`;
   }
 
-  // 🌟 ДЕТАЛЬНАЯ ФИНАНСОВАЯ МОДЕЛЬ ДЛЯ АДМИНА И ИСПОЛНИТЕЛЯ
   if (role === 'admin' || role === 'executor') {
     text += `<b>💵 Базовая цена:</b> ${basePrice} ₽\n`;
     if (discountPercent > 0) {
@@ -1063,7 +1055,6 @@ function formatOrderCard(order, role) {
     text += `\n`;
   }
 
-  // 🌟 ПОЛЯ ТОЛЬКО ДЛЯ АДМИНА
   if (role === 'admin') {
     if (commissionExpense > 0) {
       text += `📉 <b>Покрытие из фонда комиссии:</b> ${commissionExpense} ₽\n`;
@@ -1077,7 +1068,6 @@ function formatOrderCard(order, role) {
     text += `\n`;
   }
 
-  // Отображение ID заказчика и исполнителя для админа и исполнителя
   if (role === 'admin' || role === 'executor') {
     const customerDisplay = order.customerUsername
       ? `${order.customerId} (${safeUsername(order.customerUsername)})`

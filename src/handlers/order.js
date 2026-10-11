@@ -409,18 +409,53 @@ function register(bot) {
   // 🌟 Назад к карточке заказа (из просмотра данных/файлов)
   bot.action(/^order_back_view:(.+):(\w+)$/, async (ctx) => {
     const orderId = ctx.match[1];
-    const role = ctx.match[2]; // 'admin' или 'executor'
+    const role = ctx.match[2]; // 'admin', 'executor' или 'dept'
     const order = ordersDb.getOrder(orderId);
     if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
 
-    // Формируем карточку заказа
     const { formatOrderCard } = require('./menu');
     const text = formatOrderCard(order, role);
 
-    // Формируем кнопки (аналогично панелям)
     const buttons = [];
 
-    // Кнопки просмотра данных и файлов
+    // 🌟 Кнопки действий в зависимости от роли
+    if (role === 'executor') {
+      // Кнопки для исполнителя
+      if (order.isCustomOrder) {
+        if (order.status !== 'paid') {
+          if (!order.price || order.price <= 0) {
+            buttons.push([Markup.button.callback('💰 Назначить цену', `custom_set_price:${order.orderNumber}`)]);
+          } else {
+            buttons.push([Markup.button.callback('💰 Изменить цену', `custom_set_price:${order.orderNumber}`)]);
+          }
+        }
+        buttons.push([Markup.button.callback('💬 Написать заказчику', `custom_write_customer:${order.orderNumber}`)]);
+      } else {
+        buttons.push([Markup.button.callback('💬 Написать заказчику', `orders:executor:contact:${orderId}`)]);
+      }
+      if (order.status !== 'completed') {
+        buttons.push([Markup.button.callback('✅ Отметить выполненным', `orders:executor:complete:${orderId}`)]);
+      }
+    } else if (role === 'admin') {
+      // Кнопки для админа
+      buttons.push([Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)]);
+      buttons.push([Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]);
+      if (!order.managerChatId) {
+        buttons.push([Markup.button.callback('🏢 Привязать к чату', `admin:order_bind_chat:${orderId}`)]);
+      }
+      if (order.status !== 'completed') {
+        buttons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+      }
+      buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
+    } else if (role === 'dept') {
+      // Кнопки для управляющего отделом
+      buttons.push([Markup.button.callback('💬 Написать заказчику', `dept:msg:${orderId}`)]);
+      if (order.status !== 'completed') {
+        buttons.push([Markup.button.callback('✅ Отметить выполненным', `dept:status:${orderId}:completed`)]);
+      }
+    }
+
+    // 🌟 Кнопки просмотра исходных данных и файлов
     if (order.detailsText || order.description) {
       buttons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${orderId}`)]);
     }
@@ -428,29 +463,25 @@ function register(bot) {
       buttons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${orderId}:0`)]);
     }
 
-    // Кнопка "Назад" в зависимости от роли
+    // 🌟 Кнопка "Назад" в зависимости от роли
     if (role === 'admin') {
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
     } else if (role === 'executor') {
-      const backStatus = ['active', 'paid', 'waiting_price', 'price_negotiating'].includes(order.status) ? 'active' : 'completed';
+      const EXECUTOR_ACTIVE = ['active', 'paid', 'waiting_price', 'price_negotiating'];
+      const backStatus = EXECUTOR_ACTIVE.includes(order.status) ? 'active' : 'completed';
       buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${backStatus}`)]);
     } else if (role === 'dept') {
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'dept:main')]);
     }
 
     try {
-      // Пробуем отредактировать текущее сообщение (если это текст)
       await ctx.editMessageText(text, {
         parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard(buttons).reply_markup
       });
       await ctx.answerCbQuery();
     } catch (e) {
-      // Если не удалось отредактировать (например, текущее сообщение — файл),
-      // удаляем его и отправляем новое
-      try {
-        await ctx.deleteMessage();
-      } catch (_) {}
+      try { await ctx.deleteMessage(); } catch (_) {}
       await ctx.reply(text, {
         parse_mode: 'HTML',
         reply_markup: Markup.inlineKeyboard(buttons).reply_markup
