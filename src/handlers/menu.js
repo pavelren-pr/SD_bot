@@ -14,7 +14,7 @@ const ORDERS_PER_PAGE = 5;
 // 🌟 Безопасный вывод username (экранирование спецсимволов Markdown)
 function safeUsername(username) {
   if (!username) return null;
-  return '@' + String(username).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+  return '@' + String(username);
 }
 
 function getMainMenuKeyboard() {
@@ -335,7 +335,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     ];
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -360,7 +360,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     
     await ctx.editMessageText(
       `✏️ *Редактирование заказа*\n\nЗаказ: *${order.workTitle.substring(0, 30)}*\n\nВыберите поле:`,
-      { parse_mode: 'Markdown', ...keyboard }
+      { parse_mode: 'HTML', ...keyboard }
     );
     await ctx.answerCbQuery();
   });
@@ -391,7 +391,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
       `📅 *Дата:* ${order.createdAt}\n\n` +
       `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.\n\n` +
       `_(Для отмены нажмите "Отмена")_`,
-      { parse_mode: 'Markdown', ...keyboard }
+      { parse_mode: 'HTML', ...keyboard }
     );
     await ctx.answerCbQuery();
   });
@@ -429,7 +429,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     buttons.push([Markup.button.callback('⬅️ Назад в профиль', 'profile:back')]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -476,7 +476,7 @@ bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
         `📅 *Дата:* ${order.createdAt}\n\n` +
         `Напишите сообщение или прикрепите файл.\n\n` +
         `_(Для отмены нажмите "Отмена")_`,
-        { parse_mode: 'Markdown', ...keyboard }
+        { parse_mode: 'HTML', ...keyboard }
     );
     await ctx.answerCbQuery();
 });
@@ -506,7 +506,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     ]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...keyboard
     });
     await ctx.answerCbQuery();
@@ -563,7 +563,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     buttons.push([Markup.button.callback('⬅️ Назад к истории', 'profile:history')]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -602,7 +602,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     buttons.push([Markup.button.callback('⬅️ Назад', `orders:customer:back:${backStatus}`)]);
 
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -649,7 +649,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     buttons.push([Markup.button.callback('⬅️ Назад к истории', 'profile:history')]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -680,7 +680,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     ]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...keyboard
     });
     await ctx.answerCbQuery();
@@ -724,7 +724,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     ]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...keyboard
     });
     await ctx.answerCbQuery();
@@ -780,7 +780,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     buttons.push([Markup.button.callback('⬅️ Назад', 'profile:my_orders')]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -826,7 +826,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${backStatus}`)]);
 
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -872,7 +872,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     buttons.push([Markup.button.callback('⬅️ Назад', 'profile:my_orders')]);
     
     await ctx.editMessageText(text, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       ...Markup.inlineKeyboard(buttons)
     });
     await ctx.answerCbQuery();
@@ -902,7 +902,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     `📅 *Дата:* ${order.createdAt}\n\n` +
     `Напишите сообщение или прикрепите файл.\n\n` +
     `_(Для отмены нажмите "Отмена")_`,
-    { parse_mode: 'Markdown', ...keyboard }
+    { parse_mode: 'HTML', ...keyboard }
   );
   await ctx.answerCbQuery();
   });
@@ -935,7 +935,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
         updatedOrderForGroup.managerMessageId,
         null,
         completedText,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'HTML' }
       );
     } catch (e) {
       console.log('Не удалось обновить сообщение в группе при завершении:', e.message);
@@ -950,7 +950,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
         `🆔 *Номер заказа:* №${order.orderNumber}\n` +
         `📚 *Работа:* ${order.workTitle}\n\n` +
         `Спасибо за использование нашего сервиса! 🌊`,
-        { parse_mode: 'Markdown' }
+        { parse_mode: 'HTML' }
       );
     } catch (e) {
       console.log('Не удалось уведомить заказчика:', e.message);
@@ -968,7 +968,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
           `🆔 *Номер заказа:* №${order.orderNumber}\n` +
           `📚 *Работа:* ${order.workTitle}\n\n` +
           `Спасибо за использование нашего сервиса! 🌊`,
-          { parse_mode: 'Markdown' }
+          { parse_mode: 'HTML' }
         );
       } catch (e) {
         console.log('Не удалось уведомить заказчика:', e.message);
@@ -987,7 +987,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   }
   buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${updatedOrder.status}`)]);
   await ctx.editMessageText(text, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     ...Markup.inlineKeyboard(buttons)
   });
   });
@@ -1030,82 +1030,74 @@ function formatOrderCard(order, role) {
       `   • ${co.username ? '@' + co.username : 'ID: ' + co.id} — ${co.amount || 0} ₽`
     ).join('\n');
   }
-  // 🌟 REFACTOR: новая финансовая модель
 
-  let text = `📦 *Заказ №${order.orderNumber}*\n\n`;
-  text += `${statusEmoji} *Статус:* ${statusText}\n\n`;
-  text += `📚 *Работа:* ${order.workTitle}\n`;
-  text += `📖 *Предмет:* ${order.subjectName}\n`;
-  text += `🎓 *Курс:* ${order.courseName}\n\n`;
+  // 🌟 REFACTOR: переход на HTML
+  let text = `📦 <b>Заказ №${order.orderNumber}</b>\n\n`;
+  text += `${statusEmoji} <b>Статус:</b> ${statusText}\n\n`;
+  text += `📚 <b>Работа:</b> ${order.workTitle}\n`;
+  text += `📖 <b>Предмет:</b> ${order.subjectName}\n`;
+  text += `🎓 <b>Курс:</b> ${order.courseName}\n\n`;
 
-  // 🌟 REFACTOR: новая финансовая модель
   // 🌟 ОТОБРАЖЕНИЕ СТОИМОСТИ ДЛЯ ЗАКАЗЧИКА
   if (role === 'customer') {
     text += `💰 <b>Стоимость:</b> ${finalPrice} ₽\n\n`;
   }
+
   // 🌟 ДЕТАЛЬНАЯ ФИНАНСОВАЯ МОДЕЛЬ ДЛЯ АДМИНА И ИСПОЛНИТЕЛЯ
   if (role === 'admin' || role === 'executor') {
     text += `<b>💵 Базовая цена:</b> ${basePrice} ₽\n`;
-
     if (discountPercent > 0) {
       text += `🎉 <b>Скидка заказчика:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
     }
-
     text += `💰 <b>Итог к оплате:</b> ${finalPrice} ₽\n`;
     text += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
-
     text += `\n`;
   }
 
-  // 🌟 УТОЧНЕНИЕ: поля только для админа
   // 🌟 ПОЛЯ ТОЛЬКО ДЛЯ АДМИНА
   if (role === 'admin') {
     if (commissionExpense > 0) {
       text += `📉 <b>Покрытие из фонда комиссии:</b> ${commissionExpense} ₽\n`;
     }
-
     if (expenseConstantAmount > 0) {
       text += `🏛 <b>Константа расходов:</b> ${expenseConstantAmount} ₽\n`;
     }
-
     if (coOwnersText) {
       text += `👥 <b>Доли совладельцев:</b>\n${coOwnersText}\n`;
     }
-
     text += `\n`;
   }
-  // 🌟 REFACTOR: новая финансовая модель
 
   // Отображение ID заказчика и исполнителя для админа и исполнителя
   if (role === 'admin' || role === 'executor') {
-    const customerDisplay = order.customerUsername 
+    const customerDisplay = order.customerUsername
       ? `${order.customerId} (${safeUsername(order.customerUsername)})`
       : `${order.customerId}`;
-    text += `👤 *Заказчик:* ${customerDisplay}\n`;
-    
+    text += `👤 <b>Заказчик:</b> ${customerDisplay}\n`;
+
     if (role === 'admin') {
-      const executorDisplay = order.executorUsername 
+      const executorDisplay = order.executorUsername
         ? `${order.executorId} (${safeUsername(order.executorUsername)})`
-        : (order.executorId ? `${order.executorId}` : '_не назначен_');
-      text += `👷 *Исполнитель:* ${executorDisplay}\n\n`;
+        : (order.executorId ? `${order.executorId}` : '<i>не назначен</i>');
+      text += `👷 <b>Исполнитель:</b> ${executorDisplay}\n\n`;
     } else if (role === 'executor' && order.executorId) {
-      const executorDisplay = order.executorUsername 
+      const executorDisplay = order.executorUsername
         ? `${order.executorId} (${safeUsername(order.executorUsername)})`
         : `${order.executorId}`;
-      text += `👷 *Вы (исполнитель):* ${executorDisplay}\n\n`;
-    }
-  }
-  
-  if (role === 'customer') {
-    if (order.executorUsername) {
-      text += `✅ *Исполнитель назначен*\n\n`;
+      text += `👷 <b>Вы (исполнитель):</b> ${executorDisplay}\n\n`;
     }
   }
 
-  text += `📅 *Создан:* ${order.createdAt}\n`;
-  if (order.acceptedAt) text += `🔨 *Принят:* ${order.acceptedAt}\n`;
-  if (order.completedAt) text += `✅ *Выполнен:* ${order.completedAt}\n`;
-  
+  if (role === 'customer') {
+    if (order.executorUsername) {
+      text += `✅ <b>Исполнитель назначен</b>\n\n`;
+    }
+  }
+
+  text += `📅 <b>Создан:</b> ${order.createdAt}\n`;
+  if (order.acceptedAt) text += `🔨 <b>Принят:</b> ${order.acceptedAt}\n`;
+  if (order.completedAt) text += `✅ <b>Выполнен:</b> ${order.completedAt}\n`;
+
   return text;
 }
 
