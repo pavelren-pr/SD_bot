@@ -123,6 +123,7 @@ async function showOrderCard(ctx, orderId) {
   }
   ctx.session = ctx.session || {};
   ctx.session.deptState = null;
+  ctx.session.lastOrderViewRole = 'dept';
 
   const text = formatOrderCard(order, 'admin');
   const buttons = [];

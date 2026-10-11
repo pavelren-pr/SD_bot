@@ -306,19 +306,40 @@ function register(bot) {
     }
   });
 
-  // 🌟 Показать исходные данные в личке (для панелей: Мои заказы, Все заказы, Заказы отдела)
+  // 🌟 Показать исходные данные в личке — редактируем сообщение карточки
   bot.action(/^order_details_view:(.+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
 
     const textToShow = order.detailsText || order.description || 'Нет данных';
     const header = `📝 <b>Исходные данные к заказу №${order.orderNumber}</b>\n\n`;
+    const fullText = header + escapeHtml(textToShow);
 
-    // Если текст короткий — отправляем одним сообщением
-    if ((header + escapeHtml(textToShow)).length <= 4096) {
-      await ctx.reply(header + escapeHtml(textToShow), { parse_mode: 'HTML' });
+    // Определяем роль для кнопки "Назад"
+    const role = ctx.session.lastOrderViewRole || 'executor';
+
+    // Если текст помещается в лимит — редактируем текущее сообщение
+    if (fullText.length <= 4096) {
+      const backKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('⬅️ Назад к заказу', `order_back_view:${order.id}:${role}`)]
+      ]);
+
+      try {
+        await ctx.editMessageText(fullText, {
+          parse_mode: 'HTML',
+          reply_markup: backKeyboard.reply_markup
+        });
+        await ctx.answerCbQuery();
+      } catch (e) {
+        if (e.message && e.message.includes('message is not modified')) {
+          return ctx.answerCbQuery();
+        }
+        // Если не удалось отредактировать — отправляем отдельно
+        await ctx.reply(fullText, { parse_mode: 'HTML' });
+        await ctx.answerCbQuery('Данные отправлены отдельным сообщением');
+      }
     } else {
-      // Если длинный — отправляем заголовок и текст частями
+      // Текст слишком длинный — отправляем отдельными сообщениями
       await ctx.reply(header, { parse_mode: 'HTML' });
       const chunks = [];
       for (let i = 0; i < textToShow.length; i += 3500) {
@@ -327,11 +348,11 @@ function register(bot) {
       for (const chunk of chunks) {
         await ctx.reply(escapeHtml(chunk), { parse_mode: 'HTML' });
       }
+      await ctx.answerCbQuery('Данные отправлены отдельными сообщениями');
     }
-    await ctx.answerCbQuery();
   });
 
-  // 🌟 Показать файлы задания в личке (для панелей: Мои заказы, Все заказы, Заказы отдела)
+  // 🌟 Показать файлы задания в личке — удаляем карточку, отправляем файл
   bot.action(/^order_files_view:(.+):(\d+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     const fileIdx = parseInt(ctx.match[2]);
@@ -345,28 +366,96 @@ function register(bot) {
     if (fileIdx >= files.length) return ctx.answerCbQuery('❌ Файл не найден');
 
     const file = files[fileIdx];
+    const role = ctx.session.lastOrderViewRole || 'executor';
     const caption = `📎 Файл ${fileIdx + 1}/${files.length}: ${file.fileName || 'Файл задания'} (Заказ №${order.orderNumber})`;
 
     try {
-      if (file.type === 'photo') {
-        await ctx.telegram.sendPhoto(ctx.from.id, file.fileId, { caption });
-      } else {
-        await ctx.telegram.sendDocument(ctx.from.id, file.fileId, { caption });
-      }
-      // Навигация, если файлов больше одного
+      // Удаляем сообщение карточки заказа
+      try {
+        await ctx.deleteMessage();
+      } catch (_) {}
+
+      // Отправляем файл с кнопками навигации
+      const keyboardRows = [];
       if (files.length > 1) {
-        const navButtons = [];
-        if (fileIdx > 0) navButtons.push(Markup.button.callback('◀️ Пред.', `order_files_view:${order.id}:${fileIdx - 1}`));
-        navButtons.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
-        if (fileIdx < files.length - 1) navButtons.push(Markup.button.callback('След. ▶️', `order_files_view:${order.id}:${fileIdx + 1}`));
-        await ctx.reply('Навигация по файлам:', {
-          reply_markup: Markup.inlineKeyboard([navButtons]).reply_markup
+        const navRow = [];
+        if (fileIdx > 0) navRow.push(Markup.button.callback('◀️ Пред.', `order_files_view:${order.id}:${fileIdx - 1}`));
+        navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
+        if (fileIdx < files.length - 1) navRow.push(Markup.button.callback('След. ▶️', `order_files_view:${order.id}:${fileIdx + 1}`));
+        keyboardRows.push(navRow);
+      }
+      keyboardRows.push([Markup.button.callback('⬅️ Назад к заказу', `order_back_view:${order.id}:${role}`)]);
+
+      let sentMsg;
+      if (file.type === 'photo') {
+        sentMsg = await ctx.telegram.sendPhoto(ctx.from.id, file.fileId, {
+          caption,
+          reply_markup: Markup.inlineKeyboard(keyboardRows).reply_markup
+        });
+      } else {
+        sentMsg = await ctx.telegram.sendDocument(ctx.from.id, file.fileId, {
+          caption,
+          reply_markup: Markup.inlineKeyboard(keyboardRows).reply_markup
         });
       }
+
       await ctx.answerCbQuery();
     } catch (e) {
       console.error('Не удалось отправить файл:', e.message);
       await ctx.answerCbQuery('❌ Не удалось отправить файл');
+    }
+  });
+
+  // 🌟 Назад к карточке заказа (из просмотра данных/файлов)
+  bot.action(/^order_back_view:(.+):(\w+)$/, async (ctx) => {
+    const orderId = ctx.match[1];
+    const role = ctx.match[2]; // 'admin' или 'executor'
+    const order = ordersDb.getOrder(orderId);
+    if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
+
+    // Формируем карточку заказа
+    const { formatOrderCard } = require('./menu');
+    const text = formatOrderCard(order, role);
+
+    // Формируем кнопки (аналогично панелям)
+    const buttons = [];
+
+    // Кнопки просмотра данных и файлов
+    if (order.detailsText || order.description) {
+      buttons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${orderId}`)]);
+    }
+    if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+      buttons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${orderId}:0`)]);
+    }
+
+    // Кнопка "Назад" в зависимости от роли
+    if (role === 'admin') {
+      buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
+    } else if (role === 'executor') {
+      const backStatus = ['active', 'paid', 'waiting_price', 'price_negotiating'].includes(order.status) ? 'active' : 'completed';
+      buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${backStatus}`)]);
+    } else if (role === 'dept') {
+      buttons.push([Markup.button.callback('⬅️ Назад к списку', 'dept:main')]);
+    }
+
+    try {
+      // Пробуем отредактировать текущее сообщение (если это текст)
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+      });
+      await ctx.answerCbQuery();
+    } catch (e) {
+      // Если не удалось отредактировать (например, текущее сообщение — файл),
+      // удаляем его и отправляем новое
+      try {
+        await ctx.deleteMessage();
+      } catch (_) {}
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+      });
+      await ctx.answerCbQuery();
     }
   });
 
@@ -1139,16 +1228,28 @@ try {
       activeChats.get(chatId).orderId = activeOrder.id;
     }
 
-    const executorFullKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✏️ Ответить заказчику', `er:${chatId}`)],
-      [Markup.button.callback('📎 Отправить файл/фото', `esf:${chatId}`)],
-      [Markup.button.callback('❌ Завершить чат', `ecc:${chatId}`)],
-      [Markup.button.callback('✅ Заказ выполнен', `oc:${chatId}`)]
-    ]);
+    // 🌟 Формируем клавиатуру с кнопками просмотра данных
+    const executorButtons = [];
+    
+    // Кнопки просмотра исходных данных и файлов (если они есть)
+    if (activeOrder && (activeOrder.detailsText || activeOrder.description)) {
+      executorButtons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${activeOrder.id}`)]);
+    }
+    if (activeOrder && ((activeOrder.taskFiles && activeOrder.taskFiles.length > 0) || activeOrder.fileId)) {
+      executorButtons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${activeOrder.id}:0`)]);
+    }
+    
+    // Кнопки чата
+    executorButtons.push([Markup.button.callback('✏️ Ответить заказчику', `er:${chatId}`)]);
+    executorButtons.push([Markup.button.callback('📎 Отправить файл/фото', `esf:${chatId}`)]);
+    executorButtons.push([Markup.button.callback('❌ Завершить чат', `ecc:${chatId}`)]);
+    executorButtons.push([Markup.button.callback('✅ Заказ выполнен', `oc:${chatId}`)]);
+    
+    const executorFullKeyboard = Markup.inlineKeyboard(executorButtons);
 
     await ctx.telegram.sendMessage(
       executorUserId, 
-      `✅ <b>Вы приняли заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Работа:</b> ${work.title}\n👤 <b>Заказчик ID:</b> ${customerUserId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`, 
+      `✅ <b>Вы приняли заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Работа:</b> ${escapeHtml(work.title)}\n👤 <b>Заказчик ID:</b> ${customerUserId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`, 
       { parse_mode: 'HTML', reply_markup: executorFullKeyboard.reply_markup }
     );
 
@@ -1663,18 +1764,29 @@ async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignmen
     chatId: chatId
   });
   
-  // Клавиатура для исполнителя (с сокращёнными префиксами!)
-  const executorFullKeyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('✏️ Ответить заказчику', `er:${chatId}`)],
-    [Markup.button.callback('📎 Отправить файл/фото', `esf:${chatId}`)],
-    [Markup.button.callback('❌ Завершить чат', `ecc:${chatId}`)],
-    [Markup.button.callback('✅ Заказ выполнен', `oc:${chatId}`)]
-  ]);
-  
+  // 🌟 Формируем клавиатуру с кнопками просмотра данных
+  const assignButtons = [];
+
+  // Кнопки просмотра исходных данных и файлов (если они есть)
+  if (order.detailsText || order.description) {
+    assignButtons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${order.id}`)]);
+  }
+  if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
+    assignButtons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${order.id}:0`)]);
+  }
+
+  // Кнопки чата
+  assignButtons.push([Markup.button.callback('✏️ Ответить заказчику', `er:${chatId}`)]);
+  assignButtons.push([Markup.button.callback('📎 Отправить файл/фото', `esf:${chatId}`)]);
+  assignButtons.push([Markup.button.callback('❌ Завершить чат', `ecc:${chatId}`)]);
+  assignButtons.push([Markup.button.callback('✅ Заказ выполнен', `oc:${chatId}`)]);
+
+  const executorFullKeyboard = Markup.inlineKeyboard(assignButtons);
+
   // Отправляем уведомление исполнителю
   await bot.telegram.sendMessage(
     executorUserId,
-    `✅ <b>Вам назначен новый заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Работа:</b> ${order.workTitle}\n👤 <b>Заказчик ID:</b> ${order.customerId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`,
+    `✅ <b>Вам назначен новый заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n👤 <b>Заказчик ID:</b> ${order.customerId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`,
     { parse_mode: 'HTML', reply_markup: executorFullKeyboard.reply_markup }
   );
   

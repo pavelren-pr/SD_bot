@@ -787,6 +787,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   });
 
   bot.action(/^orders:executor:view:(.+)$/, async (ctx) => {
+    ctx.session.lastOrderViewRole = 'executor';
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
     if (!order || String(order.executorId) !== String(ctx.from.id)) {

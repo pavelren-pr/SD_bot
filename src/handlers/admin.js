@@ -3177,6 +3177,7 @@ const backKeyboard = Markup.inlineKeyboard([
       await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     else if (action.startsWith('order_view:')) {
+      ctx.session.lastOrderViewRole = 'admin';
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
       if (!order) { 
