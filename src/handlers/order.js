@@ -352,7 +352,7 @@ function register(bot) {
     }
   });
 
-  // 🌟 Показать файлы задания в личке — удаляем карточку, отправляем файл
+  // 🌟 Показать файлы задания в личке
   bot.action(/^order_files_view:(.+):(\d+)$/, async (ctx) => {
     const order = ordersDb.getOrder(ctx.match[1]);
     const fileIdx = parseInt(ctx.match[2]);
@@ -369,36 +369,41 @@ function register(bot) {
     const role = ctx.session.lastOrderViewRole || 'executor';
     const caption = `📎 Файл ${fileIdx + 1}/${files.length}: ${file.fileName || 'Файл задания'} (Заказ №${order.orderNumber})`;
 
+    // 🌟 Формируем клавиатуру с навигацией и кнопкой "Назад"
+    const keyboardRows = [];
+    if (files.length > 1) {
+      const navRow = [];
+      if (fileIdx > 0) navRow.push(Markup.button.callback('◀️ Пред.', `order_files_view:${order.id}:${fileIdx - 1}`));
+      navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
+      if (fileIdx < files.length - 1) navRow.push(Markup.button.callback('След. ▶️', `order_files_view:${order.id}:${fileIdx + 1}`));
+      keyboardRows.push(navRow);
+    }
+    keyboardRows.push([Markup.button.callback('⬅️ Назад к заказу', `order_back_view:${order.id}:${role}`)]);
+    const keyboard = Markup.inlineKeyboard(keyboardRows);
+
     try {
-      // Удаляем сообщение карточки заказа
+      // 🌟 Удаляем сообщение карточки заказа (используем явный chatId и messageId)
       try {
-        await ctx.deleteMessage();
-      } catch (_) {}
-
-      // Отправляем файл с кнопками навигации
-      const keyboardRows = [];
-      if (files.length > 1) {
-        const navRow = [];
-        if (fileIdx > 0) navRow.push(Markup.button.callback('◀️ Пред.', `order_files_view:${order.id}:${fileIdx - 1}`));
-        navRow.push(Markup.button.callback(`${fileIdx + 1}/${files.length}`, 'noop'));
-        if (fileIdx < files.length - 1) navRow.push(Markup.button.callback('След. ▶️', `order_files_view:${order.id}:${fileIdx + 1}`));
-        keyboardRows.push(navRow);
+        await ctx.telegram.deleteMessage(
+          ctx.callbackQuery.message.chat.id,
+          ctx.callbackQuery.message.message_id
+        );
+      } catch (delErr) {
+        console.log('Не удалось удалить сообщение карточки:', delErr.message);
       }
-      keyboardRows.push([Markup.button.callback('⬅️ Назад к заказу', `order_back_view:${order.id}:${role}`)]);
 
-      let sentMsg;
+      // 🌟 Отправляем файл с кнопками
       if (file.type === 'photo') {
-        sentMsg = await ctx.telegram.sendPhoto(ctx.from.id, file.fileId, {
+        await ctx.telegram.sendPhoto(ctx.from.id, file.fileId, {
           caption,
-          reply_markup: Markup.inlineKeyboard(keyboardRows).reply_markup
+          reply_markup: keyboard.reply_markup
         });
       } else {
-        sentMsg = await ctx.telegram.sendDocument(ctx.from.id, file.fileId, {
+        await ctx.telegram.sendDocument(ctx.from.id, file.fileId, {
           caption,
-          reply_markup: Markup.inlineKeyboard(keyboardRows).reply_markup
+          reply_markup: keyboard.reply_markup
         });
       }
-
       await ctx.answerCbQuery();
     } catch (e) {
       console.error('Не удалось отправить файл:', e.message);
@@ -409,18 +414,16 @@ function register(bot) {
   // 🌟 Назад к карточке заказа (из просмотра данных/файлов)
   bot.action(/^order_back_view:(.+):(\w+)$/, async (ctx) => {
     const orderId = ctx.match[1];
-    const role = ctx.match[2]; // 'admin', 'executor' или 'dept'
+    const role = ctx.match[2];
     const order = ordersDb.getOrder(orderId);
     if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
 
     const { formatOrderCard } = require('./menu');
     const text = formatOrderCard(order, role);
-
     const buttons = [];
 
-    // 🌟 Кнопки действий в зависимости от роли
+    // 🌟 Формируем кнопки в зависимости от роли — точно как в исходных обработчиках
     if (role === 'executor') {
-      // Кнопки для исполнителя
       if (order.isCustomOrder) {
         if (order.status !== 'paid') {
           if (!order.price || order.price <= 0) {
@@ -437,7 +440,6 @@ function register(bot) {
         buttons.push([Markup.button.callback('✅ Отметить выполненным', `orders:executor:complete:${orderId}`)]);
       }
     } else if (role === 'admin') {
-      // Кнопки для админа
       buttons.push([Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)]);
       buttons.push([Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]);
       if (!order.managerChatId) {
@@ -448,14 +450,13 @@ function register(bot) {
       }
       buttons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
     } else if (role === 'dept') {
-      // Кнопки для управляющего отделом
       buttons.push([Markup.button.callback('💬 Написать заказчику', `dept:msg:${orderId}`)]);
       if (order.status !== 'completed') {
         buttons.push([Markup.button.callback('✅ Отметить выполненным', `dept:status:${orderId}:completed`)]);
       }
     }
 
-    // 🌟 Кнопки просмотра исходных данных и файлов
+    // 🌟 Кнопки просмотра данных и файлов
     if (order.detailsText || order.description) {
       buttons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${orderId}`)]);
     }
@@ -463,28 +464,33 @@ function register(bot) {
       buttons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${orderId}:0`)]);
     }
 
-    // 🌟 Кнопка "Назад" в зависимости от роли
-    if (role === 'admin') {
-      buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
-    } else if (role === 'executor') {
-      const EXECUTOR_ACTIVE = ['active', 'paid', 'waiting_price', 'price_negotiating'];
-      const backStatus = EXECUTOR_ACTIVE.includes(order.status) ? 'active' : 'completed';
+    // 🌟 Кнопка "Назад" в список
+    if (role === 'executor') {
+      const EXEC_ACTIVE = ['active', 'paid', 'waiting_price', 'price_negotiating'];
+      const backStatus = EXEC_ACTIVE.includes(order.status) ? 'active' : 'completed';
       buttons.push([Markup.button.callback('⬅️ Назад', `orders:executor:back:${backStatus}`)]);
+    } else if (role === 'admin') {
+      buttons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
     } else if (role === 'dept') {
       buttons.push([Markup.button.callback('⬅️ Назад к списку', 'dept:main')]);
     }
 
+    const keyboard = Markup.inlineKeyboard(buttons);
+
     try {
+      // Пробуем отредактировать текущее сообщение (если это текст после просмотра данных)
       await ctx.editMessageText(text, {
         parse_mode: 'HTML',
-        reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+        reply_markup: keyboard.reply_markup
       });
       await ctx.answerCbQuery();
     } catch (e) {
+      // Если не удалось отредактировать (например, текущее сообщение — файл),
+      // удаляем его и отправляем новое
       try { await ctx.deleteMessage(); } catch (_) {}
       await ctx.reply(text, {
         parse_mode: 'HTML',
-        reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+        reply_markup: keyboard.reply_markup
       });
       await ctx.answerCbQuery();
     }
