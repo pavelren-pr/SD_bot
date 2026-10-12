@@ -2084,13 +2084,30 @@ function register(bot) {
     // --- ДОБАВЛЕНИЕ ЗАКАЗА ---
     if (state === 'add_order:customer_id') {
       if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
-      ctx.session.newOrder = { customerId: parseInt(text) };
+      const customerId = parseInt(text);
+      
+      // 🌟 АВТОМАТИЧЕСКИ получаем username из базы лояльности
+      const loyaltyData = loyalty.loadData();
+      const customerData = loyaltyData[customerId];
+      const customerUsername = customerData ? customerData.username : null;
+      
+      ctx.session.newOrder = { 
+        customerId: customerId,
+        customerUsername: customerUsername  // 🌟 Сохраняем username
+      };
+      
+      // 🌟 Показываем информацию о заказчике
+      let customerInfo = `👤 <b>Заказчик найден:</b>\n`;
+      customerInfo += `🆔 <b>ID:</b> <code>${customerId}</code>\n`;
+      customerInfo += `📛 <b>Username:</b> ${customerUsername ? '@' + escapeHtml(customerUsername) : '<i>не указан в базе</i>'}\n\n`;
+      customerInfo += `📋 <b>Шаг 2: Выберите тип заказа:</b>`;
+      
       const typeKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('📦 Обычный заказ', 'admin:add_order_type:regular')],
         [Markup.button.callback('🌟 Индивидуальный заказ', 'admin:add_order_type:custom')],
         [Markup.button.callback('❌ Отмена', 'admin:orders')]
       ]);
-      await ctx.reply('📋 <b>Шаг 2: Выберите тип заказа:</b>', { parse_mode: 'HTML', ...typeKeyboard });
+      await ctx.reply(customerInfo, { parse_mode: 'HTML', ...typeKeyboard });
       ctx.session.adminState = null; return;
     }
     if (state === 'add_order:title') {
@@ -2162,15 +2179,27 @@ function register(bot) {
 
       const newOrder = ctx.session.newOrder;
       let confirmText = `📋 <b>Подтверждение нового заказа</b>\n\n`;
-      confirmText += `👤 <b>Заказчик ID:</b> <code>${newOrder.customerId}</code>\n`;
+      confirmText += `👤 <b>Заказчик:</b> <code>${newOrder.customerId}</code>`;
+      if (newOrder.customerUsername) {
+        confirmText += ` (@${escapeHtml(newOrder.customerUsername)})`;
+      }
+      confirmText += `\n`;
       confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} <b>Тип:</b> ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
-      confirmText += `📚 <b>Работа:</b> <code>${newOrder.workTitle}</code>\n`;
-      confirmText += `📖 <b>Предмет:</b> <code>${newOrder.subjectName}</code>\n`;
-      confirmText += `🎓 <b>Курс:</b> <code>${newOrder.courseName}</code>\n`;
-      confirmText += `💰 <b>Цена:</b> <code>${newOrder.price}</code> ₽\n`;
-      confirmText += `📊 <b>Комиссия:</b> <code>${newOrder.commission}%</code>\n`;
+      confirmText += `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n`;
+      confirmText += `📖 <b>Предмет:</b> ${escapeHtml(newOrder.subjectName)}\n`;
+      confirmText += `🎓 <b>Курс:</b> ${escapeHtml(newOrder.courseName)}\n\n`;
+
+      // 🌟 Финансовая информация
+      const confirmBasePrice = newOrder.price || 0;
+      const confirmCommission = newOrder.commission || 20;
+      const confirmExecutorPrice = Math.round(confirmBasePrice * (1 - confirmCommission / 100));
+
+      confirmText += `💵 <b>Базовая цена:</b> ${confirmBasePrice} ₽\n`;
+      confirmText += `👷 <b>Исполнитель получит:</b> ${confirmExecutorPrice} ₽ (комиссия ${confirmCommission}%)\n`;
       confirmText += `💬 <b>Чат:</b> ${chatEnv ? `<code>${chatEnv}</code>` : '<i>не назначен</i>'}\n`;
-      if (newOrder.description) confirmText += `📝 <b>Описание:</b> <code>${newOrder.description.substring(0, 100)}...</code>\n`;
+      if (newOrder.description) {
+        confirmText += `📝 <b>Описание:</b> ${escapeHtml(newOrder.description.substring(0, 100))}...\n`;
+      }
       confirmText += `\nСоздать заказ?`;
 
       const confirmKeyboard = Markup.inlineKeyboard([
@@ -3585,27 +3614,91 @@ const backKeyboard = Markup.inlineKeyboard([
     else if (action === 'add_order_confirm') {
       const newOrder = ctx.session.newOrder;
       if (!newOrder) { await ctx.answerCbQuery('❌ Данные заказа потеряны'); return; }
-      // Определяем статус в зависимости от типа
+      
+      // 🌟 Определяем статус в зависимости от типа
       const status = newOrder.isCustomOrder
         ? (newOrder.price > 0 ? 'price_negotiating' : 'waiting_acceptance')
         : (newOrder.price > 0 ? 'pending' : 'pending');
+      
+      // 🌟 РАСЧЁТ ФИНАНСОВОЙ МОДЕЛИ
+      const basePrice = newOrder.price || 0;
+      const commissionPercent = newOrder.commission || 20;
+      const executorPrice = Math.round(basePrice * (1 - commissionPercent / 100));
+      const finalPrice = basePrice; // При ручном добавлении без скидки
+      const discountPercent = 0;
+      const discountAmount = 0;
+      
+      // 🌟 Расчёт покрытия скидки и константы
+      const totalCommission = Math.round(basePrice * commissionPercent / 100);
+      const actualCommission = Math.max(0, finalPrice - executorPrice);
+      const commissionExpense = Math.max(0, totalCommission - actualCommission);
+      
+      // 🌟 Финансовый снимок (константа и совладельцы)
+      const expenseConstantPercent = finance.getExpenseConstant();
+      const expenseConstantBase = Math.round(totalCommission * expenseConstantPercent / 100);
+      const expenseConstantAmount = expenseConstantBase - commissionExpense;
+      
+      // 🌟 Расчёт долей совладельцев
+      const coOwners = finance.getCoOwners();
+      const coOwnerShares = coOwners.map(co => ({
+        id: co.id,
+        username: co.username,
+        percent: co.percent,
+        amount: Math.round(totalCommission * co.percent / 100)
+      }));
+      
+      // 🌟 Генерация уникального chatId
+      const workId = newOrder.isCustomOrder ? `custom_admin_${Date.now()}` : null;
+      const chatId = workId ? `order_${newOrder.customerId}_${workId}_${Date.now()}` : null;
+      
+      // 🌟 Временная метка создания
+      const createdAt = new Date().toLocaleString('ru-RU');
+      
       const createdOrder = ordersDb.createOrder({
         customerId: newOrder.customerId,
-        customerUsername: null,
-        workId: newOrder.isCustomOrder ? `custom_admin_${Date.now()}` : null,
+        customerUsername: newOrder.customerUsername || null, // 🌟 Используем полученный username
+        workId: workId,
         workTitle: newOrder.workTitle,
         subjectName: newOrder.subjectName,
         courseName: newOrder.courseName,
-        price: newOrder.price,
-        commission: newOrder.commission || 20,
+        // 🌟 НОВЫЕ ПОЛЯ: Финансовая модель
+        basePrice: basePrice,
+        executorPrice: executorPrice,
+        finalPrice: finalPrice,
+        discountPercent: discountPercent,
+        discountAmount: discountAmount,
+        commissionPercent: commissionPercent,
+        commissionExpense: commissionExpense,
+        // 🌟 ФИНАНСОВЫЙ СНИМОК
+        expenseConstantPercent: expenseConstantPercent,
+        expenseConstantAmount: expenseConstantAmount,
+        coOwnerShares: coOwnerShares,
+        // 📜 LEGACY ПОЛЯ (для совместимости)
+        price: basePrice,
+        commission: commissionPercent,
         description: newOrder.description || null,
         isCustomOrder: newOrder.isCustomOrder || false,
         status: status,
         managerChatId: newOrder.managerChatId || null,
-        managerChatEnv: newOrder.managerChatEnv || null
+        managerChatEnv: newOrder.managerChatEnv || null,
+        // 🌟 ДОПОЛНИТЕЛЬНЫЕ ПОЛЯ
+        chatId: chatId,
+        createdAt: createdAt
       });
+      
       ctx.session.newOrder = null;
       await ctx.answerCbQuery('✅ Заказ создан');
+      
+      // 🌟 Логирование создания заказа
+      logger.logAdminAction('order_created_manually', {
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
+        customerId: newOrder.customerId,
+        isCustomOrder: newOrder.isCustomOrder,
+        basePrice: basePrice,
+        executorPrice: executorPrice
+      }, ctx);
+      
       // Показываем карточку созданного заказа
       const cardText = formatOrderCard(createdOrder, 'admin');
       const buttons = [
