@@ -80,19 +80,40 @@ function getCustomOrderChatId(orderNumber) {
 }
 
 function register(bot) {
-  // Обработка кнопки "Отправить задание" для индивидуальных заказов
   bot.action(/^order:start:(.+)$/, async (ctx, next) => {
     const workId = ctx.match[1];
     const work = catalog.getWork(workId);
-    
-    // Пропускаем если работа не требует индивидуальной логики заказа
     if (!work || !work.isCustomOrder) {
-      return next(); // Передаём управление стандартному обработчику
+      return next();
     }
-    
     const { subjectName, courseName } = getSubjectFullName(work);
-    
     ctx.session = ctx.session || {};
+    
+    // 🌟 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: очищаем все session-флаги, которые могут перехватить входящие сообщения
+    ctx.session.adminReplyToCustomerId = null;
+    ctx.session.adminReplyOrderId = null;
+    ctx.session.adminReplyOrderNumber = null;
+    ctx.session.adminReplyOrderTitle = null;
+    ctx.session.adminReplyOrderDate = null;
+    ctx.session.adminReplyAdminId = null;
+    ctx.session.customerReplyToAdminId = null;
+    ctx.session.customerReplyToAdminOrderId = null;
+    ctx.session.customerReplyToAdminOrderNumber = null;
+    ctx.session.customerReplyToAdminOrderTitle = null;
+    ctx.session.executorReplyToCustomerId = null;
+    ctx.session.executorReplyOrderId = null;
+    ctx.session.executorReplyOrderTitle = null;
+    ctx.session.executorReplyOrderDate = null;
+    ctx.session.executorReplyOrderNumber = null;
+    ctx.session.customerReplyToExecutorId = null;
+    ctx.session.customerReplyOrderId = null;
+    ctx.session.customerReplyOrderTitle = null;
+    ctx.session.customerReplyOrderDate = null;
+    ctx.session.customerReplyOrderNumber = null;
+    ctx.session.customerReplyChatId = null;
+    ctx.session.replyToUserId = null;
+    ctx.session.replyToUsername = null;
+    
     ctx.session.customOrder = { 
       workId, 
       step: 'waiting_description', 

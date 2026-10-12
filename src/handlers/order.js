@@ -216,6 +216,32 @@ function register(bot) {
     if (work && work.isCustomOrder) {
       return;
     }
+    
+    // 🌟 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: очищаем все session-флаги, которые могут перехватить входящие сообщения
+    ctx.session.adminReplyToCustomerId = null;
+    ctx.session.adminReplyOrderId = null;
+    ctx.session.adminReplyOrderNumber = null;
+    ctx.session.adminReplyOrderTitle = null;
+    ctx.session.adminReplyOrderDate = null;
+    ctx.session.adminReplyAdminId = null;
+    ctx.session.customerReplyToAdminId = null;
+    ctx.session.customerReplyToAdminOrderId = null;
+    ctx.session.customerReplyToAdminOrderNumber = null;
+    ctx.session.customerReplyToAdminOrderTitle = null;
+    ctx.session.executorReplyToCustomerId = null;
+    ctx.session.executorReplyOrderId = null;
+    ctx.session.executorReplyOrderTitle = null;
+    ctx.session.executorReplyOrderDate = null;
+    ctx.session.executorReplyOrderNumber = null;
+    ctx.session.customerReplyToExecutorId = null;
+    ctx.session.customerReplyOrderId = null;
+    ctx.session.customerReplyOrderTitle = null;
+    ctx.session.customerReplyOrderDate = null;
+    ctx.session.customerReplyOrderNumber = null;
+    ctx.session.customerReplyChatId = null;
+    ctx.session.replyToUserId = null;
+    ctx.session.replyToUsername = null;
+    
     ctx.session.order = { workId, step: 'waiting_details', details: { text: null, files: [] } };
     // 🌟 REFACTOR: переход на HTML — экранируем prompt и ссылку в формате HTML
     let message = `📎 Отлично!\n\n${escapeHtml(work.prompt)}`;
