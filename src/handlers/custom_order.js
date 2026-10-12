@@ -401,14 +401,20 @@ async function sendOrderForEvaluation(ctx) {
         });
       }
     }
+    
+      // 🌟 Кнопка связи с менеджером
+      const managerUsername = process.env.MANAGER_USERNAME || 'SmartDealsManager';
+      const waitingKeyboard = Markup.inlineKeyboard([
+        [Markup.button.url('👨‍💼 Связаться с менеджером', `https://t.me/${managerUsername}`)]
+      ]);
 
-    await ctx.reply(
+    await ctx.editMessageText(
       `✅ <b>Ваш заказ отправлен на оценку!</b>\n\n` +
       `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
       `📚 <b>Предмет:</b> ${subjectName}\n\n` +
-      `Ожидайте, исполнители ознакомятся с заданием и назначат цену.\n` +
-      `Как только цена будет назначена, вы получите уведомление.`,
-      { parse_mode: "HTML" }
+      `🪙 Ожидайте, исполнители ознакомятся с заданием и назначат цену\n` +
+      `💬 Как только цена будет назначена, вы получите уведомление`,
+      { parse_mode: "HTML", ...waitingKeyboard }
     );
 
     ctx.session.customOrder = null;
