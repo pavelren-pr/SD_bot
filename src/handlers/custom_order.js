@@ -127,8 +127,8 @@ function register(bot) {
       `💡 <b>Подсказка:</b> После отправки текста вы сможете прикрепить файл с заданием.`;
 
     await ctx.editMessageText(
-      `📝 <b>${subjectName} - Индивидуальный заказ</b>\n\n` +
-      `🎓 <b>Курс:</b> ${courseName}\n\n` +
+      `📝 <b>${escapeHtml(subjectName)} - Индивидуальный заказ</b>\n\n` +
+      `🎓 <b>Курс:</b> ${escapeHtml(courseName)}\n\n` +
       `📝 <b>Шаг 1: Описание задания</b>\n\n` +
       `${promptText}`,
       { parse_mode: 'HTML' }
@@ -199,8 +199,8 @@ function register(bot) {
     const { subjectName, courseName } = getSubjectFullName(work);
     
     let summary = `📝 <b>Подтверждение индивидуального заказа</b>\n\n`;
-    summary += `🎓 <b>Курс:</b> ${courseName}\n`;
-    summary += `📚 <b>Предмет:</b> ${subjectName}\n\n`;
+    summary += `🎓 <b>Курс:</b> ${escapeHtml(courseName)}\n`;
+    summary += `📚 <b>Предмет:</b> ${escapeHtml(subjectName)}\n\n`;
     summary += `📝 <b>Описание задания:</b>\n<code>${escapeHtml(customOrder.description)}</code>\n\n`;
 
     if (customOrder.file) {
@@ -316,8 +316,8 @@ async function sendOrderForEvaluation(ctx) {
   let orderText = `🔔 <b>НОВЫЙ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ!</b>\n\n`;
   orderText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
   orderText += `👤 <b>Заказчик:</b> ${userLink}\n`;
-  orderText += `🎓 <b>Курс:</b> ${courseName}\n`;
-  orderText += `📚 <b>Предмет:</b> ${subjectName}\n`;
+  orderText += `🎓 <b>Курс:</b> ${escapeHtml(courseName)}\n`;
+  orderText += `📚 <b>Предмет:</b> ${escapeHtml(subjectName)}\n`;
   orderText += `📝 <b>Описание:</b> ${escapeHtml(customOrder.description)}\n`;
 
   if (customOrder.file) {
@@ -411,7 +411,7 @@ async function sendOrderForEvaluation(ctx) {
     await ctx.editMessageText(
       `✅ <b>Ваш заказ отправлен на оценку!</b>\n\n` +
       `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-      `📚 <b>Предмет:</b> ${subjectName}\n\n` +
+      `📚 <b>Предмет:</b> ${escapeHtml(subjectName)}\n\n` +
       `🪙 Ожидайте, исполнители ознакомятся с заданием и назначат цену\n` +
       `💬 Как только цена будет назначена, вы получите уведомление`,
       { parse_mode: "HTML", ...waitingKeyboard }
@@ -424,7 +424,7 @@ async function sendOrderForEvaluation(ctx) {
     const logger = require('../utils/logger');
     await logger.notifyErrorToSupport(error, ctx, bot, {
       action: 'Отправка индивидуального заказа',
-      workTitle: work ? work.title : null
+      workTitle: work ? escapeHtml(work.title) : null
     });
     await ctx.reply("❌ Произошла ошибка при отправке заказа.");
   }
@@ -461,9 +461,9 @@ bot.action(/^accept_custom_order:(\d+)$/, async (ctx) => {
   // 1. Обновляем сообщение в ГРУППОВОМ чате (убираем кнопки, чтобы не захламлять)
   let groupText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ ПРИНЯТ</b>\n\n`;
   groupText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
-  groupText += `👤 <b>Заказчик:</b> ${customerName}\n`;
-  groupText += `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n`;
-  groupText += `👷 <b>Исполнитель:</b> ${executorName}\n`;
+  groupText += `👤 <b>Заказчик:</b> ${escapeHtml(customerName)}\n`;
+  groupText += `📚 <b>Предмет:</b> ${escapeHtml(orderRecord.subjectName)}\n`;
+  groupText += `👷 <b>Исполнитель:</b> ${escapeHtml(executorName)}\n`;
   groupText += `🟡 <b>Статус:</b> ОЖИДАЕТ ОЦЕНКИ\n\n`;
   groupText += `<i>Дальнейшее согласование цены и деталей перенесено в личный чат исполнителя.</i>`;
   
@@ -476,8 +476,8 @@ bot.action(/^accept_custom_order:(\d+)$/, async (ctx) => {
   // 2. Отправляем сообщение в ЛИЧНЫЙ чат исполнителю с кнопками управления
   let privateText = `🔔 <b>ВЫ ПРИНЯЛИ ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
   privateText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
-  privateText += `👤 <b>Заказчик:</b> ${customerName}\n`;
-  privateText += `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n`;
+  privateText += `👤 <b>Заказчик:</b> ${escapeHtml(customerName)}\n`;
+  privateText += `📚 <b>Предмет:</b> ${escapeHtml(orderRecord.subjectName)}\n`;
   if (orderRecord.description) {
     privateText += `📝 <b>Описание:</b> ${escapeHtml(orderRecord.description)}\n`;
   }
@@ -545,7 +545,7 @@ bot.action(/^custom_set_price:(\d+)$/, async (ctx) => {
   
   const promptText = `💰 <b>${orderRecord.price && orderRecord.price > 0 ? 'Изменение цены' : 'Назначение цены'}</b>\n\n` +
     `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-    `📚 <b>Предмет:</b> ${orderRecord.subjectName}${orderRecord.price && orderRecord.price > 0 ? '\n💵 <b>Текущая цена:</b> ' + orderRecord.price + ' ₽' : ''}\n\n` +
+    `📚 <b>Предмет:</b> ${escapeHtml(orderRecord.subjectName)}${orderRecord.price && orderRecord.price > 0 ? '\n💵 <b>Текущая цена:</b> ' + orderRecord.price + ' ₽' : ''}\n\n` +
     `Отправьте ${orderRecord.price && orderRecord.price > 0 ? 'новую' : ''}цену заказа в рублях (только число):`;
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('↩️ Назад', `custom_back:${orderNumber}`)]
@@ -582,12 +582,12 @@ bot.action(/^custom_back:(\d+)$/, async (ctx) => {
   // Формируем сообщение управления заказом
   let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
   updatedText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
-  updatedText += `👤 <b>Заказчик:</b> ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}\n`;
-  updatedText += `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n`;
+  updatedText += `👤 <b>Заказчик:</b> ${escapeHtml(orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId)}\n`;
+  updatedText += `📚 <b>Предмет:</b> ${escapeHtml(orderRecord.subjectName)}\n`;
   if (orderRecord.price && orderRecord.price > 0) {
     updatedText += `💰 <b>Цена:</b> ${orderRecord.price} ₽\n`;
   }
-  updatedText += `👷 <b>Исполнитель:</b> ${executorName}\n`;
+  updatedText += `👷 <b>Исполнитель:</b> ${escapeHtml(executorName)}\n`;
   updatedText += `🟡 <b>Статус:</b> ${orderRecord.price && orderRecord.price > 0 ? 'СОГЛАСОВАНИЕ ЦЕНЫ' : 'ОЖИДАЕТ ОЦЕНКИ'}`;
   
   await ctx.editMessageText(updatedText, {
@@ -712,8 +712,8 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   let customerMessage =
     `💰 <b>Назначена цена за ваш заказ</b>\n\n` +
     `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-    `📚 <b>Предмет:</b> ${updatedOrder.subjectName}\n` +
-    `🎓 <b>Курс:</b> ${updatedOrder.courseName}\n` +
+    `📚 <b>Предмет:</b> ${escapeHtml(updatedOrder.subjectName)}\n` +
+    `🎓 <b>Курс:</b> ${escapeHtml(updatedOrder.courseName)}\n` +
     `📅 <b>Дата заказа:</b> ${updatedOrder.createdAt}\n` +
     `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
   if (discountPercent > 0) {
@@ -745,8 +745,8 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     if (cacheData && cacheData.managerMessageId && targetChatId) {
       let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
       updatedText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
-      updatedText += `👤 <b>Заказчик:</b> ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
-      updatedText += `📚 <b>Предмет:</b> ${updatedOrder.subjectName}\n`;
+      updatedText += `👤 <b>Заказчик:</b> ${escapeHtml(updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId)}\n`;
+      updatedText += `📚 <b>Предмет:</b> ${escapeHtml(updatedOrder.subjectName)}\n`;
       updatedText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
       if (discountPercent > 0) {
         updatedText += `🎉 <b>Скидка заказчика:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
@@ -756,7 +756,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       if (commissionExpense > 0) {
         updatedText += `📉 <b>Покрытие из фонда комиссии:</b> ${commissionExpense} ₽\n`;
       }
-      updatedText += `👷 <b>Исполнитель:</b> ${executorName}\n`;
+      updatedText += `👷 <b>Исполнитель:</b> ${escapeHtml(executorName)}\n`;
       updatedText += `🟡 <b>Статус:</b> СОГЛАСОВАНИЕ ЦЕНЫ`;
       await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
         parse_mode: 'HTML',
@@ -877,7 +877,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       await ctx.telegram.sendMessage(orderRecord.customerId,
         `💬 <b>Вам сообщение от исполнителя</b>\n\n` +
         `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-        `📚 <b>Предмет:</b> ${orderRecord.subjectName}\n\n` +
+        `📚 <b>Предмет:</b> ${escapeHtml(orderRecord.subjectName)}\n\n` +
         `${messageText}`,
         {
           parse_mode: 'HTML',
@@ -933,7 +933,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
     const caption =
       `📎 <b>Файл от исполнителя</b>\n\n` +
       `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-      `📚 <b>Предмет:</b> ${orderRecord.subjectName}`;
+      `📚 <b>Предмет:</b> ${escapeHtml(orderRecord.subjectName)}`;
 
     const replyKeyboard = Markup.inlineKeyboard([
       [Markup.button.callback('✏️ Ответить исполнителю', `custom_reply_executor:${orderNumber}`)]
@@ -1280,7 +1280,7 @@ bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
       let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
       updatedText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
       updatedText += `👤 <b>Заказчик:</b> ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
-      updatedText += `📚 <b>Предмет:</b> ${updatedOrder.subjectName}\n`;
+      updatedText += `📚 <b>Предмет:</b> ${escapeHtml(updatedOrder.subjectName)}\n`;
       updatedText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
       if (discountPercent > 0) {
         updatedText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;

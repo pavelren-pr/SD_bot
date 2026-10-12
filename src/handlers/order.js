@@ -700,7 +700,7 @@ function register(bot) {
         try {
           await ctx.telegram.sendMessage(
             adminId,
-            `💬 <b>Ответ заказчика по заказу №${orderNumber}</b>\n\n👤 <b>Заказчик:</b> ${customerUsername}\n📚 <b>Заказ:</b> ${orderTitle}\n\n${messageText}`,
+            `💬 <b>Ответ заказчика по заказу №${orderNumber}</b>\n\n👤 <b>Заказчик:</b> ${escapeHtml(customerUsername)}\n📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\n${escapeHtml(messageText)}`,
             { parse_mode: 'HTML', reply_markup: replyKeyboard.reply_markup }
           );
           if (ctx.message.photo) {
@@ -736,7 +736,7 @@ function register(bot) {
       
       await ctx.telegram.sendMessage(
         targetUserId,
-        `💬 <b>Вам сообщение от исполнителя</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Заказ:</b> ${orderTitle}\n📅 <b>Дата заказа:</b> ${orderDate}\n\n${messageText}`,
+        `💬 <b>Вам сообщение от исполнителя</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n📅 <b>Дата заказа:</b> ${orderDate}\n\n${escapeHtml(messageText)}`,
         { parse_mode: 'HTML', ...keyboard }
       );
       if (ctx.message.photo) {
@@ -810,7 +810,7 @@ function register(bot) {
 
   await ctx.telegram.sendMessage(
     targetUserId,
-    `💬 <b>Вам сообщение от заказчика</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Заказ:</b> ${orderTitle}\n📅 <b>Дата заказа:</b> ${orderDate}\n\n${messageText}`,
+    `💬 <b>Вам сообщение от заказчика</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n📅 <b>Дата заказа:</b> ${orderDate}\n\n${escapeHtml(messageText)}`,
     { parse_mode: 'HTML', ...keyboard }
   );
 
@@ -846,7 +846,7 @@ function register(bot) {
       const targetUsername = ctx.session.replyToUsername || 'неизвестно';
       const messageText = ctx.message.text || '[Фото/Файл]';
       
-      await ctx.telegram.sendMessage(targetUserId, `💬 <b>Сообщение от менеджера:</b>\n\n${messageText}`, { parse_mode: 'HTML' });
+      await ctx.telegram.sendMessage(targetUserId, `💬 <b>Сообщение от менеджера:</b>\n\n${escapeHtml(messageText)}`, { parse_mode: 'HTML' });
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
       
@@ -1367,13 +1367,13 @@ try {
 
     await ctx.telegram.sendMessage(
       executorUserId, 
-      `✅ <b>Вы приняли заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Работа:</b> ${escapeHtml(work.title)}\n👤 <b>Заказчик ID:</b> ${customerUserId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`, 
+      `✅ <b>Вы приняли заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Работа:</b> ${escapeHtml(work.title)}\n👤 <b>Заказчик ID:</b> ${customerUserId}`, 
       { parse_mode: 'HTML', reply_markup: executorFullKeyboard.reply_markup }
     );
 
     await ctx.telegram.sendMessage(
       customerUserId, 
-      `✅ <b>Ваш заказ в работе!</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Работа:</b> ${work.title}\n\nИсполнитель назначен. Теперь вы можете обсудить детали выполнения заказа, используя кнопки ниже:`, 
+      `✅ <b>Ваш заказ в работе!</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Работа:</b> ${escapeHtml(work.title)}\n\nИсполнитель назначен. Теперь вы можете обсудить детали выполнения заказа, используя кнопки ниже:`, 
       { parse_mode: 'HTML', reply_markup: getChatKeyboard(chatId, true) }
     );
     
@@ -1381,7 +1381,7 @@ try {
     logger.logOrderEvent('accepted', {
       orderNumber: orderNumber,
       orderId: activeOrder ? activeOrder.id : null,
-      workTitle: work.title,
+      workTitle: escapeHtml(work.title),
       status: 'active',
       executorId: executorUserId,
       customerId: customerUserId
@@ -1458,14 +1458,14 @@ try {
       }
     }
 
-    await ctx.telegram.sendMessage(chatData.customerUserId, `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${chatData.workTitle}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'HTML' });
-    await ctx.editMessageText(`✅ <b>Заказ выполнен!</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML' });
+    await ctx.telegram.sendMessage(chatData.customerUserId, `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(`✅ <b>Заказ выполнен!</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML' });
     
     // 🌟 Логируем завершение заказа
     logger.logOrderEvent('completed', {
       orderNumber: chatData.orderNumber,
       orderId: chatData.orderId,
-      workTitle: chatData.workTitle,
+      workTitle: escapeHtml(chatData.workTitle),
       status: 'completed',
       executorId: chatData.executorUserId,
       customerId: chatData.customerUserId
@@ -1494,7 +1494,7 @@ try {
     // Отправляем заказчику текст + кнопки для ответа
     await ctx.telegram.sendMessage(
       customerUserId,
-      `💬 <b>Вам сообщение от исполнителя</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${workTitle}\n\n${messageText}`,
+      `💬 <b>Вам сообщение от исполнителя</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${escapeHtml(workTitle)}\n\n${escapeHtml(messageText)}`,
       { parse_mode: 'HTML', reply_markup: getChatKeyboard(chatId, true) }
     );
 
@@ -1524,7 +1524,7 @@ try {
     // Отправляем исполнителю текст + кнопки для ответа
     await ctx.telegram.sendMessage(
       executorUserId,
-      `💬 <b>Вам сообщение от заказчика</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${workTitle}\n\n${messageText}`,
+      `💬 <b>Вам сообщение от заказчика</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${escapeHtml(workTitle)}\n\n${escapeHtml(messageText)}`,
       { parse_mode: 'HTML', reply_markup: getChatKeyboard(chatId, false) }
     );
 
@@ -1555,7 +1555,7 @@ try {
       return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
     }
     chatData.status = 'waiting_customer_message';
-    await ctx.editMessageText(`✏️ <b>Напишите сообщение исполнителю:</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`✏️ <b>Напишите сообщение исполнителю:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1569,7 +1569,7 @@ try {
       return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
     }
     chatData.status = 'waiting_customer_file';
-    await ctx.editMessageText(`📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1583,8 +1583,8 @@ try {
       return ctx.answerCbQuery(); // закрываем "часики" на кнопке без ошибки
     }
     chatData.status = 'closed';
-    await ctx.telegram.sendMessage(chatData.executorUserId, `❌ <b>Заказчик завершил чат</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML' });
-    await ctx.editMessageText(`✅ <b>Чат завершён</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML' });
+    await ctx.telegram.sendMessage(chatData.executorUserId, `❌ <b>Заказчик завершил чат</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(`✅ <b>Чат завершён</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML' });
     await ctx.answerCbQuery('Чат завершён');
   });
 
@@ -1597,7 +1597,7 @@ try {
       return ctx.answerCbQuery();
     }
     chatData.status = 'waiting_executor_message';
-    await ctx.editMessageText(`✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1620,7 +1620,7 @@ try {
   
   chatData.status = 'waiting_executor_message';
   await ctx.editMessageText(
-    `✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`,
+    `✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`,
     { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
   );
   await ctx.answerCbQuery();
@@ -1643,7 +1643,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
   
   chatData.status = 'waiting_executor_file';
   await ctx.editMessageText(
-    `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`,
+    `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`,
     { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup }
   );
   await ctx.answerCbQuery();
@@ -1658,7 +1658,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       return ctx.answerCbQuery();
     }
     chatData.status = 'waiting_executor_file';
-    await ctx.editMessageText(`📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
+    await ctx.editMessageText(`📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `cancel_chat_mode:${chatId}`)]]).reply_markup });
     await ctx.answerCbQuery();
   });
 
@@ -1671,8 +1671,8 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       return ctx.answerCbQuery();
     }
     chatData.status = 'closed';
-    await ctx.telegram.sendMessage(chatData.customerUserId, `❌ <b>Исполнитель завершил чат по этому заказу.</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML' });
-    await ctx.editMessageText(`✅ <b>Чат завершён</b>\n\n📚 <b>Заказ:</b> ${chatData.workTitle}`, { parse_mode: 'HTML' });
+    await ctx.telegram.sendMessage(chatData.customerUserId, `❌ <b>Исполнитель завершил чат по этому заказу.</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || "—"}\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML' });
+    await ctx.editMessageText(`✅ <b>Чат завершён</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}`, { parse_mode: 'HTML' });
     await ctx.answerCbQuery('Чат завершён');
   });
 
@@ -1695,8 +1695,8 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     // 🌟 Определяем, кто нажал кнопку — заказчик или исполнитель
     const isCustomer = chatData.customerUserId === ctx.from.id;
     const returnText = isCustomer
-        ? `💬 <b>Чат с исполнителем</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || '—'}\n📚 <b>Заказ:</b> ${chatData.workTitle}\n\nВыберите действие:`
-        : `💬 <b>Чат с заказчиком</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || '—'}\n📚 <b>Заказ:</b> ${chatData.workTitle}\n\nВыберите действие:`;
+        ? `💬 <b>Чат с исполнителем</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || '—'}\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}\n\nВыберите действие:`
+        : `💬 <b>Чат с заказчиком</b>\n\n🆔 <b>Номер заказа:</b> №${chatData.orderNumber || '—'}\n📚 <b>Заказ:</b> ${escapeHtml(chatData.workTitle)}\n\nВыберите действие:`;
 
     await ctx.editMessageText(returnText, { 
         parse_mode: 'HTML', 
@@ -1721,7 +1721,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
-    `✏️ <b>Напишите ответ исполнителю:</b>\n\n📚 <b>Заказ:</b> ${ctx.session.customerReplyOrderTitle}`,
+    `✏️ <b>Напишите ответ исполнителю:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(ctx.session.customerReplyOrderTitle)}`,
     { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
@@ -1742,7 +1742,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
-    `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${ctx.session.customerReplyOrderTitle}`,
+    `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(ctx.session.customerReplyOrderTitle)}`,
     { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
@@ -1763,7 +1763,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
-    `✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${ctx.session.executorReplyOrderTitle}`,
+    `✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(ctx.session.executorReplyOrderTitle)}`,
     { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
@@ -1784,7 +1784,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
     ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
     ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
     await ctx.editMessageText(
-    `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${ctx.session.executorReplyOrderTitle}`,
+    `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(ctx.session.executorReplyOrderTitle)}`,
     { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
     );
     await ctx.answerCbQuery();
@@ -1809,7 +1809,7 @@ bot.action(/^erf:(.+)$/, async (ctx) => {
       ctx.session.cancelReplyOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
       ctx.session.cancelReplyOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
       await ctx.editMessageText(
-        `✏️ <b>Режим ответа администратору</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Заказ:</b> ${orderTitle}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено администратору.`,
+        `✏️ <b>Режим ответа администратору</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\nНапишите сообщение или прикрепите файл, которое будет отправлено администратору.`,
         { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'cancel_session_reply')]]).reply_markup }
       );
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
@@ -1949,8 +1949,8 @@ async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignmen
   const executorUsername = executorUser.username ? `@${executorUser.username}` : executorUser.first_name || 'Исполнитель';
 
   const customerText = isReassignment
-    ? `👷 <b>По вашему заказу изменён исполнитель</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Работа:</b> ${order.workTitle}\n\nТеперь вы можете обсудить детали выполнения заказа:`
-    : `✅ <b>Ваш заказ в работе!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Работа:</b> ${order.workTitle}\n\nТеперь вы можете обсудить детали выполнения заказа:`;
+    ? `👷 <b>По вашему заказу изменён исполнитель</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n\nТеперь вы можете обсудить детали выполнения заказа:`
+    : `✅ <b>Ваш заказ в работе!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n\nТеперь вы можете обсудить детали выполнения заказа:`;
 
   await bot.telegram.sendMessage(
     order.customerId,
