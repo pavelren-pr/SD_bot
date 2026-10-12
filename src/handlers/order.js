@@ -1054,7 +1054,7 @@ function register(bot) {
       const waitingKeyboard = Markup.inlineKeyboard([
         [Markup.button.url('👨‍💼 Связаться с менеджером', `https://t.me/${managerUsername}`)]
       ]);
-      await ctx.editMessageText(
+      await ctx.sendMessage(
         `✅ <b>Заказ оформлен и ожидает назначения исполнителя</b>.\n\n` +
         `🆔 <b>Номер заказа:</b> №${newOrder.orderNumber}\n\n` +
         `📚 <b>Работа:</b> ${work.title}\n` +
