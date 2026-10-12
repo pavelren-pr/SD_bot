@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const loyalty = require('../data/loyalty');
 const ordersDb = require('../data/orders');
 const { findChatByOrderId, buildGroupOrderText } = require('./order');
+const { escapeHtml } = require('../utils/html');
 
 // 🌟 Статусы для категорий (включая custom orders)
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
@@ -10,12 +11,6 @@ const COMPLETED_STATUSES = ['completed'];
 const EXECUTOR_ACTIVE_STATUSES = ['active', 'paid', 'waiting_price', 'price_negotiating'];
 
 const ORDERS_PER_PAGE = 5;
-
-// 🌟 Безопасный вывод username (экранирование спецсимволов Markdown)
-function safeUsername(username) {
-  if (!username) return null;
-  return '@' + String(username);
-}
 
 function getMainMenuKeyboard() {
   return Markup.keyboard([
@@ -69,7 +64,7 @@ bot.command('start', async (ctx) => {
   // Если специальность не выбрана — показываем выбор
   if (!userSpecialty) {
     await ctx.reply(
-      `👋 <b>Добро пожаловать, ${userName}!</b>\n\n` +
+      `👋 <b>Добро пожаловать, ${escapeHtml(userName)}!</b>\n\n` +
       `Я — бот 🤖 для помощи с учебными работами.`, //
       { parse_mode: 'HTML' }
     );
@@ -78,7 +73,7 @@ bot.command('start', async (ctx) => {
   }
   
   await ctx.reply(
-    `👋 <b>Добро пожаловать, ${userName}!</b>\n\n` +
+    `👋 <b>Добро пожаловать, ${escapeHtml(userName)}!</b>\n\n` +
     `Я — бот 🤖 для помощи с учебными работами.\n` +
     `Выберите раздел в меню 👇`,
     { 
@@ -139,10 +134,10 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     );
     return;
   }
-  const courseButtons = courses.map(c => [{ text: c.name, callback: `catalog:subject:${c.id}` }]);
+  const courseButtons = courses.map(c => [{ text: escapeHtml(c.name), callback: `catalog:subject:${c.id}` }]);
   // 🌟 НОВОЕ: Добавляем кнопку "Общие работы", если они есть
   if (generalWorks && generalWorks.length > 0) {
-    courseButtons.push([{ text: `📋 Общие работы`, callback: `catalog:general_works` }]);
+    courseButtons.push([{ text: escapeHtml(`📋 Общие работы`), callback: `catalog:general_works` }]);
   }
   await ctx.reply(
     `📚 <b>Каталог работ</b>\n\nВыберите курс, чтобы начать:`,
@@ -1113,23 +1108,23 @@ async function showProfile(ctx) {
   const userName = ctx.from.first_name || 'Пользователь';
   
   let profileText = `👤 <b>Профиль пользователя</b>\n\n`;
-  profileText += `<b>Имя:</b> ${userName}\n`;
+  profileText += `<b>Имя:</b> ${escapeHtml(userName)}\n`;
   profileText += `<b>ID:</b> <code>${ctx.from.id}</code>\n\n`;
   
   const specialty = loyalty.getSpecialtyById(loyaltyInfo.specialty);
   if (specialty) {
-    profileText += `🎓 <b>Специальность:</b> ${specialty.name}\n\n`;
+    profileText += `🎓 <b>Специальность:</b> ${escapeHtml(specialty.name)}\n\n`;
   } else {
     profileText += `🎓 <b>Специальность:</b> <i>не выбрана</i>\n\n`;
   }
   
   profileText += `💵 <b>Программа лояльности</b>\n`;
-  profileText += `${loyaltyInfo.rank.emoji} <b>${loyaltyInfo.rank.name}</b>\n`;
+  profileText += `${loyaltyInfo.rank.emoji} <b>${escapeHtml(loyaltyInfo.rank.name)}</b>\n`;
   profileText += `💰 <b>Сумма заказов:</b> ${loyaltyInfo.totalSpent} ₽\n`;
   profileText += `🎉 <b>Текущая скидка:</b> ${loyaltyInfo.discountPercent}%\n`;
   
   if (loyaltyInfo.progressToNext) {
-    profileText += `➡️ <b>До следующего ранга (${loyaltyInfo.progressToNext.nextName}):</b> ${loyaltyInfo.progressToNext.need} ₽\n`;
+    profileText += `➡️ <b>До следующего ранга (${escapeHtml(loyaltyInfo.progressToNext.nextName)}):</b> ${loyaltyInfo.progressToNext.need} ₽\n`;
   } else if (currentRankIsMaxPublic(loyaltyInfo.rank)) {
     profileText += `👑 <b>Вы достигли максимального ранга!</b>\n`;
   }

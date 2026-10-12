@@ -1,4 +1,5 @@
 const { Markup } = require('telegraf');
+const { escapeHtml } = require('../utils/html');
 
 const loyaltyDocLink = 'https://docs.google.com/document/d/1tcjS6BL9TVWVeH-cG7jj0lyYwJtyPViWj60lzhd3x-A/edit?usp=sharing';
 const trackingManagerLink = 'https://t.me/SmartDealsManager';
@@ -91,7 +92,7 @@ function register(bot) {
 
   bot.action('treasure:offer', async (ctx) => {
     const user = ctx.from;
-    const text = `Мы ценим твою инициативу, ✨${user.first_name}✨\n\n` +
+    const text = `Мы ценим твою инициативу, ✨${escapeHtml(user.first_name)}✨\n\n` +
                  `Для предложения работы или услуги напиши нашему <a href="${trackingManagerLink}">менеджеру</a>.\n\n` +
                  `Будем очень рады и достойно <a href="${loyaltyDocLink}">вознаградим Вас (см. п. 4)</a> за пополнение общей сокровищницы, а так же выполнение работ через наш сервис.`;
     

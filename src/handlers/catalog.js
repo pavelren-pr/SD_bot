@@ -1,6 +1,7 @@
 const { createInlineKeyboard } = require('../utils/keyboard');
 const catalog = require('../data/catalog');
 const loyalty = require('../data/loyalty');
+const { escapeHtml } = require('../utils/html');
 
 function register(bot) {
 
@@ -13,11 +14,11 @@ function register(bot) {
     const courses = catalog.getCourses(userSpecialty);
     const generalWorks = catalog.getWorksBySpecialty(userSpecialty);
     
-    const buttons = courses.map(c => [{ text: c.name, callback: `catalog:subject:${c.id}` }]);
+    const buttons = courses.map(c => [{ text: escapeHtml(c.name), callback: `catalog:subject:${c.id}` }]);
     
     // 🌟 Добавляем пункт "Общие работы" если они есть
     if (generalWorks.length > 0) {
-      buttons.push([{ text: `📋 Общие работы`, callback: `catalog:general_works` }]);
+      buttons.push([{ text: escapeHtml(`📋 Общие работы`), callback: `catalog:general_works` }]);
     }
     
     if (buttons.length === 0) {
@@ -41,7 +42,7 @@ function register(bot) {
     let header = `📋 <b>Общие работы</b>\n`;
     header += `📝 <b>Выберите работу:</b>`;
     
-    const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
+    const buttons = works.map(w => [{ text: escapeHtml(w.title), callback: `catalog:details:${w.id}` }]);
     ctx.editMessageText(
       header,
       {
@@ -65,11 +66,11 @@ function register(bot) {
     const subjects = catalog.getSubjectsByCourse(courseId);
     const generalWorks = catalog.getWorksByCourse(courseId);
     
-    const buttons = subjects.map(s => [{ text: s.name, callback: `catalog:work:${s.id}` }]);
+    const buttons = subjects.map(s => [{ text: escapeHtml(s.name), callback: `catalog:work:${s.id}` }]);
     
     // 🌟 Добавляем пункт "Общие работы" если они есть
     if (generalWorks.length > 0) {
-      buttons.push([{ text: `📋 Общие работы`, callback: `catalog:course_general:${courseId}` }]);
+      buttons.push([{ text: escapeHtml(`📋 Общие работы`), callback: `catalog:course_general:${courseId}` }]);
     }
     
     if (buttons.length === 0) {
@@ -77,7 +78,7 @@ function register(bot) {
     }
     
     ctx.editMessageText(
-      `📚 Курс: <b>${course.name}</b>\nВыберите предмет:`,
+      `📚 Курс: <b>${escapeHtml(course.name)}</b>\nВыберите предмет:`,
       {
         parse_mode: 'HTML',
         ...createInlineKeyboard(buttons, 'catalog:courses')
@@ -109,11 +110,11 @@ function register(bot) {
     }
     
     // Заголовок с информацией о курсе и предмете
-    let header = `🎯 <b>Выбран: ${course.name}</b>\n`;
-    header += `📖 <b>Предмет:</b> ${subject.name}\n\n`;
+    let header = `🎯 <b>Выбран: ${escapeHtml(course.name)}</b>\n`;
+    header += `📖 <b>Предмет:</b> ${escapeHtml(subject.name)}\n\n`;
     header += `📝 <b>Выберите работу:</b>`;
     
-    const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
+    const buttons = works.map(w => [{ text: escapeHtml(w.title), callback: `catalog:details:${w.id}` }]);
     ctx.editMessageText(
       header, 
       {
@@ -143,7 +144,7 @@ function register(bot) {
     header += `📚 Курс: <b>${course.name}</b>\n\n`;
     header += `📝 <b>Выберите работу:</b>`;
     
-    const buttons = works.map(w => [{ text: w.title, callback: `catalog:details:${w.id}` }]);
+    const buttons = works.map(w => [{ text: escapeHtml(w.title), callback: `catalog:details:${w.id}` }]);
     ctx.editMessageText(
       header,
       {
@@ -180,9 +181,9 @@ function register(bot) {
     
     const pricing = require('../data/loyalty').calculatePrice(work.price, ctx.from.id);
     
-    let text = `🎯 <b>${work.title}</b>\n\n`;
+    let text = `🎯 <b>${escapeHtml(work.title)}</b>\n\n`;
     if (work.description && work.description.trim() !== '') {
-      text += `${work.description}\n\n`;
+      text += `${escapeHtml(work.description)}\n\n`;
     }
     if (work.exampleUrl && work.exampleUrl.trim() !== '') {
       text += `🔍 <b>Пример работы и методички</b> <a href="${work.exampleUrl}">доступны по ссылке</a>\n\n`;
@@ -192,7 +193,7 @@ function register(bot) {
       text += `🎉 <b>Ваша скидка:</b> ${pricing.discountPercent}%\n`;
     }
     text += `✅ <b>Итого к оплате:</b> ${pricing.finalPrice} ₽\n\n`;
-    text += `📌 <b>Что нужно для заказа:</b>\n${work.prompt}`;
+    text += `📌 <b>Что нужно для заказа:</b>\n${escapeHtml(work.prompt)}`;
     
     // 🌟 Кнопка "Назад" зависит от типа работы
     let backCallback;

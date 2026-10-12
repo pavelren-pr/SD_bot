@@ -4,6 +4,7 @@ const { formatOrderCard } = require('./menu');
 const { Markup } = require('telegraf');
 const logger = require('../utils/logger');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
+const { escapeHtml } = require('../utils/html');
 
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
 const ACTIVE_STATUSES = ['active', 'paid'];
@@ -50,7 +51,7 @@ async function showDepartmentOrders(ctx, chatEnv, deptIdx, filter, page) {
   const currentPage = Math.min(page, totalPages - 1);
   const displayOrders = filtered.slice(currentPage * ORDERS_PER_PAGE, (currentPage + 1) * ORDERS_PER_PAGE).reverse();
 
-  let text = `🏢 <b>Отдел:</b> ${deptName}\n`;
+  let text = `🏢 <b>Отдел:</b> ${escapeHtml(deptName)}\n`;
   text += `${title}\n\n`;
   text += `Страница ${currentPage + 1} из ${totalPages}\n`;
   text += `Всего заказов: ${filtered.length}`;
@@ -578,11 +579,8 @@ function register(bot) {
           orderNumber: orderNumber
         });
         await ctx.reply(
-          `❌ <b>Ошибка назначения:</b>\n\n${err.message}`,
-          {
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `dept:view:${orderId}`)]])
-          }
+          `❌ <b>Ошибка назначения:</b>\n\n${escapeHtml(err.message)}`,
+          { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `dept:view:${orderId}`)]]) }
         );
       }
 
@@ -603,7 +601,7 @@ function register(bot) {
       try {
         await ctx.telegram.sendMessage(
           order.customerId,
-          `📬 <b>Сообщение от руководителя отдела по заказу №${order.orderNumber}</b>\n\n${text}`,
+          `📬 <b>Сообщение от руководителя отдела по заказу №${order.orderNumber}</b>\n\n${escapeHtml(text)}`,
           { parse_mode: 'HTML' }
         );
         await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}`);

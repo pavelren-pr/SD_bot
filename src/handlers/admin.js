@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 const storage = require('../utils/storage');
 const backup = require('../utils/backup');
 const finance = require('../data/finance');
+const { escapeHtml } = require('../utils/html');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 
 // 🌟 Получение доступных переменных окружения из .env
@@ -41,28 +42,18 @@ function formatEnvVarsList(vars, type) {
     : `💳 <b>Доступные переменные оплаты:</b>\n`;
   vars.forEach(v => {
     if (type === 'chat') {
-      text += `• <code>${v.name}</code> — ID: ${v.value}\n`;
+      text += `• <code>${escapeHtml(v.name)}</code> — ID: ${escapeHtml(v.value)}\n`;
     } else {
-      text += `• <code>${v.name}</code>\n`;
+      text += `• <code>${escapeHtml(v.name)}</code>\n`;
     }
   });
   return text;
 }
 
-// 🌟 Экранирование спецсимволов Markdown
-function escapeHtml(text) {
-  if (!text) return '';
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-// 🌟 Безопасный вывод username (экранирование спецсимволов Markdown)
 function safeUsername(username) {
   if (!username || username === 'N/A') return 'не указан';
-  return '@' + String(username);
-}
+  return '@' + escapeHtml(String(username));
+} 
 
 // 🌟 Парсинг чатов отделов из строки "Название=ПЕРЕМЕННАЯ, Название2=ПЕРЕМЕННАЯ2"
 function parseManagedChats(text) {
@@ -859,7 +850,7 @@ function register(bot) {
       await ctx.reply(
         `✅ <b>Совладелец добавлен!</b>\n\n` +
         `👤 <b>ID:</b> \`${coOwnerId}\`\n` +
-        `📛 <b>Username:</b> @${coOwnerUsername}\n` +
+        `📛 <b>Username:</b> @${escapeHtml(coOwnerUsername)}\n` +
         `📊 <b>Процент:</b> ${percent}%`,
         {
           parse_mode: 'HTML',
@@ -924,7 +915,7 @@ function register(bot) {
       const name = coOwner.username ? `@${coOwner.username}` : coOwnerId;
       await ctx.reply(
         `✅ <b>Процент совладельца изменён!</b>\n\n` +
-        `👤 <b>Совладелец:</b> ${name}\n` +
+        `👤 <b>Совладелец:</b> ${escapeHtml(name)}\n` +
         `📊 <b>Было:</b> ${oldPercent}%\n` +
         `📊 <b>Стало:</b> ${newPercent}%`,
         {
@@ -1064,7 +1055,7 @@ function register(bot) {
       const specialtyId = state.split(':')[1];
       catalog.updateSpecialty(specialtyId, { name: text });
       await ctx.reply(
-        `✅ <b>Название специальности изменено на:</b> <b>${text}</b>`,
+        `✅ <b>Название специальности изменено на:</b> <b>${escapeHtml(text)}</b>`,
         { parse_mode: 'HTML', ...getCatalogSpecialtiesMenu() }
       );
       ctx.session.adminState = null;
@@ -1081,7 +1072,7 @@ function register(bot) {
       
       const specialty = catalog.getSpecialtyById(specialtyId);
       await ctx.reply(
-        `✅ <b>Курс добавлен!</b>\n\n<b>Название:</b> ${text}\n<b>Специальность:</b> ${specialty ? specialty.name : specialtyId}\n<b>ID:</b> \`${newId}\``,
+        `✅ <b>Курс добавлен!</b>\n\n<b>Название:</b> ${escapeHtml(text)}\n<b>Специальность:</b> ${specialty ? escapeHtml(specialty.name) : escapeHtml(specialtyId)}\n<b>ID:</b> \`${newId}\``,
         { parse_mode: 'HTML', ...getSpecialtyCourses(specialtyId) }
       );
       ctx.session.tempCourseSpecialty = null;
@@ -1099,7 +1090,7 @@ function register(bot) {
         specialty: course ? course.specialty : 'navigation'
       });
       catalog.saveData({ ...catalog.getData(), subjects });
-      await ctx.reply(`✅ <b>Предмет добавлен!</b>\n\n<b>Название:</b> ${text}`, { parse_mode: 'HTML', ...getCourseSubjects(courseId) });
+      await ctx.reply(`✅ <b>Предмет добавлен!</b>\n\n<b>Название:</b> ${escapeHtml(text)}`, { parse_mode: 'HTML', ...getCourseSubjects(courseId) });
       ctx.session.adminState = null; return;
     }
     if (state.startsWith('edit_course_name:')) {
@@ -1111,7 +1102,7 @@ function register(bot) {
         data.courses[idx].name = text;
         catalog.saveData(data);
         const specialtyId = catalog.getCourse(courseId) ? catalog.getCourse(courseId).specialty : 'navigation';
-        await ctx.reply(`✅ <b>Название курса изменено!</b>\n\n📝 <b>Было:</b> ${oldName}\n📝 <b>Стало:</b> ${text}`, { parse_mode: 'HTML', ...getSpecialtyCourses(specialtyId) });
+        await ctx.reply(`✅ <b>Название курса изменено!</b>\n\n📝 <b>Было:</b> ${escapeHtml(oldName)}\n📝 <b>Стало:</b> ${escapeHtml(text)}`, { parse_mode: 'HTML', ...getSpecialtyCourses(specialtyId) });
       }
       ctx.session.adminState = null; return;
     }
@@ -1124,7 +1115,7 @@ function register(bot) {
         const courseId = data.subjects[idx].courseId;
         data.subjects[idx].name = text;
         catalog.saveData(data);
-        await ctx.reply(`✅ <b>Название предмета изменено!</b>\n\n📝 <b>Было:</b> ${oldName}\n📝 <b>Стало:</b> ${text}`, { parse_mode: 'HTML', ...getCourseSubjects(courseId) });
+        await ctx.reply(`✅ <b>Название предмета изменено!</b>\n\n📝 <b>Было:</b> ${escapeHtml(oldName)}\n📝 <b>Стало:</b> ${escapeHtml(text)}`, { parse_mode: 'HTML', ...getCourseSubjects(courseId) });
       }
       ctx.session.adminState = null; return;
     }
@@ -4269,7 +4260,6 @@ const backKeyboard = Markup.inlineKeyboard([
       const buttons = [];
       displayCustomers.forEach(c => {
         const usernameDisplay = c.username !== 'N/A' ? '@' + c.username : 'без username';
-        // В callback-кнопках Markdown не парсится, поэтому экранирование не нужно
         buttons.push([Markup.button.callback(`${c.id} | ${usernameDisplay} | ${c.totalSpent}₽`, `admin:customer_view:${c.id}`)]);
       });
       
@@ -4302,8 +4292,7 @@ const backKeyboard = Markup.inlineKeyboard([
       
       const buttons = [];
       displayCustomers.forEach(c => {
-        const usernameDisplay = c.username !== 'N/A' ? '@' + c.username : 'без username';
-        // В callback-кнопках Markdown не парсится, поэтому экранирование не нужно
+        const usernameDisplay = c.username !== 'N/A' ? '@' + escapeHtml(c.username) : 'без username';
         buttons.push([Markup.button.callback(`${c.id} | ${usernameDisplay} | ${c.totalSpent}₽`, `admin:customer_view:${c.id}`)]);
       });
       
