@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const storage = require('../utils/storage');
 const finance = require('../data/finance');
 const { Markup } = require('telegraf');
+const { sendTempNotification } = require('../utils/notify');
 
 const mediaBuffer = {};
 const activeChats = new Map();
@@ -679,7 +680,7 @@ function register(bot) {
         );
       }
 
-      await ctx.reply(`✅ Сообщение отправлено заказчику (ID: ${targetUserId})`);
+      await sendTempNotification(ctx, `✅ Сообщение отправлено заказчику (ID: ${targetUserId})`);
 
       ctx.session.adminReplyToCustomerId = null;
       ctx.session.adminReplyOrderId = null;
@@ -714,9 +715,9 @@ function register(bot) {
           } else if (ctx.message.document) {
             await ctx.telegram.sendDocument(adminId, ctx.message.document.file_id);
           }
-          await ctx.reply(`✅ Ваш ответ отправлен администратору`);
+          await sendTempNotification(ctx, `✅ Ваш ответ отправлен администратору`);
         } catch (err) {
-          await ctx.reply(`❌ Не удалось отправить сообщение администратору: ${err.message}`);
+          await sendTempNotification(ctx, `❌ Не удалось отправить сообщение администратору: ${err.message}`);
         }
         // Очищаем session
         ctx.session.customerReplyToAdminId = null;
@@ -750,7 +751,7 @@ function register(bot) {
       } else if (ctx.message.document) {
         await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
       }
-      await ctx.reply(`✅ Сообщение отправлено заказчику`);
+      await sendTempNotification(ctx, `✅ Сообщение отправлено заказчику`);
       
       // Очищаем session
       ctx.session.executorReplyToCustomerId = null;
@@ -834,7 +835,7 @@ function register(bot) {
     await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
   }
 
-  await ctx.reply(`✅ Сообщение отправлено исполнителю`);
+  await sendTempNotification(ctx, `✅ Сообщение отправлено исполнителю`);
 
   // Очищаем session
   ctx.session.customerReplyToExecutorId = null;
@@ -864,7 +865,7 @@ function register(bot) {
       if (ctx.message.photo) await ctx.telegram.sendPhoto(targetUserId, ctx.message.photo[ctx.message.photo.length - 1].file_id);
       else if (ctx.message.document) await ctx.telegram.sendDocument(targetUserId, ctx.message.document.file_id);
       
-      await ctx.reply(`✅ Ответ успешно отправлен пользователю @${targetUsername} (ID: ${targetUserId})`);
+      await sendTempNotification(ctx, `✅ Ответ успешно отправлен пользователю @${escapeHtml(targetUsername)} (ID: ${targetUserId})`);
       ctx.session.replyToUserId = null;
       ctx.session.replyToUsername = null;
       return;
@@ -899,7 +900,7 @@ function register(bot) {
       order.details.text = ctx.message.text;
       // 🌟 Если нужен файл и его ещё нет — ждём файл
       if (needsFile && order.details.files.length === 0) {
-        await ctx.reply('✅ Текст принят! Теперь прикрепите файл(ы) с заданием 📎');
+        await sendMessage(ctx, '✅ Текст принят! Теперь прикрепите файл(ы) с заданием 📎');
         return;
       }
       await showConfirmation(ctx);
