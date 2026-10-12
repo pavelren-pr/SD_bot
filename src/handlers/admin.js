@@ -2093,13 +2093,12 @@ function register(bot) {
       
       ctx.session.newOrder = { 
         customerId: customerId,
-        customerUsername: customerUsername  // 🌟 Сохраняем username
+        customerUsername: customerUsername
       };
       
-      // 🌟 Показываем информацию о заказчике
       let customerInfo = `👤 <b>Заказчик найден:</b>\n`;
       customerInfo += `🆔 <b>ID:</b> <code>${customerId}</code>\n`;
-      customerInfo += `📛 <b>Username:</b> ${customerUsername ? '@' + escapeHtml(customerUsername) : '<i>не указан в базе</i>'}\n\n`;
+      customerInfo += `📛 <b>Username:</b> ${customerUsername ? safeUsername(customerUsername) : '<i>не указан в базе</i>'}\n\n`;
       customerInfo += `📋 <b>Шаг 2: Выберите тип заказа:</b>`;
       
       const typeKeyboard = Markup.inlineKeyboard([
@@ -2127,61 +2126,225 @@ function register(bot) {
       await ctx.reply('📝 <b>Шаг 6: Введите описание задания (или "нет", если не требуется):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
       return;
     }
-    if (state === 'add_order:price') {
-      if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
-      ctx.session.newOrder.price = parseInt(text);
-      ctx.session.adminState = 'add_order:commission';
-       await ctx.reply('📊 <b>Шаг 8: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
-    }
     if (state === 'add_order:description') {
-      // 🌟 Если пользователь ввёл "нет", сохраняем null
       ctx.session.newOrder.description = text.toLowerCase() === 'нет' ? null : text;
-      if (ctx.session.newOrder.isCustomOrder) {
-        ctx.session.adminState = 'add_order:price_custom';
-        await ctx.reply('💰 <b>Шаг 7: Введите цену заказа (0 если ещё не назначена):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
+      
+      const newOrder = ctx.session.newOrder;
+      
+      // 🌟 Предлагаем выбрать цену: из каталога или свою
+      const priceKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback(`✅ Принять базовую (${newOrder.catalogPrice} ₽)`, 'admin:add_order_price_accept')],
+        [Markup.button.callback('✏️ Ввести другую цену', 'admin:add_order_price_custom')]
+      ]);
+      
+      await ctx.reply(
+        `💰 <b>Шаг 8: Цена заказа</b>\n\n` +
+        `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n` +
+        `💵 <b>Базовая цена из каталога:</b> ${newOrder.catalogPrice} ₽\n\n` +
+        `Выберите действие:`,
+        { parse_mode: 'HTML', ...priceKeyboard }
+      );
+      return;
+    }
+    if (state === 'add_order:details_text') {
+      ctx.session.newOrder.detailsText = text.toLowerCase() === 'нет' ? null : text;
+      
+      // 🌟 Спрашиваем про файлы
+      ctx.session.adminState = 'add_order:file_choice';
+      await ctx.reply(
+        '📎 <b>Шаг 8: Файлы задания</b>\n\n' +
+        'Хотите прикрепить файлы к заказу?\n\n' +
+        'Отправьте <code>да</code> — затем пришлите файлы (можно несколько)\n' +
+        'Отправьте <code>нет</code> — продолжить без файлов',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+    if (state === 'add_order:file_choice') {
+      const answer = text.toLowerCase();
+      
+      if (answer === 'да') {
+        // 🌟 Инициализируем массив файлов
+        ctx.session.newOrder.pendingFiles = [];
+        
+        if (ctx.session.newOrder.isCustomOrder) {
+          ctx.session.adminState = 'add_order:waiting_file_custom';
+          await ctx.reply(
+            '📎 <b>Пришлите файл задания</b>\n\n' +
+            'Отправьте фото или документ.\n' +
+            '<i>Для индивидуальных заказов поддерживается один файл.</i>',
+            { parse_mode: 'HTML', ...getBackToAdminMenu() }
+          );
+        } else {
+          ctx.session.adminState = 'add_order:waiting_files';
+          await ctx.reply(
+            '📎 <b>Пришлите файлы задания</b>\n\n' +
+            'Отправляйте фото и документы по одному или группой.\n' +
+            'Когда закончите — отправьте <code>готово</code>.',
+            { parse_mode: 'HTML', ...getBackToAdminMenu() }
+          );
+        }
+      } else if (answer === 'нет') {
+        // 🌟 Пропускаем файлы, переходим к цене
+        ctx.session.newOrder.pendingFiles = [];
+        
+        if (ctx.session.newOrder.isCustomOrder) {
+          ctx.session.adminState = 'add_order:price_custom';
+          await ctx.reply('💰 <b>Шаг 9: Введите цену заказа (0 если ещё не назначена):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
+        } else {
+          ctx.session.adminState = 'add_order:price';
+          await ctx.reply('💰 <b>Шаг 9: Введите цену заказа (число в рублях):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
+        }
       } else {
-        ctx.session.adminState = 'add_order:price';
-        await ctx.reply('💰 <b>Шаг 7: Введите цену заказа (число в рублях):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
+        return ctx.reply('❌ Отправьте <code>да</code> или <code>нет</code>.', { parse_mode: 'HTML' });
       }
       return;
     }
-    if (state === 'add_order:price_custom') {
-      if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
-      ctx.session.newOrder.price = parseInt(text);
-      ctx.session.adminState = 'add_order:commission';
-      await ctx.reply('📊 <b>Шаг 8: Введите комиссию в %:</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() }); return;
+    if (state === 'add_order:waiting_files') {
+      if (text.toLowerCase() === 'готово') {
+        const filesCount = (ctx.session.newOrder.pendingFiles || []).length;
+        
+        if (ctx.session.newOrder.isCustomOrder) {
+          ctx.session.adminState = 'add_order:price_custom';
+          await ctx.reply(
+            `✅ Принято файлов: ${filesCount}\n\n💰 <b>Шаг 9: Введите цену заказа (0 если ещё не назначена):</b>`,
+            { parse_mode: 'HTML', ...getBackToAdminMenu() }
+          );
+        } else {
+          ctx.session.adminState = 'add_order:price';
+          await ctx.reply(
+            `✅ Принято файлов: ${filesCount}\n\n💰 <b>Шаг 9: Введите цену заказа (число в рублях):</b>`,
+            { parse_mode: 'HTML', ...getBackToAdminMenu() }
+          );
+        }
+        return;
+      }
+      return ctx.reply('❌ Отправьте <code>готово</code> для завершения загрузки файлов.', { parse_mode: 'HTML' });
     }
-    if (state === 'add_order:commission') {
-      if (isNaN(text)) return ctx.reply('❌ Комиссия должна быть числом.');
-      ctx.session.newOrder.commission = parseInt(text);
+    if (state === 'add_order:discount') {
+      if (isNaN(text)) return ctx.reply('❌ Скидка должна быть числом.');
+      const discountPercent = parseInt(text);
+      if (discountPercent < 0 || discountPercent > 100) {
+        return ctx.reply('❌ Скидка должна быть в диапазоне от 0 до 100.');
+      }
+      ctx.session.newOrder.discountPercent = discountPercent;
       ctx.session.adminState = 'add_order:chat';
       const envVars = getAvailableEnvVars();
-      let message = '💬 <b>Шаг 9: Чат исполнителей</b>\n\n';
+      let message = '💬 <b>Шаг 10: Чат исполнителей</b>\n\n';
       message += formatEnvVarsList(envVars.chatVars, 'chat');
       message += `\nОтправьте имя переменной чата (или \`нет\`, если не требуется):`;
       await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() });
       return;
     }
+    // 🌟 Ввод своей цены (после нажатия "Ввести другую")
+    if (state === 'add_order:price_manual') {
+      if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
+      ctx.session.newOrder.price = parseInt(text);
+      
+      // Переходим к скидке
+      ctx.session.adminState = 'add_order:discount';
+      await ctx.reply(
+        `✅ <b>Цена установлена:</b> ${ctx.session.newOrder.price} ₽\n\n` +
+        `🎉 <b>Шаг 9: Скидка заказчика</b>\n\n` +
+        `Введите скидку в процентах (число от 0 до 100).\n` +
+        `Отправьте <code>0</code>, если скидка не требуется.\n\n` +
+        `<i>💡 Скидка будет автоматически покрыта из фонда константы расходов.</i>`,
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+
+    // 🌟 Ввод скидки
+    if (state === 'add_order:discount') {
+      if (isNaN(text)) return ctx.reply('❌ Скидка должна быть числом.');
+      const discountPercent = parseInt(text);
+      if (discountPercent < 0 || discountPercent > 100) {
+        return ctx.reply('❌ Скидка должна быть в диапазоне от 0 до 100.');
+      }
+      ctx.session.newOrder.discountPercent = discountPercent;
+      
+      const newOrder = ctx.session.newOrder;
+      
+      // 🌟 РАСЧЁТ ФИНАНСОВОЙ МОДЕЛИ ДЛЯ ПОДТВЕРЖДЕНИЯ
+      const basePrice = newOrder.price || 0;
+      const commissionPercent = newOrder.commission || 20;
+      const executorPrice = Math.round(basePrice * (1 - commissionPercent / 100));
+      const discountAmount = Math.round(basePrice * discountPercent / 100);
+      const finalPrice = basePrice - discountAmount;
+      const totalCommission = Math.round(basePrice * commissionPercent / 100);
+      const actualCommission = Math.max(0, finalPrice - executorPrice);
+      const commissionExpense = Math.max(0, totalCommission - actualCommission);
+      
+      let confirmText = `📋 <b>Подтверждение нового заказа</b>\n\n`;
+      confirmText += `👤 <b>Заказчик:</b> <code>${newOrder.customerId}</code>`;
+      if (newOrder.customerUsername) confirmText += ` (${safeUsername(newOrder.customerUsername)})`;
+      confirmText += `\n`;
+      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} <b>Тип:</b> ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
+      confirmText += `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n`;
+      confirmText += `📖 <b>Предмет:</b> ${escapeHtml(newOrder.subjectName || '—')}\n`;
+      confirmText += `🎓 <b>Курс:</b> ${escapeHtml(newOrder.courseName || '—')}\n\n`;
+      
+      // Финансовая информация
+      confirmText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
+      if (discountPercent > 0) {
+        confirmText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
+      }
+      confirmText += `💰 <b>Итого к оплате:</b> ${finalPrice} ₽\n`;
+      confirmText += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+      if (commissionExpense > 0) {
+        confirmText += `📉 <b>Покрытие из фонда константы:</b> ${commissionExpense} ₽\n`;
+      }
+      
+      // 🌟 Чат и оплата из каталога
+      confirmText += `💬 <b>Чат:</b> ${newOrder.chatEnv ? `<code>${escapeHtml(newOrder.chatEnv)}</code>` : '<i>не настроен в каталоге</i>'}\n`;
+      confirmText += `💳 <b>Оплата:</b> ${newOrder.paymentEnv ? `<code>${escapeHtml(newOrder.paymentEnv)}</code>` : '<i>не настроена в каталоге</i>'}\n`;
+      
+      if (newOrder.description) {
+        confirmText += `📝 <b>Описание:</b> ${escapeHtml(newOrder.description.substring(0, 100))}${newOrder.description.length > 100 ? '...' : ''}\n`;
+      }
+      confirmText += `\nСоздать заказ?`;
+      
+      const confirmKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Создать заказ', 'admin:add_order_confirm')],
+        [Markup.button.callback('❌ Отмена', 'admin:orders')]
+      ]);
+      
+      await ctx.reply(confirmText, { parse_mode: 'HTML', ...confirmKeyboard });
+      ctx.session.adminState = null;
+      return;
+    }
+    // ==========================================
+    // 🌟 ДОБАВЛЕНИЕ ЗАКАЗЧИКА ВРУЧНУЮ
+    // ==========================================
     if (state === 'add_order:chat') {
       let chatEnv = null;
       let managerChatId = null;
-
       if (text.toLowerCase() !== 'нет') {
         chatEnv = text.trim();
         managerChatId = process.env[chatEnv];
         if (!managerChatId) {
-          return ctx.reply(`❌ Переменная <code>${chatEnv}</code> не найдена в .env. Попробуйте другое имя или отправьте <code>нет</code>.`);
+          return ctx.reply(`❌ Переменная <code>${chatEnv}</code> не найдена в .env. Попробуйте другое имя или отправьте <code>нет</code>.`, { parse_mode: 'HTML' });
         }
       }
-
       ctx.session.newOrder.managerChatEnv = chatEnv;
       ctx.session.newOrder.managerChatId = managerChatId;
-
       const newOrder = ctx.session.newOrder;
+
+      // 🌟 РАСЧЁТ ФИНАНСОВОЙ МОДЕЛИ ДЛЯ ПОДТВЕРЖДЕНИЯ
+      const basePrice = newOrder.price || 0;
+      const commissionPercent = newOrder.commission || 20;
+      const discountPercent = newOrder.discountPercent || 0;
+      const executorPrice = Math.round(basePrice * (1 - commissionPercent / 100));
+      const discountAmount = Math.round(basePrice * discountPercent / 100);
+      const finalPrice = basePrice - discountAmount;
+      const totalCommission = Math.round(basePrice * commissionPercent / 100);
+      const actualCommission = Math.max(0, finalPrice - executorPrice);
+      const commissionExpense = Math.max(0, totalCommission - actualCommission);
+
       let confirmText = `📋 <b>Подтверждение нового заказа</b>\n\n`;
       confirmText += `👤 <b>Заказчик:</b> <code>${newOrder.customerId}</code>`;
       if (newOrder.customerUsername) {
-        confirmText += ` (@${escapeHtml(newOrder.customerUsername)})`;
+        confirmText += ` (${safeUsername(newOrder.customerUsername)})`;
       }
       confirmText += `\n`;
       confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} <b>Тип:</b> ${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}\n`;
@@ -2189,14 +2352,17 @@ function register(bot) {
       confirmText += `📖 <b>Предмет:</b> ${escapeHtml(newOrder.subjectName)}\n`;
       confirmText += `🎓 <b>Курс:</b> ${escapeHtml(newOrder.courseName)}\n\n`;
 
-      // 🌟 Финансовая информация
-      const confirmBasePrice = newOrder.price || 0;
-      const confirmCommission = newOrder.commission || 20;
-      const confirmExecutorPrice = Math.round(confirmBasePrice * (1 - confirmCommission / 100));
-
-      confirmText += `💵 <b>Базовая цена:</b> ${confirmBasePrice} ₽\n`;
-      confirmText += `👷 <b>Исполнитель получит:</b> ${confirmExecutorPrice} ₽ (комиссия ${confirmCommission}%)\n`;
-      confirmText += `💬 <b>Чат:</b> ${chatEnv ? `<code>${chatEnv}</code>` : '<i>не назначен</i>'}\n`;
+      // 🌟 ФИНАНСОВАЯ ИНФОРМАЦИЯ
+      confirmText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
+      if (discountPercent > 0) {
+        confirmText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
+      }
+      confirmText += `💰 <b>Итого к оплате:</b> ${finalPrice} ₽\n`;
+      confirmText += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+      if (commissionExpense > 0) {
+        confirmText += `📉 <b>Покрытие из фонда константы:</b> ${commissionExpense} ₽\n`;
+      }
+      confirmText += `💬 <b>Чат:</b> ${chatEnv ? `<code>${escapeHtml(chatEnv)}</code>` : '<i>не назначен</i>'}\n`;
       if (newOrder.description) {
         confirmText += `📝 <b>Описание:</b> ${escapeHtml(newOrder.description.substring(0, 100))}...\n`;
       }
@@ -2208,80 +2374,6 @@ function register(bot) {
       ]);
       await ctx.reply(confirmText, { parse_mode: 'HTML', ...confirmKeyboard });
       ctx.session.adminState = null;
-      return;
-    }
-    if (state === 'add_order:chat') {
-      let chatEnv = null;
-      let managerChatId = null;
-
-      if (text.toLowerCase() !== 'нет') {
-        chatEnv = text.trim();
-        managerChatId = process.env[chatEnv];
-        if (!managerChatId) {
-          return ctx.reply(`❌ Переменная \`${chatEnv}\` не найдена в .env. Попробуйте другое имя или отправьте \`нет\`.`);
-        }
-      }
-
-      ctx.session.newOrder.managerChatEnv = chatEnv;
-      ctx.session.newOrder.managerChatId = managerChatId;
-
-      const newOrder = ctx.session.newOrder;
-      let confirmText = `📋 <b>Подтверждение нового заказа</b>\n\n`;
-      confirmText += `👤 <b>Заказчик ID:</b> <code>${newOrder.customerId}</code>\n`;
-      confirmText += `${newOrder.isCustomOrder ? '🌟' : '📦'} <b>Тип:</b> <code>${newOrder.isCustomOrder ? 'Индивидуальный' : 'Обычный'}</code>\n`;
-      confirmText += `📚 <b>Работа:</b> <code>${newOrder.workTitle}</code>\n`;
-      confirmText += `📖 <b>Предмет:</b> <code>${newOrder.subjectName}</code>\n`;
-      confirmText += `🎓 <b>Курс:</b> <code>${newOrder.courseName}</code>\n`;
-      confirmText += `💰 <b>Цена:</b> <code>${newOrder.price}</code> ₽\n`;
-      confirmText += `📊 <b>Комиссия:</b> <code>${newOrder.commission}%</code>\n`;
-      confirmText += `💬 <b>Чат:</b> ${chatEnv ? `<code>${chatEnv}</code>` : '<i>не назначен</i>'}\n`;
-      if (newOrder.description) confirmText += `📝 <b>Описание:</b> <code>${newOrder.description.substring(0, 100)}...</code>\n`;
-      confirmText += `\nСоздать заказ?`;
-
-      const confirmKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('✅ Создать заказ', 'admin:add_order_confirm')],
-        [Markup.button.callback('❌ Отмена', 'admin:orders')]
-      ]);
-      await ctx.reply(confirmText, { parse_mode: 'HTML', ...confirmKeyboard });
-      ctx.session.adminState = null;
-      return;
-    }
-    // ==========================================
-    // 🌟 ДОБАВЛЕНИЕ ЗАКАЗЧИКА ВРУЧНУЮ
-    // ==========================================
-    if (state === 'add_customer:id') {
-      if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
-      const id = parseInt(text);
-      const loyaltyData = loyalty.loadData();
-
-      // 🌟 Проверка: существует ли уже такой заказчик?
-      if (loyaltyData[id]) {
-        const existing = loyaltyData[id];
-        ctx.session.newCustomer = { id: id };
-        ctx.session.adminState = 'add_customer:confirm_overwrite';
-        await ctx.reply(
-          `⚠️ <b>Заказчик с ID <code>${id}</code> уже существует!</b>\n\n` +
-          `📛 <b>Username:</b> <code>${existing.username ? '@' + existing.username : 'не указан'}</code>\n` +
-          `💰 <b>Сумма выкупа:</b> <code>${existing.totalSpent || 0}</code> ₽\n` +
-          `${existing.specialty ? '🎓 <b>Специальность:</b> <code>' + (loyalty.getSpecialtyById(existing.specialty)?.name || existing.specialty) + '</code>\n' : ''}\n` +
-          `<b>Продолжить и перезаписать данные?</b>`,
-          {
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([
-              [Markup.button.callback('✅ Да, перезаписать', 'admin:add_customer:overwrite_yes')],
-              [Markup.button.callback('❌ Отмена', 'admin:customers')]
-            ])
-          }
-        );
-        return;
-      }
-
-      ctx.session.newCustomer = { id: id };
-      ctx.session.adminState = 'add_customer:username';
-      await ctx.reply(
-        '📝 <b>Шаг 2/3: Введите username заказчика (без @):</b>',
-        { parse_mode: 'HTML', ...getBackToAdminMenu() }
-      );
       return;
     }
 
@@ -2738,6 +2830,83 @@ function register(bot) {
             return;
           }
         });
+
+    // ==========================================
+    // 🌟 ОБРАБОТЧИК ФАЙЛОВ ДЛЯ РУЧНОГО ДОБАВЛЕНИЯ ЗАКАЗА
+    // ==========================================
+    bot.on(['photo', 'document'], async (ctx, next) => {
+      ctx.session = ctx.session || {};
+      
+      // 🌟 Если админ не в режиме добавления заказа — пропускаем
+      if (!ctx.session.adminState) {
+        await next();
+        return;
+      }
+      
+      if (!isAdmin(ctx.from.id)) return;
+      
+      const state = ctx.session.adminState;
+      
+      // 🌟 Файл для индивидуального заказа (один файл)
+      if (state === 'add_order:waiting_file_custom') {
+        const fileInfo = {};
+        
+        if (ctx.message.photo) {
+          fileInfo.type = 'photo';
+          fileInfo.fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+          fileInfo.fileName = `Фото_${Date.now()}.jpg`;
+        } else if (ctx.message.document) {
+          fileInfo.type = 'document';
+          fileInfo.fileId = ctx.message.document.file_id;
+          fileInfo.fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
+        }
+        
+        // 🌟 Для индивидуальных заказов сохраняем один файл
+        ctx.session.newOrder.fileInfo = fileInfo;
+        
+        // 🌟 Переходим к цене
+        ctx.session.adminState = 'add_order:price_custom';
+        await ctx.reply(
+          `✅ <b>Файл принят:</b> ${escapeHtml(fileInfo.fileName)}\n\n` +
+          `💰 <b>Шаг 9: Введите цену заказа (0 если ещё не назначена):</b>`,
+          { parse_mode: 'HTML', ...getBackToAdminMenu() }
+        );
+        return;
+      }
+      
+      // 🌟 Файлы для обычного заказа (несколько файлов)
+      if (state === 'add_order:waiting_files') {
+        const fileInfo = {};
+        
+        if (ctx.message.photo) {
+          fileInfo.type = 'photo';
+          fileInfo.fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+          fileInfo.fileName = `Фото_${Date.now()}.jpg`;
+        } else if (ctx.message.document) {
+          fileInfo.type = 'document';
+          fileInfo.fileId = ctx.message.document.file_id;
+          fileInfo.fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
+        }
+        
+        // 🌟 Добавляем в массив
+        if (!ctx.session.newOrder.pendingFiles) {
+          ctx.session.newOrder.pendingFiles = [];
+        }
+        ctx.session.newOrder.pendingFiles.push(fileInfo);
+        
+        const filesCount = ctx.session.newOrder.pendingFiles.length;
+        await ctx.reply(
+          `✅ <b>Файл принят:</b> ${escapeHtml(fileInfo.fileName)}\n\n` +
+          `📎 Принято файлов: ${filesCount}\n` +
+          `Продолжайте отправлять файлы или отправьте <code>готово</code>.`,
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+      
+      // 🌟 Если состояние не связано с файлами — пропускаем
+      await next();
+    });
 
     // ==========================================
     // 🌟 Админ нажимает "Ответить заказчику" после получения ответа от заказчика
@@ -3353,7 +3522,7 @@ const backKeyboard = Markup.inlineKeyboard([
       if (executors.length > 0) {
         availableUsersText += `🔥 <b>Исполнители (Прометей):</b>\n`;
         executors.forEach(e => {
-          availableUsersText += `• \`${e.id}\`${e.username ? ` (\`@${e.username}\`)` : ''}\n`;
+          availableUsersText += `<code>${e.id}</code>${e.username ? ` (<code>@${e.username}</code>)` : ''}\n`;
         });
       } else {
         availableUsersText += `🔥 <b>Исполнители:</b> <i>нет назначенных рангов</i>\n`;
@@ -3362,13 +3531,13 @@ const backKeyboard = Markup.inlineKeyboard([
       if (managers.length > 0) {
         availableUsersText += `\n👁️ <b>Управляющие отделами (Циклоп):</b>\n`;
         managers.forEach(m => {
-          availableUsersText += `• \`${m.id}\`${m.username ? ` (\`@${m.username}\`)` : ''}\n`;
+          availableUsersText += `• <code>${m.id}</code>${m.username ? ` (<code>@${m.username}</code>)` : ''}\n`;
         });
       }
       if (admins.length > 0) {
         availableUsersText += `\n👑 <b>Администраторы (Посейдон):</b>\n`;
         admins.forEach(a => {
-          availableUsersText += `• \`${a.id}\`${a.username ? ` (\`@${a.username}\`)` : ''}\n`;
+          availableUsersText += `• <code>${a.id}</code>${a.username ? ` (<code>@${a.username}</code>)` : ''}\n`;
         });
       }
       
@@ -3598,47 +3767,320 @@ const backKeyboard = Markup.inlineKeyboard([
       await ctx.answerCbQuery();
     }
 
-    // --- ДОБАВЛЕНИЕ ЗАКАЗА: выбор типа ---
+    // --- ДОБАВЛЕНИЕ ЗАКАЗА: выбор типа → показываем каталог специальностей ---
     else if (action.startsWith('add_order_type:')) {
       const type = action.split(':')[1];
       ctx.session.newOrder = ctx.session.newOrder || {};
       ctx.session.newOrder.isCustomOrder = type === 'custom';
       const typeLabel = type === 'custom' ? '🌟 Индивидуальный' : '📦 Обычный';
-      ctx.session.adminState = 'add_order:title';
+      
+      // Показываем список специальностей из каталога
+      const specialties = catalog.getSpecialties();
+      const buttons = specialties.map(s => [
+        Markup.button.callback(`${s.emoji} ${s.name.replace(s.emoji, '').trim()}`, `admin:add_order_specialty:${s.id}`)
+      ]);
+      buttons.push([Markup.button.callback('❌ Отмена', 'admin:orders')]);
+      
       await ctx.editMessageText(
-        `${typeLabel} заказ выбран\n\n📝 <b>Шаг 3: Введите название работы:</b>`,
+        `${typeLabel} заказ выбран.\n\n🎓 <b>Шаг 3: Выберите специальность:</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+    }
+    // ==========================================
+    // 🌟 НАВИГАЦИЯ ПО КАТАЛОГУ ПРИ ДОБАВЛЕНИИ ЗАКАЗА
+    // ==========================================
+
+    // Выбор специальности → показываем курсы
+    else if (action.startsWith('add_order_specialty:')) {
+      const specialtyId = action.split(':')[1];
+      const specialty = catalog.getSpecialtyById(specialtyId);
+      if (!specialty) { await ctx.answerCbQuery('❌ Специальность не найдена'); return; }
+      
+      ctx.session.newOrder.specialtyId = specialtyId;
+      const courses = catalog.getCourses(specialtyId);
+      const generalWorks = catalog.getWorksBySpecialty(specialtyId);
+      
+      const buttons = courses.map(c => [
+        Markup.button.callback(c.name, `admin:add_order_course:${c.id}`)
+      ]);
+      
+      // Если есть общие работы специальности
+      if (generalWorks.length > 0) {
+        buttons.push([
+          Markup.button.callback(`📋 Общие работы (${generalWorks.length})`, `admin:add_order_general_works:${specialtyId}`)
+        ]);
+      }
+      
+      if (buttons.length === 0) {
+        buttons.push([Markup.button.callback('— курсов пока нет —', 'noop')]);
+      }
+      
+      buttons.push([Markup.button.callback('⬅️ Назад к специальностям', `admin:add_order_type:${ctx.session.newOrder.isCustomOrder ? 'custom' : 'regular'}`)]);
+      buttons.push([Markup.button.callback('❌ Отмена', 'admin:orders')]);
+      
+      await ctx.editMessageText(
+        `${specialty.emoji} <b>Специальность: ${escapeHtml(specialty.name)}</b>\n\n📚 <b>Шаг 4: Выберите курс:</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+      await ctx.answerCbQuery();
+    }
+
+    // Выбор курса → показываем предметы
+    else if (action.startsWith('add_order_course:')) {
+      const courseId = action.split(':')[1];
+      const course = catalog.getCourse(courseId);
+      if (!course) { await ctx.answerCbQuery('❌ Курс не найден'); return; }
+      
+      ctx.session.newOrder.courseId = courseId;
+      ctx.session.newOrder.courseName = course.name;
+      
+      const subjects = catalog.getSubjectsByCourse(courseId);
+      const generalWorks = catalog.getWorksByCourse(courseId);
+      
+      const buttons = subjects.map(s => [
+        Markup.button.callback(s.name, `admin:add_order_subject:${s.id}`)
+      ]);
+      
+      // Если есть общие работы курса
+      if (generalWorks.length > 0) {
+        buttons.push([
+          Markup.button.callback(`📋 Общие работы курса (${generalWorks.length})`, `admin:add_order_course_general_works:${courseId}`)
+        ]);
+      }
+      
+      if (buttons.length === 0) {
+        buttons.push([Markup.button.callback('— предметов пока нет —', 'noop')]);
+      }
+      
+      buttons.push([Markup.button.callback('⬅️ Назад к курсам', `admin:add_order_specialty:${course.specialty}`)]);
+      buttons.push([Markup.button.callback('❌ Отмена', 'admin:orders')]);
+      
+      await ctx.editMessageText(
+        `📚 <b>Курс: ${escapeHtml(course.name)}</b>\n\n📖 <b>Шаг 5: Выберите предмет:</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+      await ctx.answerCbQuery();
+    }
+
+    // Выбор предмета → показываем работы
+    else if (action.startsWith('add_order_subject:')) {
+      const subjectId = action.split(':')[1];
+      const subject = catalog.getSubject(subjectId);
+      if (!subject) { await ctx.answerCbQuery('❌ Предмет не найден'); return; }
+      
+      ctx.session.newOrder.subjectId = subjectId;
+      ctx.session.newOrder.subjectName = subject.name;
+      
+      const course = catalog.getCourse(subject.courseId);
+      const works = catalog.getWorksBySubject(subjectId);
+      const isCustom = ctx.session.newOrder.isCustomOrder;
+      
+      // Фильтруем работы по типу заказа
+      const filteredWorks = works.filter(w => {
+        if (isCustom) return w.isCustomOrder === true;
+        return !w.isCustomOrder;
+      });
+      
+      const buttons = filteredWorks.map(w => [
+        Markup.button.callback(
+          `💰 ${w.price}₽ | ${w.title.substring(0, 30)}`,
+          `admin:add_order_work:${w.id}`
+        )
+      ]);
+      
+      if (buttons.length === 0) {
+        buttons.push([Markup.button.callback('— работ пока нет —', 'noop')]);
+      }
+      
+      buttons.push([Markup.button.callback('⬅️ Назад к предметам', `admin:add_order_course:${subject.courseId}`)]);
+      buttons.push([Markup.button.callback('❌ Отмена', 'admin:orders')]);
+      
+      await ctx.editMessageText(
+        `📖 <b>Предмет: ${escapeHtml(subject.name)}</b>\n` +
+        `🎓 <b>Курс: ${course ? escapeHtml(course.name) : '—'}</b>\n\n` +
+        `📌 <b>Шаг 6: Выберите работу:</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+      await ctx.answerCbQuery();
+    }
+
+    // Общие работы специальности (без курса/предмета)
+    else if (action.startsWith('add_order_general_works:')) {
+      const specialtyId = action.split(':')[1];
+      const works = catalog.getWorksBySpecialty(specialtyId);
+      const isCustom = ctx.session.newOrder.isCustomOrder;
+      
+      const filteredWorks = works.filter(w => {
+        if (isCustom) return w.isCustomOrder === true;
+        return !w.isCustomOrder;
+      });
+      
+      const buttons = filteredWorks.map(w => [
+        Markup.button.callback(
+          `💰 ${w.price}₽ | ${w.title.substring(0, 30)}`,
+          `admin:add_order_work:${w.id}`
+        )
+      ]);
+      
+      if (buttons.length === 0) {
+        buttons.push([Markup.button.callback('— работ пока нет —', 'noop')]);
+      }
+      
+      buttons.push([Markup.button.callback('⬅️ Назад к курсам', `admin:add_order_specialty:${specialtyId}`)]);
+      buttons.push([Markup.button.callback('❌ Отмена', 'admin:orders')]);
+      
+      await ctx.editMessageText(
+        `📋 <b>Общие работы специальности</b>\n\n📌 <b>Шаг 6: Выберите работу:</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+      await ctx.answerCbQuery();
+    }
+
+    // Общие работы курса (без предмета)
+    else if (action.startsWith('add_order_course_general_works:')) {
+      const courseId = action.split(':')[1];
+      const works = catalog.getWorksByCourse(courseId);
+      const isCustom = ctx.session.newOrder.isCustomOrder;
+      
+      const filteredWorks = works.filter(w => {
+        if (isCustom) return w.isCustomOrder === true;
+        return !w.isCustomOrder;
+      });
+      
+      const buttons = filteredWorks.map(w => [
+        Markup.button.callback(
+          `💰 ${w.price}₽ | ${w.title.substring(0, 30)}`,
+          `admin:add_order_work:${w.id}`
+        )
+      ]);
+      
+      if (buttons.length === 0) {
+        buttons.push([Markup.button.callback('— работ пока нет —', 'noop')]);
+      }
+      
+      buttons.push([Markup.button.callback('⬅️ Назад к предметам', `admin:add_order_course:${courseId}`)]);
+      buttons.push([Markup.button.callback('❌ Отмена', 'admin:orders')]);
+      
+      await ctx.editMessageText(
+        `📋 <b>Общие работы курса</b>\n\n📌 <b>Шаг 6: Выберите работу:</b>`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+      await ctx.answerCbQuery();
+    }
+
+    // 🌟 Выбор работы → автоматически подтягиваем данные из каталога
+    else if (action.startsWith('add_order_work:')) {
+      const workId = action.split(':')[1];
+      const work = catalog.getWork(workId);
+      if (!work) { await ctx.answerCbQuery('❌ Работа не найдена'); return; }
+      
+      const newOrder = ctx.session.newOrder;
+      
+      // 🌟 Автоматически заполняем данные из каталога
+      newOrder.workId = work.id;
+      newOrder.workTitle = work.title;
+      newOrder.catalogPrice = work.price;
+      newOrder.commission = work.commission || 20;
+      newOrder.chatEnv = work.chatEnv || null;
+      newOrder.paymentEnv = work.paymentEnv || null;
+      
+      // Если у работы есть предмет/курс — подтягиваем названия
+      if (work.subjectId) {
+        const subject = catalog.getSubject(work.subjectId);
+        if (subject) {
+          newOrder.subjectName = subject.name;
+          const course = catalog.getCourse(subject.courseId);
+          if (course) newOrder.courseName = course.name;
+        }
+      } else if (work.courseId) {
+        const course = catalog.getCourse(work.courseId);
+        if (course) {
+          newOrder.courseName = course.name;
+          newOrder.subjectName = 'Общая работа курса';
+        }
+      } else {
+        newOrder.subjectName = newOrder.subjectName || 'Общая работа';
+        newOrder.courseName = newOrder.courseName || 'Без курса';
+      }
+      
+      // Переходим к описанию задания
+      ctx.session.adminState = 'add_order:description';
+      
+      // 🌟 Показываем информацию о выбранной работе
+      let workInfo = `✅ <b>Работа выбрана!</b>\n\n`;
+      workInfo += `📚 <b>Работа:</b> ${escapeHtml(work.title)}\n`;
+      workInfo += `📖 <b>Предмет:</b> ${escapeHtml(newOrder.subjectName || '—')}\n`;
+      workInfo += `🎓 <b>Курс:</b> ${escapeHtml(newOrder.courseName || '—')}\n`;
+      workInfo += `💰 <b>Цена из каталога:</b> ${work.price} ₽\n`;
+      workInfo += `📊 <b>Комиссия:</b> ${work.commission || 20}%\n\n`;
+      workInfo += `📝 <b>Шаг 7: Введите описание задания (или "нет", если не требуется):</b>`;
+      
+      await ctx.editMessageText(workInfo, { parse_mode: 'HTML', ...getBackToAdminMenu() });
+      await ctx.answerCbQuery();
+    }
+
+    // ==========================================
+    // 🌟 ВЫБОР ЦЕНЫ: из каталога или своя
+    // ==========================================
+
+    // Принять базовую цену из каталога
+    else if (action === 'add_order_price_accept') {
+      const newOrder = ctx.session.newOrder;
+      if (!newOrder) { await ctx.answerCbQuery('❌ Данные заказа потеряны'); return; }
+      
+      newOrder.price = newOrder.catalogPrice;
+      
+      // Переходим к скидке
+      ctx.session.adminState = 'add_order:discount';
+      await ctx.editMessageText(
+        `✅ <b>Базовая цена принята:</b> ${newOrder.price} ₽\n\n` +
+        `🎉 <b>Шаг 9: Скидка заказчика</b>\n\n` +
+        `Введите скидку в процентах (число от 0 до 100).\n` +
+        `Отправьте <code>0</code>, если скидка не требуется.\n\n` +
+        `<i>💡 Скидка будет автоматически покрыта из фонда константы расходов.</i>`,
         { parse_mode: 'HTML', ...getBackToAdminMenu() }
       );
+      await ctx.answerCbQuery();
+    }
+
+    // Ввести свою цену
+    else if (action === 'add_order_price_custom') {
+      const newOrder = ctx.session.newOrder;
+      if (!newOrder) { await ctx.answerCbQuery('❌ Данные заказа потеряны'); return; }
+      
+      ctx.session.adminState = 'add_order:price_manual';
+      await ctx.editMessageText(
+        `💰 <b>Шаг 8: Введите свою цену (число в рублях):</b>\n\n` +
+        `📌 Базовая цена из каталога: ${newOrder.catalogPrice} ₽`,
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
+      );
+      await ctx.answerCbQuery();
     }
     // --- ДОБАВЛЕНИЕ ЗАКАЗА: подтверждение ---
     else if (action === 'add_order_confirm') {
       const newOrder = ctx.session.newOrder;
       if (!newOrder) { await ctx.answerCbQuery('❌ Данные заказа потеряны'); return; }
-      
-      // 🌟 Определяем статус в зависимости от типа
+
       const status = newOrder.isCustomOrder
         ? (newOrder.price > 0 ? 'price_negotiating' : 'waiting_acceptance')
         : (newOrder.price > 0 ? 'pending' : 'pending');
-      
-      // 🌟 РАСЧЁТ ФИНАНСОВОЙ МОДЕЛИ
+
+      // 🌟 РАСЧЁТ ПОЛНОЙ ФИНАНСОВОЙ МОДЕЛИ
       const basePrice = newOrder.price || 0;
       const commissionPercent = newOrder.commission || 20;
+      const discountPercent = newOrder.discountPercent || 0;
+      const discountAmount = Math.round(basePrice * discountPercent / 100);
+      const finalPrice = basePrice - discountAmount;
       const executorPrice = Math.round(basePrice * (1 - commissionPercent / 100));
-      const finalPrice = basePrice; // При ручном добавлении без скидки
-      const discountPercent = 0;
-      const discountAmount = 0;
-      
-      // 🌟 Расчёт покрытия скидки и константы
+
       const totalCommission = Math.round(basePrice * commissionPercent / 100);
       const actualCommission = Math.max(0, finalPrice - executorPrice);
       const commissionExpense = Math.max(0, totalCommission - actualCommission);
-      
-      // 🌟 Финансовый снимок (константа и совладельцы)
+
       const expenseConstantPercent = finance.getExpenseConstant();
       const expenseConstantBase = Math.round(totalCommission * expenseConstantPercent / 100);
       const expenseConstantAmount = expenseConstantBase - commissionExpense;
-      
-      // 🌟 Расчёт долей совладельцев
+
       const coOwners = finance.getCoOwners();
       const coOwnerShares = coOwners.map(co => ({
         id: co.id,
@@ -3646,22 +4088,27 @@ const backKeyboard = Markup.inlineKeyboard([
         percent: co.percent,
         amount: Math.round(totalCommission * co.percent / 100)
       }));
-      
-      // 🌟 Генерация уникального chatId
-      const workId = newOrder.isCustomOrder ? `custom_admin_${Date.now()}` : null;
+
+      const workId = newOrder.workId || (newOrder.isCustomOrder ? `custom_admin_${Date.now()}` : null);
       const chatId = workId ? `order_${newOrder.customerId}_${workId}_${Date.now()}` : null;
-      
-      // 🌟 Временная метка создания
       const createdAt = new Date().toLocaleString('ru-RU');
-      
-      const createdOrder = ordersDb.createOrder({
+
+      // 🌟 Получаем username из базы лояльности
+      const loyaltyData = loyalty.loadData();
+      const customerData = loyaltyData[newOrder.customerId];
+      const customerUsername = newOrder.customerUsername || (customerData ? customerData.username : null);
+
+      // 🌟 Получаем chatId из каталога (переменная окружения)
+      const managerChatId = newOrder.chatEnv ? process.env[newOrder.chatEnv] : null;
+
+      const orderData = {
         customerId: newOrder.customerId,
-        customerUsername: newOrder.customerUsername || null, // 🌟 Используем полученный username
+        customerUsername: customerUsername,
         workId: workId,
         workTitle: newOrder.workTitle,
-        subjectName: newOrder.subjectName,
-        courseName: newOrder.courseName,
-        // 🌟 НОВЫЕ ПОЛЯ: Финансовая модель
+        subjectName: newOrder.subjectName || null,
+        courseName: newOrder.courseName || null,
+        // Финансовая модель
         basePrice: basePrice,
         executorPrice: executorPrice,
         finalPrice: finalPrice,
@@ -3669,37 +4116,44 @@ const backKeyboard = Markup.inlineKeyboard([
         discountAmount: discountAmount,
         commissionPercent: commissionPercent,
         commissionExpense: commissionExpense,
-        // 🌟 ФИНАНСОВЫЙ СНИМОК
         expenseConstantPercent: expenseConstantPercent,
         expenseConstantAmount: expenseConstantAmount,
         coOwnerShares: coOwnerShares,
-        // 📜 LEGACY ПОЛЯ (для совместимости)
+        // Legacy поля
         price: basePrice,
         commission: commissionPercent,
         description: newOrder.description || null,
+        detailsText: newOrder.detailsText || null,
+        taskFiles: newOrder.pendingFiles || [],
+        fileName: newOrder.fileInfo ? newOrder.fileInfo.fileName : null,
+        fileId: newOrder.fileInfo ? newOrder.fileInfo.fileId : null,
+        fileType: newOrder.fileInfo ? newOrder.fileInfo.type : null,
         isCustomOrder: newOrder.isCustomOrder || false,
         status: status,
-        managerChatId: newOrder.managerChatId || null,
-        managerChatEnv: newOrder.managerChatEnv || null,
-        // 🌟 ДОПОЛНИТЕЛЬНЫЕ ПОЛЯ
+        // 🌟 Чат и оплата из каталога
+        managerChatId: managerChatId,
+        managerChatEnv: newOrder.chatEnv || null,
         chatId: chatId,
         createdAt: createdAt
-      });
-      
+      };
+
+      const createdOrder = ordersDb.createOrder(orderData);
+
       ctx.session.newOrder = null;
       await ctx.answerCbQuery('✅ Заказ создан');
-      
-      // 🌟 Логирование создания заказа
+
       logger.logAdminAction('order_created_manually', {
         orderId: createdOrder.id,
         orderNumber: createdOrder.orderNumber,
         customerId: newOrder.customerId,
+        workId: workId,
         isCustomOrder: newOrder.isCustomOrder,
         basePrice: basePrice,
-        executorPrice: executorPrice
+        finalPrice: finalPrice,
+        discountPercent: discountPercent,
+        commissionExpense: commissionExpense
       }, ctx);
-      
-      // Показываем карточку созданного заказа
+
       const cardText = formatOrderCard(createdOrder, 'admin');
       const buttons = [
         [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${createdOrder.id}`)],
@@ -3708,24 +4162,24 @@ const backKeyboard = Markup.inlineKeyboard([
       await ctx.editMessageText(`✅ <b>Заказ №${createdOrder.orderNumber} создан!</b>\n\n${cardText}`, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
 
-    // --- МЕНЮ СТАТУСОВ ДЛЯ CUSTOM ORDERS ---
-    else if (action.startsWith('order_status_menu:')) {
-      const orderId = action.split(':')[1];
-      const order = ordersDb.getOrder(orderId);
-      if (!order) return;
-      const statusKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('🟡 Ожидает принятия', `admin:order_status:${orderId}:waiting_acceptance`)],
-        [Markup.button.callback('🟠 Ожидает цену', `admin:order_status:${orderId}:waiting_price`)],
-        [Markup.button.callback('🔵 Согласование цены', `admin:order_status:${orderId}:price_negotiating`)],
-        [Markup.button.callback('🟢 Оплачен', `admin:order_status:${orderId}:paid`)],
-        [Markup.button.callback('✅ Выполнен', `admin:order_status:${orderId}:completed`)],
-        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
-      ]);
-      await ctx.editMessageText(
-        `🔄 <b>Смена статуса заказа №${order.orderNumber}</b>\n\nТекущий статус: <b>${order.status}</b>`,
-        { parse_mode: 'HTML', ...statusKeyboard }
-      );
-    }
+        // --- МЕНЮ СТАТУСОВ ДЛЯ CUSTOM ORDERS ---
+        else if (action.startsWith('order_status_menu:')) {
+          const orderId = action.split(':')[1];
+          const order = ordersDb.getOrder(orderId);
+          if (!order) return;
+          const statusKeyboard = Markup.inlineKeyboard([
+            [Markup.button.callback('🟡 Ожидает принятия', `admin:order_status:${orderId}:waiting_acceptance`)],
+            [Markup.button.callback('🟠 Ожидает цену', `admin:order_status:${orderId}:waiting_price`)],
+            [Markup.button.callback('🔵 Согласование цены', `admin:order_status:${orderId}:price_negotiating`)],
+            [Markup.button.callback('🟢 Оплачен', `admin:order_status:${orderId}:paid`)],
+            [Markup.button.callback('✅ Выполнен', `admin:order_status:${orderId}:completed`)],
+            [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+          ]);
+          await ctx.editMessageText(
+            `🔄 <b>Смена статуса заказа №${order.orderNumber}</b>\n\nТекущий статус: <b>${order.status}</b>`,
+            { parse_mode: 'HTML', ...statusKeyboard }
+          );
+        }
 
     // ==========================================
     // 📊 ЭКСПОРТ ДАННЫХ В EXCEL
