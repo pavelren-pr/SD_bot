@@ -3766,8 +3766,8 @@ const backKeyboard = Markup.inlineKeyboard([
       if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
 
       let peopleText = `👥 <b>Участники заказа №${order.orderNumber}</b>\n\n`;
-      peopleText += `👤 <b>Заказчик:</b> ${order.customerId} (${safeUsername(order.customerUsername)})\n`;
-      peopleText += `👷 <b>Исполнитель:</b> ${order.executorId || 'не назначен'} (${safeUsername(order.executorUsername)})\n\n`;
+      peopleText += `👤 <b>Заказчик:</b> <code>${order.customerId}</code> (${safeUsername(order.customerUsername)})\n`;
+      peopleText += `👷 <b>Исполнитель:</b> <code>${order.executorId || 'не назначен'}</code> (${safeUsername(order.executorUsername)})\n\n`;
       peopleText += `Выберите поле для изменения:`;
 
       const buttons = [
