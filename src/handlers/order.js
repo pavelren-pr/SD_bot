@@ -241,6 +241,15 @@ function register(bot) {
     ctx.session.customerReplyChatId = null;
     ctx.session.replyToUserId = null;
     ctx.session.replyToUsername = null;
+    ctx.session.customOrder = null;
+    ctx.session.waitingCustomPrice = null;
+    ctx.session.waitingCustomMessageToCustomer = null;
+    ctx.session.waitingCustomFileToCustomer = null;
+    ctx.session.waitingCustomReplyToExecutor = null;
+    ctx.session.waitingCustomReplyFileToExecutor = null;
+    ctx.session.waitingCustomPayment = null;
+    ctx.session.waitingCustomWriteToExecutor = null;
+    ctx.session.order = { workId, step: 'waiting_details', details: { text: null, files: [] } };
     
     ctx.session.order = { workId, step: 'waiting_details', details: { text: null, files: [] } };
     // 🌟 REFACTOR: переход на HTML — экранируем prompt и ссылку в формате HTML

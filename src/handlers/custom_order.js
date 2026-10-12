@@ -88,8 +88,7 @@ function register(bot) {
     }
     const { subjectName, courseName } = getSubjectFullName(work);
     ctx.session = ctx.session || {};
-    
-    // 🌟 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: очищаем все session-флаги, которые могут перехватить входящие сообщения
+    ctx.session.order = null;
     ctx.session.adminReplyToCustomerId = null;
     ctx.session.adminReplyOrderId = null;
     ctx.session.adminReplyOrderNumber = null;
@@ -113,7 +112,6 @@ function register(bot) {
     ctx.session.customerReplyChatId = null;
     ctx.session.replyToUserId = null;
     ctx.session.replyToUsername = null;
-    
     ctx.session.customOrder = { 
       workId, 
       step: 'waiting_description', 
