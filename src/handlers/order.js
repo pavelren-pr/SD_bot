@@ -1120,21 +1120,59 @@ function register(bot) {
     const order = ctx.session.order;
     const work = catalog.getWork(order.workId);
     const pricing = loyalty.calculatePrice(work.price, ctx.from.id);
+    
     let summary = '🛒 <b>Подтверждение заказа</b>\n\n';
-    summary += `📌 <b>Работа:</b> ${work.title}\n💵 <b>Базовая цена:</b> ${pricing.basePrice} ₽\n`;
-    if (pricing.discountPercent > 0) summary += `🎉 <b>Ваша скидка:</b> -${pricing.discountPercent}%\n`;
+    summary += `📌 <b>Работа:</b> ${escapeHtml(work.title)}\n`;
+    summary += `💵 <b>Базовая цена:</b> ${pricing.basePrice} ₽\n`;
+    if (pricing.discountPercent > 0) {
+      summary += `🎉 <b>Ваша скидка:</b> -${pricing.discountPercent}%\n`;
+    }
     summary += `✅ <b>Итого к оплате:</b> ${pricing.finalPrice} ₽\n\n`;
-    if (order.details.text) summary += `📝 <b>Ваши данные:</b>\n\`${order.details.text}\`\n\n`;
+    
+    // 🌟 ИСПРАВЛЕНО: экранируем текст пользователя и используем HTML-теги
+    if (order.details.text) {
+      summary += `📝 <b>Ваши данные:</b>\n<code>${escapeHtml(order.details.text)}</code>\n\n`;
+    }
+    
     if (order.details.files.length > 0) {
       summary += `📎 <b>Принято файлов:</b> ${order.details.files.length}\n`;
-      order.details.files.forEach(file => { summary += `• ${escapeHtml(file.fileName)}\n`; });
+      order.details.files.forEach(file => { 
+        summary += `• ${escapeHtml(file.fileName)}\n`; 
+      });
       summary += '\n';
     }
+    
     summary += 'Проверьте данные и нажмите кнопку ниже.';
+    
     const buttons = [[{ text: '💳 Подтвердить и оплатить', callback: 'order:confirm' }]];
-    if (order.details.text) buttons.push([{ text: '✏️ Изменить данные', callback: 'order:edit_text' }]);
-    if (order.details.files.length > 0) buttons.push([{ text: '📎 Изменить вложение', callback: 'order:edit_files' }]);
-    await ctx.editMessageText(summary, { parse_mode: 'HTML', reply_markup: createInlineKeyboard(buttons).reply_markup });
+    if (order.details.text) {
+      buttons.push([{ text: '✏️ Изменить данные', callback: 'order:edit_text' }]);
+    }
+    if (order.details.files.length > 0) {
+      buttons.push([{ text: '📎 Изменить вложение', callback: 'order:edit_files' }]);
+    }
+    
+    // 🌟 ИСПРАВЛЕНО: добавлена обработка ошибок
+    try {
+      await ctx.reply(summary, { 
+        parse_mode: 'HTML', 
+        reply_markup: createInlineKeyboard(buttons).reply_markup 
+      });
+    } catch (error) {
+      console.error('Ошибка парсинга HTML в showConfirmation:', error.message);
+      console.error('Проблемный текст:', summary);
+      
+      // Отправляем без форматирования как fallback
+      try {
+        const plainSummary = summary.replace(/<[^>]*>/g, ''); // удаляем HTML-теги
+        await ctx.reply(plainSummary, { 
+          reply_markup: createInlineKeyboard(buttons).reply_markup 
+        });
+      } catch (fallbackError) {
+        console.error('Ошибка fallback:', fallbackError.message);
+        await ctx.reply('⚠️ Произошла ошибка при формировании подтверждения. Попробуйте ещё раз или напишите в поддержку.');
+      }
+    }
   }
 
   bot.action('order:edit_text', async (ctx) => {
