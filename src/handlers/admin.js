@@ -570,6 +570,61 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
   };
 }
 
+// 🌟 Функция полного пересчёта финансовой модели заказа
+function recalculateFinances(order, overrides = {}) {
+  const basePrice = overrides.basePrice !== undefined ? overrides.basePrice : (order.basePrice || order.price || 0);
+  const commissionPercent = overrides.commissionPercent !== undefined ? overrides.commissionPercent : (order.commissionPercent || order.commission || 20);
+  const discountPercent = overrides.discountPercent !== undefined ? overrides.discountPercent : (order.discountPercent || 0);
+  const finalPriceOverride = overrides.finalPrice; // если задана оплаченная сумма вручную
+
+  const executorPrice = Math.round(basePrice * (1 - commissionPercent / 100));
+  const totalCommission = Math.round(basePrice * commissionPercent / 100);
+
+  let discountAmount, finalPrice, actualDiscountPercent;
+
+  if (finalPriceOverride !== undefined) {
+    // Режим: указана оплаченная сумма → пересчитываем скидку
+    finalPrice = finalPriceOverride;
+    discountAmount = Math.max(0, basePrice - finalPrice);
+    actualDiscountPercent = basePrice > 0 ? Math.round(discountAmount / basePrice * 100) : 0;
+  } else {
+    // Режим: указана скидка в % → пересчитываем итог
+    discountAmount = Math.round(basePrice * discountPercent / 100);
+    finalPrice = basePrice - discountAmount;
+    actualDiscountPercent = discountPercent;
+  }
+
+  const actualCommission = Math.max(0, finalPrice - executorPrice);
+  const commissionExpense = Math.max(0, totalCommission - actualCommission);
+
+  const expenseConstantPercent = finance.getExpenseConstant();
+  const expenseConstantBase = Math.round(totalCommission * expenseConstantPercent / 100);
+  const expenseConstantAmount = expenseConstantBase - commissionExpense;
+
+  const coOwners = finance.getCoOwners();
+  const coOwnerShares = coOwners.map(co => ({
+    id: co.id,
+    username: co.username,
+    percent: co.percent,
+    amount: Math.round(totalCommission * co.percent / 100)
+  }));
+
+  return {
+    basePrice,
+    executorPrice,
+    finalPrice,
+    discountPercent: actualDiscountPercent,
+    discountAmount,
+    commissionPercent,
+    commissionExpense,
+    expenseConstantPercent,
+    expenseConstantAmount,
+    coOwnerShares,
+    price: basePrice,
+    commission: commissionPercent
+  };
+}
+
 // 🌟 Клавиатура главного меню финансов
 function getFinanceMenu() {
   return Markup.inlineKeyboard([
@@ -1625,56 +1680,46 @@ function register(bot) {
       await ctx.reply(`✅ Поле "${field}" обновлено!`, { ...getWorkCard(workId).keyboard });
       ctx.session.adminState = null; return;
     }
-
     // --- ЗАКАЗЫ: Редактирование заказа ---
     if (state.startsWith('edit_order_input:')) {
       const parts = state.split(':');
       const orderId = parts[1]; const field = parts[2];
-      let value = text;
-      if ((field === 'price' || field === 'commission') && isNaN(text)) return ctx.reply('❌ Значение должно быть числом.');
-      if (field === 'price' || field === 'commission') value = parseInt(text);
-      if (field === 'needs') value = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
-
-      // 🌟 Получаем заказ ДО обновления (для сравнения старой цены)
       const orderBefore = ordersDb.getOrder(orderId);
-      const oldPrice = orderBefore ? orderBefore.price : 0;
-
-        // 🌟 При изменении цены пересчитываем итоговую цену с комиссией
-      if (field === 'price' && orderBefore && orderBefore.isCustomOrder) {
-        const commission = orderBefore.commission || 0;
-        const finalPrice = Math.round(value / (1 - commission / 100));
-        ordersDb.updateOrder(orderId, { price: value, finalPrice: finalPrice });
-      } else {
-        ordersDb.updateOrder(orderId, { [field]: value });
+      if (!orderBefore) { ctx.session.adminState = null; return ctx.reply('❌ Заказ не найден.'); }
+      let value = text;
+      // Числовые поля
+      if (['price', 'commission', 'customerId', 'executorId'].includes(field)) {
+        if (isNaN(text)) return ctx.reply('❌ Значение должно быть числом.');
+        value = parseInt(text);
       }
-      
-      const order = ordersDb.getOrder(orderId);
-
+      if (field === 'needs') value = text.toLowerCase() === 'нет' ? [] : text.split(',').map(s => s.trim());
+      // 🌟 Для username — убираем @
+      if (field === 'customerUsername' || field === 'executorUsername') {
+        value = text.replace('@', '').trim();
+      }
+      // Обновляем поле
+      ordersDb.updateOrder(orderId, { [field]: value });
       // 🌟 Логика уведомлений при изменении цены индивидуального заказа
-      if (field === 'price' && order.isCustomOrder && order.customerId) {
-        const orderNumber = order.orderNumber || orderId;
-
-        if (order.status !== 'paid' && value > 0) {
-          // Цена назначена/изменена и заказ НЕ оплачен → уведомляем заказчика
+      if (field === 'price' && orderBefore.isCustomOrder && orderBefore.customerId) {
+        const orderNumber = orderBefore.orderNumber || orderId;
+        const oldPrice = orderBefore.price || 0;
+        if (orderBefore.status !== 'paid' && value > 0) {
           const isNewPrice = (!oldPrice || oldPrice <= 0);
           const title = isNewPrice
             ? '💰 <b>Назначена цена за ваш заказ</b>'
             : '💰 <b>Цена за ваш заказ изменена</b>';
-
           const customerMessage =
             `${title}\n\n` +
             `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-            `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n` +
+            `📚 <b>Предмет:</b> ${orderBefore.subjectName || orderBefore.workTitle}\n` +
             `💵 <b>Цена:</b> ${value} ₽\n\n` +
             `Вы можете обсудить цену с исполнителем или перейти к оплате:`;
-
           const customerKeyboard = Markup.inlineKeyboard([
             [Markup.button.callback('✉️ Обсудить цену с исполнителем', `custom_write_executor:${orderNumber}`)],
             [Markup.button.callback('💳 Перейти к оплате', `custom_pay:${orderNumber}`)]
           ]);
-
           try {
-            await ctx.telegram.sendMessage(order.customerId, customerMessage, {
+            await ctx.telegram.sendMessage(orderBefore.customerId, customerMessage, {
               parse_mode: 'HTML',
               reply_markup: customerKeyboard.reply_markup
             });
@@ -1682,21 +1727,80 @@ function register(bot) {
             console.log('Не удалось уведомить заказчика о цене:', e.message);
           }
         }
-        // Если status === 'paid' — просто обновляем поле, без уведомления
       }
-
       await ctx.reply(
-        `✅ Поле "${field}" обновлено!\n\nНовое значение: <code>${value}</code>`,
+        `✅ Поле "<b>${field}</b>" обновлено!\n\nНовое значение: <code>${escapeHtml(String(value))}</code>`,
         {
           parse_mode: 'HTML',
           ...Markup.inlineKeyboard([
-            [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
+            [Markup.button.callback('⬅️ Назад к редактированию', `admin:order_edit:${orderId}`)],
+            [Markup.button.callback('📦 К заказу', `admin:order_view:${orderId}`)]
           ])
         }
       );
       ctx.session.adminState = null; return;
     }
+    // 🌟 РЕДАКТИРОВАНИЕ ФИНАНСОВЫХ ПОЛЕЙ С ПЕРЕСЧЁТОМ
+    if (state.startsWith('edit_order_fin:')) {
+      const parts = state.split(':');
+      const orderId = parts[1];
+      const field = parts[2];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { ctx.session.adminState = null; return ctx.reply('❌ Заказ не найден.'); }
 
+      if (isNaN(text)) return ctx.reply('❌ Значение должно быть числом.');
+      const numValue = parseInt(text);
+
+      // Валидация
+      if (field === 'discountPercent' && (numValue < 0 || numValue > 100)) {
+        return ctx.reply('❌ Скидка должна быть в диапазоне от 0 до 100.');
+      }
+      if (field === 'commissionPercent' && (numValue < 0 || numValue > 100)) {
+        return ctx.reply('❌ Комиссия должна быть в диапазоне от 0 до 100.');
+      }
+      if ((field === 'basePrice' || field === 'finalPrice') && numValue < 0) {
+        return ctx.reply('❌ Сумма не может быть отрицательной.');
+      }
+
+      // 🌟 Пересчёт финансовой модели
+      const overrides = {};
+      overrides[field] = numValue;
+      const newFinances = recalculateFinances(order, overrides);
+
+      // Обновляем заказ
+      ordersDb.updateOrder(orderId, newFinances);
+
+      // Формируем отчёт
+      let report = `✅ <b>Финансы пересчитаны!</b>\n\n`;
+      report += `💵 <b>Базовая цена:</b> ${newFinances.basePrice} ₽\n`;
+      if (newFinances.discountPercent > 0) {
+        report += `🎉 <b>Скидка:</b> ${newFinances.discountPercent}% (-${newFinances.discountAmount} ₽)\n`;
+      }
+      report += `💰 <b>Итого к оплате:</b> ${newFinances.finalPrice} ₽\n`;
+      report += `👷 <b>Исполнитель получит:</b> ${newFinances.executorPrice} ₽\n`;
+      report += `📊 <b>Комиссия:</b> ${newFinances.commissionPercent}%\n`;
+      if (newFinances.commissionExpense > 0) {
+        report += `📉 <b>Покрытие из фонда константы:</b> ${newFinances.commissionExpense} ₽\n`;
+      }
+
+      logger.logAdminAction('order_finances_updated', {
+        orderId,
+        orderNumber: order.orderNumber,
+        changedField: field,
+        newValue: numValue,
+        newFinalPrice: newFinances.finalPrice,
+        newExecutorPrice: newFinances.executorPrice
+      }, ctx);
+
+      await ctx.reply(report, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('💰 К финансам', `admin:order_edit_fin:${orderId}`)],
+          [Markup.button.callback('📦 К заказу', `admin:order_view:${orderId}`)]
+        ])
+      });
+      ctx.session.adminState = null; return;
+    }
      // --- ИЗМЕНЕНИЕ СУММЫ ВЫКУПА ---
     if (state.startsWith('edit_customer_spent:')) {
       const customerId = state.split(':')[1];
@@ -2963,6 +3067,74 @@ function register(bot) {
         );
         return;
       }
+      // 🌟 Файлы при редактировании обычного заказа
+      if (state.startsWith('edit_order_waiting_files:')) {
+        const orderId = state.split(':')[1];
+
+        if (ctx.message.text && ctx.message.text.toLowerCase() === 'готово') {
+          const files = ctx.session.editOrderFiles || [];
+          ordersDb.updateOrder(orderId, { taskFiles: files });
+          logger.logAdminAction('order_files_updated', { orderId, filesCount: files.length }, ctx);
+          await ctx.reply(
+            `✅ <b>Файлы обновлены!</b>\n\n📎 Принято файлов: ${files.length}`,
+            { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit_data:${orderId}`)]]) }
+          );
+          ctx.session.adminState = null;
+          ctx.session.editOrderFiles = null;
+          return;
+        }
+
+        const fileInfo = {};
+        if (ctx.message.photo) {
+          fileInfo.type = 'photo';
+          fileInfo.fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+          fileInfo.fileName = `Фото_${Date.now()}.jpg`;
+        } else if (ctx.message.document) {
+          fileInfo.type = 'document';
+          fileInfo.fileId = ctx.message.document.file_id;
+          fileInfo.fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
+        }
+
+        if (!ctx.session.editOrderFiles) ctx.session.editOrderFiles = [];
+        ctx.session.editOrderFiles.push(fileInfo);
+
+        await ctx.reply(
+          `✅ <b>Файл принят:</b> ${escapeHtml(fileInfo.fileName)}\n\n📎 Всего: ${ctx.session.editOrderFiles.length}\nОтправляйте ещё или <code>готово</code>.`,
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      // 🌟 Файл при редактировании индивидуального заказа
+      if (state.startsWith('edit_order_waiting_file_custom:')) {
+        const orderId = state.split(':')[1];
+
+        const fileInfo = {};
+        if (ctx.message.photo) {
+          fileInfo.type = 'photo';
+          fileInfo.fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+          fileInfo.fileName = `Фото_${Date.now()}.jpg`;
+        } else if (ctx.message.document) {
+          fileInfo.type = 'document';
+          fileInfo.fileId = ctx.message.document.file_id;
+          fileInfo.fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
+        }
+
+        ordersDb.updateOrder(orderId, {
+          fileName: fileInfo.fileName,
+          fileId: fileInfo.fileId,
+          fileType: fileInfo.type
+        });
+
+        logger.logAdminAction('order_file_updated', { orderId, fileName: fileInfo.fileName }, ctx);
+
+        await ctx.reply(
+          `✅ <b>Файл обновлён:</b> ${escapeHtml(fileInfo.fileName)}`,
+          { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit_data:${orderId}`)]]) }
+        );
+        ctx.session.adminState = null;
+        return;
+      }
       
       // 🌟 Если состояние не связано с файлами — пропускаем
       await next();
@@ -3502,26 +3674,309 @@ const backKeyboard = Markup.inlineKeyboard([
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
       if (!order) return;
+
+      const typeLabel = order.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
+
       const keyboardButtons = [
+        // 📋 Основные данные
+        [Markup.button.callback('📋 Основные данные', `admin:order_edit_main:${orderId}`)],
+        // 💰 Финансы
+        [Markup.button.callback('💰 Финансы (цена, скидка, комиссия)', `admin:order_edit_fin:${orderId}`)],
+        // 👥 Участники
+        [Markup.button.callback('👥 Участники (заказчик, исполнитель)', `admin:order_edit_people:${orderId}`)],
+        // 📝 Исходные данные
+        [Markup.button.callback('📝 Исходные данные и файлы', `admin:order_edit_data:${orderId}`)],
+        // 🏷 Статус
+        [Markup.button.callback('🏷 Изменить статус', `admin:order_status_select:${orderId}`)],
+        // ⬅️ Назад
+        [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
+      ];
+
+      await ctx.editMessageText(
+        `✏️ <b>Редактирование заказа №${order.orderNumber}</b>\n${typeLabel}\n\nВыберите раздел:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(keyboardButtons) }
+      );
+    }
+    // ==========================================
+    // 🌟 ПОДМЕНЮ РЕДАКТИРОВАНИЯ ЗАКАЗА
+    // ==========================================
+
+    // 📋 Основные данные
+    else if (action.startsWith('order_edit_main:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const buttons = [
         [Markup.button.callback('📝 Название работы', `admin:order_field:${orderId}:workTitle`)],
         [Markup.button.callback('📖 Предмет', `admin:order_field:${orderId}:subjectName`)],
         [Markup.button.callback('🎓 Курс', `admin:order_field:${orderId}:courseName`)],
-        [Markup.button.callback('💰 Цена', `admin:order_field:${orderId}:price`)],
-        [Markup.button.callback('📊 Комиссия', `admin:order_field:${orderId}:commission`)],
-        [Markup.button.callback('👤 Username заказчика', `admin:order_field:${orderId}:customerUsername`)],
-        [Markup.button.callback('👷 Username исполнителя', `admin:order_field:${orderId}:executorUsername`)]
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
       ];
-      // 🌟 Дополнительные поля для custom orders
-      if (order.isCustomOrder) {
-        keyboardButtons.push([Markup.button.callback('📝 Описание задания', `admin:order_field:${orderId}:description`)]);
-        keyboardButtons.push([Markup.button.callback('🏷 Статус заказа', `admin:order_status_menu:${orderId}`)]);
-      }
-      keyboardButtons.push([Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]);
-      const typeLabel = order.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
+
       await ctx.editMessageText(
-        `✏️ <b>Редактирование заказа №${order.orderNumber}</b>\n${typeLabel}\n\nВыберите поле для изменения:`,
-        { parse_mode: 'HTML', ...Markup.inlineKeyboard(keyboardButtons) }
+        `📋 <b>Основные данные заказа №${order.orderNumber}</b>\n\n` +
+        `📝 Работа: ${escapeHtml(order.workTitle || '—')}\n` +
+        `📖 Предмет: ${escapeHtml(order.subjectName || '—')}\n` +
+        `🎓 Курс: ${escapeHtml(order.courseName || '—')}\n\n` +
+        `Выберите поле для изменения:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
       );
+    }
+
+    // 💰 Финансы
+    else if (action.startsWith('order_edit_fin:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const basePrice = order.basePrice || order.price || 0;
+      const discountPercent = order.discountPercent || 0;
+      const finalPrice = order.finalPrice || order.price || 0;
+      const commissionPercent = order.commissionPercent || order.commission || 20;
+      const executorPrice = order.executorPrice || Math.round(basePrice * (1 - commissionPercent / 100));
+      const commissionExpense = order.commissionExpense || 0;
+
+      let finText = `💰 <b>Финансы заказа №${order.orderNumber}</b>\n\n`;
+      finText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
+      if (discountPercent > 0) {
+        finText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${order.discountAmount || 0} ₽)\n`;
+      }
+      finText += `💰 <b>Итого к оплате:</b> ${finalPrice} ₽\n`;
+      finText += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+      if (commissionExpense > 0) {
+        finText += `📉 <b>Покрытие из фонда:</b> ${commissionExpense} ₽\n`;
+      }
+
+      const buttons = [
+        [Markup.button.callback('💵 Изменить базовую цену', `admin:order_edit_fin_field:${orderId}:basePrice`)],
+        [Markup.button.callback('🎉 Изменить скидку (%)', `admin:order_edit_fin_field:${orderId}:discountPercent`)],
+        [Markup.button.callback('💰 Изменить оплаченную сумму', `admin:order_edit_fin_field:${orderId}:finalPrice`)],
+        [Markup.button.callback('📊 Изменить комиссию (%)', `admin:order_edit_fin_field:${orderId}:commissionPercent`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ];
+
+      await ctx.editMessageText(finText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 👥 Участники
+    else if (action.startsWith('order_edit_people:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      let peopleText = `👥 <b>Участники заказа №${order.orderNumber}</b>\n\n`;
+      peopleText += `👤 <b>Заказчик:</b> ${order.customerId} (${safeUsername(order.customerUsername)})\n`;
+      peopleText += `👷 <b>Исполнитель:</b> ${order.executorId || 'не назначен'} (${safeUsername(order.executorUsername)})\n\n`;
+      peopleText += `Выберите поле для изменения:`;
+
+      const buttons = [
+        [Markup.button.callback('👤 ID заказчика', `admin:order_field:${orderId}:customerId`)],
+        [Markup.button.callback('👤 Username заказчика', `admin:order_field:${orderId}:customerUsername`)],
+        [Markup.button.callback('👷 ID исполнителя', `admin:order_field:${orderId}:executorId`)],
+        [Markup.button.callback('👷 Username исполнителя', `admin:order_field:${orderId}:executorUsername`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ];
+
+      await ctx.editMessageText(peopleText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 📝 Исходные данные и файлы
+    else if (action.startsWith('order_edit_data:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      // 🌟 Получаем требования из каталога
+      let requirementsText = '';
+      if (order.workId) {
+        const work = catalog.getWork(order.workId);
+        if (work && work.needs && work.needs.length > 0) {
+          const parts = [];
+          if (work.needs.includes('details')) parts.push('текстовые данные');
+          if (work.needs.includes('variant')) parts.push('номер варианта');
+          if (work.needs.includes('photo')) parts.push('файл/фото');
+          requirementsText = `📋 <b>Требования каталога:</b> ${parts.join(' + ')}\n`;
+        }
+      }
+
+      let dataText = `📝 <b>Исходные данные заказа №${order.orderNumber}</b>\n\n`;
+      dataText += requirementsText;
+
+      if (order.isCustomOrder) {
+        dataText += `📝 <b>Описание:</b> ${order.description ? escapeHtml(order.description.substring(0, 100)) : '<i>пусто</i>'}\n`;
+        dataText += `📎 <b>Файл:</b> ${order.fileName ? escapeHtml(order.fileName) : '<i>нет</i>'}\n`;
+      } else {
+        dataText += `📝 <b>Исходные данные:</b> ${order.detailsText ? escapeHtml(order.detailsText.substring(0, 100)) : '<i>пусто</i>'}\n`;
+        dataText += `📎 <b>Файлов:</b> ${(order.taskFiles || []).length}\n`;
+      }
+
+      const buttons = [];
+      if (order.isCustomOrder) {
+        buttons.push([Markup.button.callback('📝 Изменить описание', `admin:order_field:${orderId}:description`)]);
+        buttons.push([Markup.button.callback('📎 Заменить/добавить файл', `admin:order_edit_file_custom:${orderId}`)]);
+      } else {
+        buttons.push([Markup.button.callback('📝 Изменить исходные данные', `admin:order_field:${orderId}:detailsText`)]);
+        buttons.push([Markup.button.callback('📎 Добавить/заменить файлы', `admin:order_edit_files:${orderId}`)]);
+      }
+      buttons.push([Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]);
+
+      await ctx.editMessageText(dataText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 🏷 Выбор статуса кнопками (для всех типов заказов)
+    else if (action.startsWith('order_status_select:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const statusKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🟡 Ожидает принятия', `admin:order_status:${orderId}:waiting_acceptance`)],
+        [Markup.button.callback('🟠 Ожидает цену', `admin:order_status:${orderId}:waiting_price`)],
+        [Markup.button.callback('🔵 Согласование цены', `admin:order_status:${orderId}:price_negotiating`)],
+        [Markup.button.callback('⏳ В ожидании (обычный)', `admin:order_status:${orderId}:pending`)],
+        [Markup.button.callback('🔨 В работе', `admin:order_status:${orderId}:active`)],
+        [Markup.button.callback('🟢 Оплачен', `admin:order_status:${orderId}:paid`)],
+        [Markup.button.callback('✅ Выполнен', `admin:order_status:${orderId}:completed`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ]);
+
+      await ctx.editMessageText(
+        `🏷 <b>Смена статуса заказа №${order.orderNumber}</b>\n\n` +
+        `Текущий статус: <b>${order.status}</b>\n\n` +
+        `Выберите новый статус:`,
+        { parse_mode: 'HTML', ...statusKeyboard }
+      );
+    }
+
+    // 🌟 Переход к вводу финансового поля
+    else if (action.startsWith('order_edit_fin_field:')) {
+      const parts = action.split(':');
+      const orderId = parts[1];
+      const field = parts[2];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const fieldLabels = {
+        basePrice: '💵 Базовая цена (₽)',
+        discountPercent: '🎉 Скидка (%)',
+        finalPrice: '💰 Оплаченная сумма (₽)',
+        commissionPercent: '📊 Комиссия (%)'
+      };
+
+      const currentValues = {
+        basePrice: order.basePrice || order.price || 0,
+        discountPercent: order.discountPercent || 0,
+        finalPrice: order.finalPrice || order.price || 0,
+        commissionPercent: order.commissionPercent || order.commission || 20
+      };
+
+      ctx.session.adminState = `edit_order_fin:${orderId}:${field}`;
+      await ctx.editMessageText(
+        `${fieldLabels[field]}\n\n` +
+        `📌 <b>Текущее значение:</b> <code>${currentValues[field]}</code>\n\n` +
+        `Введите новое значение (число):`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit_fin:${orderId}`)]]) }
+      );
+    }
+
+    // 🌟 Редактирование файлов обычного заказа
+    else if (action.startsWith('order_edit_files:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      ctx.session.adminState = `edit_order_waiting_files:${orderId}`;
+      ctx.session.editOrderFiles = [];
+
+      const buttons = [
+        [Markup.button.callback('🔄 Заменить все файлы (отправить новые)', `admin:order_edit_files_replace:${orderId}`)],
+        [Markup.button.callback('🗑 Удалить все файлы', `admin:order_edit_files_clear:${orderId}`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit_data:${orderId}`)]
+      ];
+
+      await ctx.editMessageText(
+        `📎 <b>Файлы заказа №${order.orderNumber}</b>\n\n` +
+        `Текущее количество: <b>${(order.taskFiles || []).length}</b>\n\n` +
+        `Выберите действие:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+    }
+
+    // 🌟 Замена файлов обычного заказа
+    else if (action.startsWith('order_edit_files_replace:')) {
+      const orderId = action.split(':')[1];
+      ctx.session.adminState = `edit_order_waiting_files:${orderId}`;
+      ctx.session.editOrderFiles = [];
+      await ctx.editMessageText(
+        `📎 <b>Отправляйте новые файлы</b>\n\n` +
+        `Отправляйте фото и документы по одному или группой.\n` +
+        `Когда закончите — отправьте <code>готово</code>.`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:order_edit_files:${orderId}`)]]) }
+      );
+      await ctx.answerCbQuery();
+    }
+
+    // 🌟 Удаление файлов обычного заказа
+    else if (action.startsWith('order_edit_files_clear:')) {
+      const orderId = action.split(':')[1];
+      ordersDb.updateOrder(orderId, { taskFiles: [] });
+      logger.logAdminAction('order_files_cleared', { orderId }, ctx);
+      await ctx.answerCbQuery('✅ Файлы удалены');
+      // Возвращаемся к данным
+      const order = ordersDb.getOrder(orderId);
+      let dataText = `📝 <b>Исходные данные заказа №${order.orderNumber}</b>\n\n`;
+      dataText += `📝 <b>Исходные данные:</b> ${order.detailsText ? escapeHtml(order.detailsText.substring(0, 100)) : '<i>пусто</i>'}\n`;
+      dataText += `📎 <b>Файлов:</b> 0\n`;
+      const buttons = [
+        [Markup.button.callback('📝 Изменить исходные данные', `admin:order_field:${orderId}:detailsText`)],
+        [Markup.button.callback('📎 Добавить файлы', `admin:order_edit_files:${orderId}`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ];
+      await ctx.editMessageText(dataText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 🌟 Редактирование файла индивидуального заказа
+    else if (action.startsWith('order_edit_file_custom:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const buttons = [
+        [Markup.button.callback('🔄 Заменить файл', `admin:order_edit_file_custom_replace:${orderId}`)],
+        [Markup.button.callback('🗑 Удалить файл', `admin:order_edit_file_custom_clear:${orderId}`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit_data:${orderId}`)]
+      ];
+
+      await ctx.editMessageText(
+        `📎 <b>Файл заказа №${order.orderNumber}</b>\n\n` +
+        `Текущий файл: ${order.fileName ? escapeHtml(order.fileName) : '<i>нет</i>'}\n\n` +
+        `Выберите действие:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) }
+      );
+    }
+
+    // 🌟 Замена файла индивидуального заказа
+    else if (action.startsWith('order_edit_file_custom_replace:')) {
+      const orderId = action.split(':')[1];
+      ctx.session.adminState = `edit_order_waiting_file_custom:${orderId}`;
+      await ctx.editMessageText(
+        `📎 <b>Пришлите новый файл задания</b>\n\nОтправьте фото или документ.`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Отмена', `admin:order_edit_file_custom:${orderId}`)]]) }
+      );
+      await ctx.answerCbQuery();
+    }
+
+    // 🌟 Удаление файла индивидуального заказа
+    else if (action.startsWith('order_edit_file_custom_clear:')) {
+      const orderId = action.split(':')[1];
+      ordersDb.updateOrder(orderId, { fileName: null, fileId: null, fileType: null });
+      logger.logAdminAction('order_file_cleared', { orderId }, ctx);
+      await ctx.answerCbQuery('✅ Файл удалён');
+      await ctx.editMessageText('✅ Файл удалён.', {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit_data:${orderId}`)]])
+      });
     }
     // --- ПРИВЯЗКА ЗАКАЗА К ЧАТУ (АДМИН) ---
     else if (action.startsWith('order_bind_chat:')) {
