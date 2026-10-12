@@ -24,14 +24,20 @@ function restoreChatData(chatId) {
     const parts = chatId.split('_');
     if (parts[0] === 'order' && parts.length >= 3) {
       const customerUserId = parseInt(parts[1]);
-      const lastPart = parts[parts.length - 1];
-      const workId = (!isNaN(lastPart) && lastPart.length >= 10) ? parts.slice(2, -1).join('_') : parts.slice(2).join('_');
+      
+      // 🌟 ИСПРАВЛЕННЫЙ ПАРСИНГ: двухэтапная проверка
+      const fullWorkId = parts.slice(2).join('_');
+      let workId;
+      if (catalog.getWork(fullWorkId)) {
+        workId = fullWorkId; // старый формат
+      } else {
+        workId = parts.slice(2, -1).join('_'); // новый формат с timestamp
+      }
 
       const userOrders = orders.getUserOrders(customerUserId);
-      // Ищем заказы с нужной работой, у которых уже есть исполнитель
       const matchingOrders = userOrders.filter(o => o.workId === workId && o.executorId);
       if (matchingOrders.length > 0) {
-        order = matchingOrders[matchingOrders.length - 1]; // Берем самый свежий
+        order = matchingOrders[matchingOrders.length - 1];
       }
     }
   }
@@ -555,7 +561,7 @@ function register(bot) {
       keyboard = Markup.inlineKeyboard([]);
     } else {
       caption = buildExecutorOrderCaption(order);
-      keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}`);
+      keyboard = buildExecutorOrderKeyboard(order, order.chatId || `order_${order.customerId}_${order.workId}_${Date.now()}`);
     }
 
     try {
@@ -755,24 +761,32 @@ function register(bot) {
       return;
     }
 
-    // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ
-    if (ctx.session.customerReplyToExecutorId) {
-      const targetUserId = ctx.session.customerReplyToExecutorId;
-      const orderTitle = ctx.session.customerReplyOrderTitle;
-      const orderDate = ctx.session.customerReplyOrderDate;
-      const orderNumber = ctx.session.customerReplyOrderNumber || '—';
-      const orderId = ctx.session.customerReplyOrderId;
-      const chatId = ctx.session.customerReplyChatId; // 🌟 Используем сохранённый chatId
-      const messageText = ctx.message.text || '[Фото/Файл]';
+  // 🌟 0.2 ЗАКАЗЧИК ПИШЕТ ИСПОЛНИТЕЛЮ
+  if (ctx.session.customerReplyToExecutorId) {
+    const targetUserId = ctx.session.customerReplyToExecutorId;
+    const orderTitle = ctx.session.customerReplyOrderTitle;
+    const orderDate = ctx.session.customerReplyOrderDate;
+    const orderNumber = ctx.session.customerReplyOrderNumber || '—';
+    const orderId = ctx.session.customerReplyOrderId;
+    const chatId = ctx.session.customerReplyChatId; // 🌟 Используем сохранённый chatId
+    const messageText = ctx.message.text || '[Фото/Файл]';
 
   // 🌟 Проверяем, существует ли чат в activeChats
   let chatData = activeChats.get(chatId);
   
   // Если чата нет в activeChats, создаём его
   if (!chatData) {
-    // Получаем workId из chatId (формат: order_customerId_workId)
+    // 🌟 ИСПРАВЛЕННЫЙ ПАРСИНГ: двухэтапная проверка
     const parts = chatId.split('_');
-    const workId = parts.slice(2).join('_');
+    const fullWorkId = parts.slice(2).join('_');
+    let workId;
+    
+    if (catalog.getWork(fullWorkId)) {
+      workId = fullWorkId; // старый формат
+    } else {
+      workId = parts.slice(2, -1).join('_'); // новый формат с timestamp
+    }
+    
     const work = catalog.getWork(workId);
     
     if (!work) {
@@ -1258,80 +1272,85 @@ function register(bot) {
     const parts = chatId.split('_');
     const customerUserId = parseInt(parts[1]);
     
-    // 🌟 Поддержка старого и нового формата chatId (с timestamp и без)
-    const lastPart = parts[parts.length - 1];
+    // 🌟 ИСПРАВЛЕННЫЙ ПАРСИНГ: двухэтапная проверка
+    // Сначала пробуем взять всё после второго элемента (старый формат без timestamp)
+    const fullWorkId = parts.slice(2).join('_');
     let workId;
-    if (!isNaN(lastPart) && lastPart.length >= 10) {
-      // Новый формат: order_customerId_workId_with_underscores_timestamp
-      workId = parts.slice(2, -1).join('_');
+    
+    if (catalog.getWork(fullWorkId)) {
+      // Работа найдена — значит это старый формат (без timestamp)
+      workId = fullWorkId;
     } else {
-      // Старый формат: order_customerId_workId_with_underscores
-      workId = parts.slice(2).join('_');
+      // Работа не найдена — пробуем без последнего элемента (новый формат с timestamp)
+      workId = parts.slice(2, -1).join('_');
     }
     
     const work = catalog.getWork(workId);
-    if (!work) return ctx.answerCbQuery('❌ Работа не найдена');
+    if (!work) {
+      console.error(`❌ Работа не найдена при парсинге chatId: ${chatId}`);
+      console.error(`   Пробовали: "${fullWorkId}" и "${workId}"`);
+      return ctx.answerCbQuery('❌ Работа не найдена');
+    }
 
-// 🌟 ПРОВЕРКА: Используем данные из БД, а не in-memory Map
-const activeOrder = orders.findActiveOrder(customerUserId, workId);
+  // 🌟 ПРОВЕРКА: Используем данные из БД, а не in-memory Map
+  const activeOrder = orders.findActiveOrder(customerUserId, workId);
 
-// 🌟 Если заказ существует и у него уже есть исполнитель, блокируем повторное принятие
-if (activeOrder && activeOrder.executorId) {
-  return ctx.answerCbQuery('⚠️ Этот заказ уже принят другим исполнителем');
-}
-
-const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
-let customerUsername = null;
-try {
-  const customerUser = await ctx.telegram.getChat(customerUserId);
-  customerUsername = customerUser.username ? `@${customerUser.username}` : null;
-} catch (e) {
-  console.log('Не удалось получить username заказчика:', e.message);
-}
-
-const groupChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
-
-// 🌟 Получаем номер заказа из уже найденного activeOrder
-const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
-    
-// 🌟 Редактируем исходное сообщение в группе вместо отправки нового
-if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
-const executorUser = await ctx.telegram.getChat(executorUserId);
-orders.updateOrder(activeOrder.id, {
-executorId: executorUserId,
-executorUsername: executorUser.username || null,
-status: 'active',
-acceptedAt: new Date().toLocaleString('ru-RU'),
-chatId: chatId
-});
-const updatedOrder = orders.getOrder(activeOrder.id);
-const updatedText = buildGroupOrderText(updatedOrder, 'in_progress');
-
-const inProgressKeyboard = buildInProgressKeyboard(updatedOrder);   // 🌟 используем общую функцию
-
-try {
-  if (updatedOrder.screenshotFileId) {
-    await ctx.telegram.editMessageCaption(
-      activeOrder.managerChatId,
-      activeOrder.managerMessageId,
-      null,
-      updatedText,
-      { parse_mode: 'HTML', reply_markup: inProgressKeyboard.reply_markup }
-    );
-  } else {
-    await ctx.telegram.editMessageText(
-      activeOrder.managerChatId,
-      activeOrder.managerMessageId,
-      null,
-      updatedText,
-      { parse_mode: 'HTML', reply_markup: inProgressKeyboard.reply_markup }
-    );
+  // 🌟 Если заказ существует и у него уже есть исполнитель, блокируем повторное принятие
+  if (activeOrder && activeOrder.executorId) {
+    return ctx.answerCbQuery('⚠️ Этот заказ уже принят другим исполнителем');
   }
-} catch (e) {
-  console.log('Не удалось обновить сообщение в группе:', e.message);
-}
-}
-    
+
+  const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+  let customerUsername = null;
+  try {
+    const customerUser = await ctx.telegram.getChat(customerUserId);
+    customerUsername = customerUser.username ? `@${customerUser.username}` : null;
+  } catch (e) {
+    console.log('Не удалось получить username заказчика:', e.message);
+  }
+
+  const groupChatId = process.env[work.chatEnv] || process.env.MY_CHAT_ID;
+
+  // 🌟 Получаем номер заказа из уже найденного activeOrder
+  const orderNumber = activeOrder ? activeOrder.orderNumber : '—';
+      
+  // 🌟 Редактируем исходное сообщение в группе вместо отправки нового
+  if (activeOrder && activeOrder.managerMessageId && activeOrder.managerChatId) {
+  const executorUser = await ctx.telegram.getChat(executorUserId);
+  orders.updateOrder(activeOrder.id, {
+  executorId: executorUserId,
+  executorUsername: executorUser.username || null,
+  status: 'active',
+  acceptedAt: new Date().toLocaleString('ru-RU'),
+  chatId: chatId
+  });
+  const updatedOrder = orders.getOrder(activeOrder.id);
+  const updatedText = buildGroupOrderText(updatedOrder, 'in_progress');
+
+  const inProgressKeyboard = buildInProgressKeyboard(updatedOrder);   // 🌟 используем общую функцию
+
+  try {
+    if (updatedOrder.screenshotFileId) {
+      await ctx.telegram.editMessageCaption(
+        activeOrder.managerChatId,
+        activeOrder.managerMessageId,
+        null,
+        updatedText,
+        { parse_mode: 'HTML', reply_markup: inProgressKeyboard.reply_markup }
+      );
+    } else {
+      await ctx.telegram.editMessageText(
+        activeOrder.managerChatId,
+        activeOrder.managerMessageId,
+        null,
+        updatedText,
+        { parse_mode: 'HTML', reply_markup: inProgressKeyboard.reply_markup }
+      );
+    }
+  } catch (e) {
+    console.log('Не удалось обновить сообщение в группе:', e.message);
+  }
+  }
     activeChats.set(chatId, { chatId, customerUserId, executorUserId, workId, workTitle: work.title, orderId: activeOrder ? activeOrder.id : null, orderNumber: orderNumber, status: 'idle', createdAt: Date.now() });
 
     // 🌟 Используем УЖЕ ОБЪЯВЛЕННУЮ выше переменную activeOrder (без const!)
