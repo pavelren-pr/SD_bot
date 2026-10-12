@@ -12,6 +12,11 @@ const EXECUTOR_ACTIVE_STATUSES = ['active', 'paid', 'waiting_price', 'price_nego
 
 const ORDERS_PER_PAGE = 5;
 
+function safeUsername(username) {
+  if (!username) return null;
+  return '@' + escapeHtml(String(username));
+}
+
 function getMainMenuKeyboard() {
   return Markup.keyboard([
     ['📚 Заказать работу'],
@@ -61,11 +66,10 @@ bot.command('start', async (ctx) => {
   const userName = ctx.from.first_name || 'Пользователь';
   const userSpecialty = loyalty.getUserSpecialty(ctx.from.id);
   
-  // Если специальность не выбрана — показываем выбор
   if (!userSpecialty) {
     await ctx.reply(
       `👋 <b>Добро пожаловать, ${escapeHtml(userName)}!</b>\n\n` +
-      `Я — бот 🤖 для помощи с учебными работами.`, //
+      `Я — бот 🤖 для помощи с учебными работами.`,
       { parse_mode: 'HTML' }
     );
     await showSpecialtySelection(ctx);
@@ -1023,18 +1027,21 @@ function formatOrderCard(order, role) {
   const expenseConstantAmount = order.expenseConstantAmount || 0;
   const executorPrice = order.executorPrice !== undefined ? order.executorPrice : Math.round(basePrice * (1 - commissionPercent / 100));
 
+  // 🌟 ИСПРАВЛЕНО: экранируем username совладельцев
   let coOwnersText = '';
   if (order.coOwnerShares && Array.isArray(order.coOwnerShares) && order.coOwnerShares.length > 0) {
     coOwnersText = order.coOwnerShares.map(co =>
-      `• ${co.username ? '@' + co.username : 'ID: ' + co.id} — ${co.amount || 0} ₽`
+      `• ${co.username ? '@' + escapeHtml(co.username) : 'ID: ' + co.id} — ${co.amount || 0} ₽`
     ).join('\n');
   }
 
-  let text = `📦 <b>Заказ №${order.orderNumber}</b>\n\n`;
+  let text = `📦 <b>Заказ №${escapeHtml(order.orderNumber)}</b>\n\n`;
   text += `${statusEmoji} <b>Статус:</b> ${statusText}\n\n`;
-  text += `📚 <b>Работа:</b> ${order.workTitle}\n`;
-  text += `📖 <b>Предмет:</b> ${order.subjectName}\n`;
-  text += `🎓 <b>Курс:</b> ${order.courseName}\n\n`;
+  
+  // 🌟 ИСПРАВЛЕНО: экранируем данные заказа
+  text += `📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n`;
+  text += `📖 <b>Предмет:</b> ${escapeHtml(order.subjectName || '—')}\n`;
+  text += `🎓 <b>Курс:</b> ${escapeHtml(order.courseName || '—')}\n\n`;
 
   if (role === 'customer') {
     text += `💰 <b>Стоимость:</b> ${finalPrice} ₽\n\n`;
@@ -1088,9 +1095,10 @@ function formatOrderCard(order, role) {
     }
   }
 
-  text += `📅 <b>Создан:</b> ${order.createdAt}\n`;
-  if (order.acceptedAt) text += `🔨 <b>Принят:</b> ${order.acceptedAt}\n`;
-  if (order.completedAt) text += `✅ <b>Выполнен:</b> ${order.completedAt}\n`;
+  // 🌟 ИСПРАВЛЕНО: экранируем даты
+  text += `📅 <b>Создан:</b> ${escapeHtml(order.createdAt || '—')}\n`;
+  if (order.acceptedAt) text += `🔨 <b>Принят:</b> ${escapeHtml(order.acceptedAt)}\n`;
+  if (order.completedAt) text += `✅ <b>Выполнен:</b> ${escapeHtml(order.completedAt)}\n`;
 
   return text;
 }
