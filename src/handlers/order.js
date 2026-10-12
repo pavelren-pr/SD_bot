@@ -860,8 +860,7 @@ function register(bot) {
     
     const order = ctx.session.order;
 
-    // Пропускаем если это индивидуальный заказ (обрабатывается в custom_order.js)
-    if (order && ctx.session.customOrder) {
+    if (ctx.session.customOrder) {
       return next();
     }
 
