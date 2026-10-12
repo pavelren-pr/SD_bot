@@ -2128,22 +2128,95 @@ function register(bot) {
     }
     if (state === 'add_order:description') {
       ctx.session.newOrder.description = text.toLowerCase() === 'нет' ? null : text;
-      
       const newOrder = ctx.session.newOrder;
-      
-      // 🌟 Предлагаем выбрать цену: из каталога или свою
-      const priceKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback(`✅ Принять базовую (${newOrder.catalogPrice} ₽)`, 'admin:add_order_price_accept')],
-        [Markup.button.callback('✏️ Ввести другую цену', 'admin:add_order_price_custom')]
-      ]);
-      
-      await ctx.reply(
-        `💰 <b>Шаг 8: Цена заказа</b>\n\n` +
-        `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n` +
-        `💵 <b>Базовая цена из каталога:</b> ${newOrder.catalogPrice} ₽\n\n` +
-        `Выберите действие:`,
-        { parse_mode: 'HTML', ...priceKeyboard }
-      );
+      const needs = newOrder.needs || [];
+
+      if (newOrder.isCustomOrder) {
+        // 🌟 Для индивидуальных заказов: спрашиваем про файл
+        ctx.session.adminState = 'add_order:file_choice';
+        await ctx.reply(
+          '📎 <b>Шаг 8: Файл задания</b>\n\n' +
+          'Хотите прикрепить файл к заказу?\n\n' +
+          'Отправьте <code>да</code> — затем пришлите файл\n' +
+          'Отправьте <code>нет</code> — продолжить без файла',
+          { parse_mode: 'HTML', ...getBackToAdminMenu() }
+        );
+      } else {
+        // 🌟 Для обычных заказов: анализируем needs из каталога
+        const needsText = needs.includes('details') || needs.includes('variant');
+        const needsFile = needs.includes('photo');
+
+        if (needsText) {
+          // Запрашиваем текстовые исходные данные
+          ctx.session.adminState = 'add_order:details_input';
+          let detailsPrompt = '📝 <b>Шаг 8: Исходные данные</b>\n\n';
+          if (needs.includes('variant')) {
+            detailsPrompt += 'Введите номер варианта:\n';
+          }
+          if (needs.includes('details')) {
+            detailsPrompt += 'Введите текстовые исходные данные (ФИО, группа и т.д.):\n';
+          }
+          await ctx.reply(detailsPrompt, { parse_mode: 'HTML', ...getBackToAdminMenu() });
+        } else if (needsFile) {
+          // Сразу запрашиваем файлы
+          ctx.session.adminState = 'add_order:waiting_files';
+          newOrder.pendingFiles = [];
+          await ctx.reply(
+            '📎 <b>Шаг 8: Файлы задания</b>\n\n' +
+            'Отправляйте фото и документы по одному или группой.\n' +
+            'Когда закончите — отправьте <code>готово</code>.',
+            { parse_mode: 'HTML', ...getBackToAdminMenu() }
+          );
+        } else {
+          // Нет требований — сразу к цене
+          const priceKeyboard = Markup.inlineKeyboard([
+            [Markup.button.callback(`✅ Принять базовую (${newOrder.catalogPrice} ₽)`, 'admin:add_order_price_accept')],
+            [Markup.button.callback('✏️ Ввести другую цену', 'admin:add_order_price_custom')]
+          ]);
+          await ctx.reply(
+            `💰 <b>Шаг 8: Цена заказа</b>\n\n` +
+            `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n` +
+            `💵 <b>Базовая цена из каталога:</b> ${newOrder.catalogPrice} ₽\n\n` +
+            `Выберите действие:`,
+            { parse_mode: 'HTML', ...priceKeyboard }
+          );
+        }
+      }
+      return;
+    }
+    // 🌟 НОВЫЙ ШАГ: Ввод текстовых исходных данных (для needs: details, variant)
+    if (state === 'add_order:details_input') {
+      ctx.session.newOrder.detailsText = text;
+      const newOrder = ctx.session.newOrder;
+      const needs = newOrder.needs || [];
+      const needsFile = needs.includes('photo');
+
+      if (needsFile) {
+        // После текста запрашиваем файлы
+        ctx.session.adminState = 'add_order:waiting_files';
+        newOrder.pendingFiles = [];
+        await ctx.reply(
+          `✅ <b>Исходные данные приняты!</b>\n\n` +
+          `📎 <b>Шаг 9: Файлы задания</b>\n\n` +
+          `Отправляйте фото и документы по одному или группой.\n` +
+          `Когда закончите — отправьте <code>готово</code>.`,
+          { parse_mode: 'HTML', ...getBackToAdminMenu() }
+        );
+      } else {
+        // Файлы не нужны — переходим к цене
+        const priceKeyboard = Markup.inlineKeyboard([
+          [Markup.button.callback(`✅ Принять базовую (${newOrder.catalogPrice} ₽)`, 'admin:add_order_price_accept')],
+          [Markup.button.callback('✏️ Ввести другую цену', 'admin:add_order_price_custom')]
+        ]);
+        await ctx.reply(
+          `✅ <b>Исходные данные приняты!</b>\n\n` +
+          `💰 <b>Шаг 9: Цена заказа</b>\n\n` +
+          `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n` +
+          `💵 <b>Базовая цена из каталога:</b> ${newOrder.catalogPrice} ₽\n\n` +
+          `Выберите действие:`,
+          { parse_mode: 'HTML', ...priceKeyboard }
+        );
+      }
       return;
     }
     if (state === 'add_order:details_text') {
@@ -2162,11 +2235,8 @@ function register(bot) {
     }
     if (state === 'add_order:file_choice') {
       const answer = text.toLowerCase();
-      
       if (answer === 'да') {
-        // 🌟 Инициализируем массив файлов
         ctx.session.newOrder.pendingFiles = [];
-        
         if (ctx.session.newOrder.isCustomOrder) {
           ctx.session.adminState = 'add_order:waiting_file_custom';
           await ctx.reply(
@@ -2185,15 +2255,24 @@ function register(bot) {
           );
         }
       } else if (answer === 'нет') {
-        // 🌟 Пропускаем файлы, переходим к цене
         ctx.session.newOrder.pendingFiles = [];
-        
-        if (ctx.session.newOrder.isCustomOrder) {
-          ctx.session.adminState = 'add_order:price_custom';
+        const newOrder = ctx.session.newOrder;
+        if (newOrder.isCustomOrder) {
+          ctx.session.adminState = 'add_order:price_manual';
           await ctx.reply('💰 <b>Шаг 9: Введите цену заказа (0 если ещё не назначена):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
         } else {
-          ctx.session.adminState = 'add_order:price';
-          await ctx.reply('💰 <b>Шаг 9: Введите цену заказа (число в рублях):</b>', { parse_mode: 'HTML', ...getBackToAdminMenu() });
+          // 🌟 Для обычных заказов — выбор из каталога или своя цена
+          const priceKeyboard = Markup.inlineKeyboard([
+            [Markup.button.callback(`✅ Принять базовую (${newOrder.catalogPrice} ₽)`, 'admin:add_order_price_accept')],
+            [Markup.button.callback('✏️ Ввести другую цену', 'admin:add_order_price_custom')]
+          ]);
+          await ctx.reply(
+            `💰 <b>Шаг 9: Цена заказа</b>\n\n` +
+            `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n` +
+            `💵 <b>Базовая цена из каталога:</b> ${newOrder.catalogPrice} ₽\n\n` +
+            `Выберите действие:`,
+            { parse_mode: 'HTML', ...priceKeyboard }
+          );
         }
       } else {
         return ctx.reply('❌ Отправьте <code>да</code> или <code>нет</code>.', { parse_mode: 'HTML' });
@@ -2203,57 +2282,35 @@ function register(bot) {
     if (state === 'add_order:waiting_files') {
       if (text.toLowerCase() === 'готово') {
         const filesCount = (ctx.session.newOrder.pendingFiles || []).length;
-        
-        if (ctx.session.newOrder.isCustomOrder) {
-          ctx.session.adminState = 'add_order:price_custom';
+        const newOrder = ctx.session.newOrder;
+
+        if (newOrder.isCustomOrder) {
+          // Для индивидуальных заказов — цена может быть 0
+          ctx.session.adminState = 'add_order:price_manual';
           await ctx.reply(
-            `✅ Принято файлов: ${filesCount}\n\n💰 <b>Шаг 9: Введите цену заказа (0 если ещё не назначена):</b>`,
+            `✅ <b>Принято файлов:</b> ${filesCount}\n\n` +
+            `💰 <b>Шаг 10: Введите цену заказа (0 если ещё не назначена):</b>`,
             { parse_mode: 'HTML', ...getBackToAdminMenu() }
           );
         } else {
-          ctx.session.adminState = 'add_order:price';
+          // Для обычных заказов — выбор из каталога или своя цена
+          const priceKeyboard = Markup.inlineKeyboard([
+            [Markup.button.callback(`✅ Принять базовую (${newOrder.catalogPrice} ₽)`, 'admin:add_order_price_accept')],
+            [Markup.button.callback('✏️ Ввести другую цену', 'admin:add_order_price_custom')]
+          ]);
           await ctx.reply(
-            `✅ Принято файлов: ${filesCount}\n\n💰 <b>Шаг 9: Введите цену заказа (число в рублях):</b>`,
-            { parse_mode: 'HTML', ...getBackToAdminMenu() }
+            `✅ <b>Принято файлов:</b> ${filesCount}\n\n` +
+            `💰 <b>Шаг 10: Цена заказа</b>\n\n` +
+            `📚 <b>Работа:</b> ${escapeHtml(newOrder.workTitle)}\n` +
+            `💵 <b>Базовая цена из каталога:</b> ${newOrder.catalogPrice} ₽\n\n` +
+            `Выберите действие:`,
+            { parse_mode: 'HTML', ...priceKeyboard }
           );
         }
         return;
       }
       return ctx.reply('❌ Отправьте <code>готово</code> для завершения загрузки файлов.', { parse_mode: 'HTML' });
     }
-    if (state === 'add_order:discount') {
-      if (isNaN(text)) return ctx.reply('❌ Скидка должна быть числом.');
-      const discountPercent = parseInt(text);
-      if (discountPercent < 0 || discountPercent > 100) {
-        return ctx.reply('❌ Скидка должна быть в диапазоне от 0 до 100.');
-      }
-      ctx.session.newOrder.discountPercent = discountPercent;
-      ctx.session.adminState = 'add_order:chat';
-      const envVars = getAvailableEnvVars();
-      let message = '💬 <b>Шаг 10: Чат исполнителей</b>\n\n';
-      message += formatEnvVarsList(envVars.chatVars, 'chat');
-      message += `\nОтправьте имя переменной чата (или \`нет\`, если не требуется):`;
-      await ctx.reply(message, { parse_mode: 'HTML', ...getBackToAdminMenu() });
-      return;
-    }
-    // 🌟 Ввод своей цены (после нажатия "Ввести другую")
-    if (state === 'add_order:price_manual') {
-      if (isNaN(text)) return ctx.reply('❌ Цена должна быть числом.');
-      ctx.session.newOrder.price = parseInt(text);
-      
-      // Переходим к скидке
-      ctx.session.adminState = 'add_order:discount';
-      await ctx.reply(
-        `✅ <b>Цена установлена:</b> ${ctx.session.newOrder.price} ₽\n\n` +
-        `🎉 <b>Шаг 9: Скидка заказчика</b>\n\n` +
-        `Введите скидку в процентах (число от 0 до 100).\n` +
-        `Отправьте <code>0</code>, если скидка не требуется.\n\n` +
-        `<i>💡 Скидка будет автоматически покрыта из фонда константы расходов.</i>`,
-        { parse_mode: 'HTML', ...getBackToAdminMenu() }
-      );
-      return;
-    }
-
     // 🌟 Ввод скидки
     if (state === 'add_order:discount') {
       if (isNaN(text)) return ctx.reply('❌ Скидка должна быть числом.');
@@ -2301,6 +2358,13 @@ function register(bot) {
       
       if (newOrder.description) {
         confirmText += `📝 <b>Описание:</b> ${escapeHtml(newOrder.description.substring(0, 100))}${newOrder.description.length > 100 ? '...' : ''}\n`;
+      }
+      if (newOrder.detailsText) {
+        confirmText += `📝 <b>Исходные данные:</b> ${escapeHtml(newOrder.detailsText.substring(0, 100))}${newOrder.detailsText.length > 100 ? '...' : ''}\n`;
+      }
+      const filesCount = (newOrder.pendingFiles || []).length + (newOrder.fileInfo ? 1 : 0);
+      if (filesCount > 0) {
+        confirmText += `📎 <b>Файлов:</b> ${filesCount}\n`;
       }
       confirmText += `\nСоздать заказ?`;
       
@@ -2850,7 +2914,6 @@ function register(bot) {
       // 🌟 Файл для индивидуального заказа (один файл)
       if (state === 'add_order:waiting_file_custom') {
         const fileInfo = {};
-        
         if (ctx.message.photo) {
           fileInfo.type = 'photo';
           fileInfo.fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
@@ -2860,12 +2923,9 @@ function register(bot) {
           fileInfo.fileId = ctx.message.document.file_id;
           fileInfo.fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
         }
-        
-        // 🌟 Для индивидуальных заказов сохраняем один файл
         ctx.session.newOrder.fileInfo = fileInfo;
-        
-        // 🌟 Переходим к цене
-        ctx.session.adminState = 'add_order:price_custom';
+        // 🌟 Переходим к вводу цены (индивидуальный заказ)
+        ctx.session.adminState = 'add_order:price_manual';
         await ctx.reply(
           `✅ <b>Файл принят:</b> ${escapeHtml(fileInfo.fileName)}\n\n` +
           `💰 <b>Шаг 9: Введите цену заказа (0 если ещё не назначена):</b>`,
@@ -3973,18 +4033,18 @@ const backKeyboard = Markup.inlineKeyboard([
       const workId = action.split(':')[1];
       const work = catalog.getWork(workId);
       if (!work) { await ctx.answerCbQuery('❌ Работа не найдена'); return; }
-      
       const newOrder = ctx.session.newOrder;
-      
-      // 🌟 Автоматически заполняем данные из каталога
       newOrder.workId = work.id;
       newOrder.workTitle = work.title;
       newOrder.catalogPrice = work.price;
       newOrder.commission = work.commission || 20;
       newOrder.chatEnv = work.chatEnv || null;
       newOrder.paymentEnv = work.paymentEnv || null;
-      
-      // Если у работы есть предмет/курс — подтягиваем названия
+      // 🌟 СОХРАНЯЕМ требования к заказу из каталога
+      newOrder.needs = work.needs || [];
+      // 🌟 АВТОМАТИЧЕСКИ подтягиваем чат из каталога
+      newOrder.managerChatId = work.chatEnv ? (process.env[work.chatEnv] || null) : null;
+
       if (work.subjectId) {
         const subject = catalog.getSubject(work.subjectId);
         if (subject) {
@@ -4002,19 +4062,33 @@ const backKeyboard = Markup.inlineKeyboard([
         newOrder.subjectName = newOrder.subjectName || 'Общая работа';
         newOrder.courseName = newOrder.courseName || 'Без курса';
       }
-      
-      // Переходим к описанию задания
+
       ctx.session.adminState = 'add_order:description';
-      
-      // 🌟 Показываем информацию о выбранной работе
+
+      // 🌟 Формируем информацию о требованиях к заказу
+      const needs = newOrder.needs;
+      let requirementsText = '';
+      if (needs.length > 0) {
+        requirementsText += `📋 <b>Требования к данным:</b> `;
+        const parts = [];
+        if (needs.includes('details')) parts.push('текстовые данные');
+        if (needs.includes('variant')) parts.push('номер варианта');
+        if (needs.includes('photo')) parts.push('файл/фото');
+        requirementsText += parts.join(' + ') + '\n';
+      } else {
+        requirementsText += `📋 <b>Требования к данным:</b> отсутствуют\n`;
+      }
+
       let workInfo = `✅ <b>Работа выбрана!</b>\n\n`;
       workInfo += `📚 <b>Работа:</b> ${escapeHtml(work.title)}\n`;
       workInfo += `📖 <b>Предмет:</b> ${escapeHtml(newOrder.subjectName || '—')}\n`;
       workInfo += `🎓 <b>Курс:</b> ${escapeHtml(newOrder.courseName || '—')}\n`;
       workInfo += `💰 <b>Цена из каталога:</b> ${work.price} ₽\n`;
-      workInfo += `📊 <b>Комиссия:</b> ${work.commission || 20}%\n\n`;
+      workInfo += `📊 <b>Комиссия:</b> ${work.commission || 20}%\n`;
+      workInfo += requirementsText;
+      workInfo += `💬 <b>Чат:</b> ${newOrder.chatEnv ? `<code>${escapeHtml(newOrder.chatEnv)}</code>` : '<i>не настроен</i>'}\n\n`;
       workInfo += `📝 <b>Шаг 7: Введите описание задания (или "нет", если не требуется):</b>`;
-      
+
       await ctx.editMessageText(workInfo, { parse_mode: 'HTML', ...getBackToAdminMenu() });
       await ctx.answerCbQuery();
     }
@@ -4099,7 +4173,7 @@ const backKeyboard = Markup.inlineKeyboard([
       const customerUsername = newOrder.customerUsername || (customerData ? customerData.username : null);
 
       // 🌟 Получаем chatId из каталога (переменная окружения)
-      const managerChatId = newOrder.chatEnv ? process.env[newOrder.chatEnv] : null;
+      const managerChatId = newOrder.managerChatId || (newOrder.chatEnv ? process.env[newOrder.chatEnv] : null);
 
       const orderData = {
         customerId: newOrder.customerId,
