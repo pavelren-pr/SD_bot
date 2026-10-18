@@ -3112,29 +3112,22 @@ function register(bot) {
   // ==========================================
   bot.action(/^admin_reply_to_customer:(\d+)_(.+)$/, async (ctx) => {
     ctx.session = ctx.session || {};
-    if (!isAdmin(ctx.from.id)) {
-      await ctx.answerCbQuery('❌ У вас нет прав');
-      return;
-    }
+    if (!isAdmin(ctx.from.id)) { await ctx.answerCbQuery('❌ У вас нет прав'); return; }
     const customerId = parseInt(ctx.match[1]);
     const orderId = ctx.match[2];
     const order = ordersDb.getOrder(orderId);
     const orderNumber = order && order.orderNumber ? order.orderNumber : orderId;
     const orderTitle = order ? order.workTitle : 'Заказ';
 
-    // 🌟 Запускаем композер
     startComposer(ctx, 'admin_to_customer', {
       targetUserId: customerId,
-      orderId: orderId,
-      orderNumber: orderNumber,
-      orderTitle: orderTitle
+      orderId,
+      orderNumber,
+      orderTitle
     });
 
     await ctx.reply(
-      `💬 <b>Режим ответа заказчику</b>\n\n` +
-      `🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n` +
-      `📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\n` +
-      `Напишите сообщение:`,
+      `💬 <b>Режим ответа заказчику</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(String(orderNumber))}\n📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\nНапишите сообщение:`,
       { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery('✅ Готов к отправке ответа');
@@ -4207,31 +4200,18 @@ function register(bot) {
     else if (action.startsWith('order_message_customer:')) {
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
-      
-      if (!order) {
-        await ctx.answerCbQuery('❌ Заказ не найден');
-        return;
-      }
-      
-      ctx.session = ctx.session || {};
-      ctx.session.adminReplyToCustomerId = order.customerId;
-      ctx.session.adminReplyOrderId = orderId;
-      ctx.session.adminReplyOrderNumber = order.orderNumber;
-      ctx.session.adminReplyOrderTitle = order.workTitle;
-      ctx.session.adminReplyOrderDate = order.createdAt;
-      ctx.session.adminReplyAdminId = ctx.from.id;
-      
-      const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('↩️ Назад', `admin:order_view:${orderId}`)]
-      ]);
-      
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      startComposer(ctx, 'admin_to_customer', {
+        targetUserId: order.customerId,
+        orderId,
+        orderNumber: order.orderNumber || orderId,
+        orderTitle: order.workTitle
+      });
+
       await ctx.editMessageText(
-        `💬 <b>Режим ответа заказчику</b>\n\n` +
-        `📚 <b>Заказ:</b> ${order.workTitle}\n` +
-        `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
-        `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.\n\n` +
-        `<i>(Для отмены нажмите "Отмена")</i>`,
-        { parse_mode: 'HTML', ...keyboard }
+        `💬 <b>Режим ответа заказчику</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\nНапишите сообщение:`,
+        { parse_mode: 'HTML' }
       );
       await ctx.answerCbQuery();
     }
@@ -5444,41 +5424,24 @@ function register(bot) {
     else if (action.startsWith('send_msg_customer:')) {
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
-      if (!order) {
-        await ctx.answerCbQuery('❌ Заказ не найден');
-        return;
-      }
-
-      // 🌟 Запускаем композер
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
       startComposer(ctx, 'admin_to_customer', {
-        targetUserId: order.customerId,
-        orderId: orderId,
-        orderNumber: order.orderNumber || orderId,
-        orderTitle: order.workTitle
+        targetUserId: order.customerId, orderId,
+        orderNumber: order.orderNumber || orderId, orderTitle: order.workTitle
       });
-
       await ctx.editMessageText(
-        `💬 <b>Отправка сообщения заказчику</b>\n\n` +
-        `Заказ №${escapeHtml(order.orderNumber || orderId)}\n` +
-        `Заказчик: ${order.customerUsername ? '@' + escapeHtml(order.customerUsername) : 'ID: <code>' + order.customerId + '</code>'}\n\n` +
-        `Введите текст сообщения:`,
+        `💬 <b>Отправка сообщения заказчику</b>\n\nЗаказ №${escapeHtml(order.orderNumber || orderId)}\n\nВведите текст сообщения:`,
         { parse_mode: 'HTML' }
       );
     }
+
     else if (action.startsWith('send_msg_customer_by_id:')) {
       const customerId = action.split(':')[1];
-
-      // 🌟 Запускаем композер
       startComposer(ctx, 'admin_to_customer_generic', {
-        targetUserId: parseInt(customerId),
-        orderNumber: '—',
-        orderTitle: 'Без заказа'
+        targetUserId: parseInt(customerId), orderNumber: '—', orderTitle: 'Без заказа'
       });
-
       await ctx.editMessageText(
-        `💬 <b>Отправка сообщения заказчику</b>\n\n` +
-        `ID заказчика: <code>${escapeHtml(customerId)}</code>\n\n` +
-        `Введите текст сообщения:`,
+        `💬 <b>Отправка сообщения заказчику</b>\n\nID заказчика: <code>${escapeHtml(customerId)}</code>\n\nВведите текст сообщения:`,
         { parse_mode: 'HTML' }
       );
     }

@@ -83,42 +83,14 @@ function getCustomOrderChatId(orderNumber) {
 function register(bot) {
   bot.action(/^order:start:(.+)$/, async (ctx, next) => {
     const workId = ctx.match[1];
-    const work = catalog.getWork(workId);
-    if (!work || !work.isCustomOrder) {
-      return next();
-    }
-    const { subjectName, courseName } = getSubjectFullName(work);
-    ctx.session = ctx.session || {};
-    ctx.session.order = null;
-    ctx.session.adminReplyToCustomerId = null;
-    ctx.session.adminReplyOrderId = null;
-    ctx.session.adminReplyOrderNumber = null;
-    ctx.session.adminReplyOrderTitle = null;
-    ctx.session.adminReplyOrderDate = null;
-    ctx.session.adminReplyAdminId = null;
-    ctx.session.customerReplyToAdminId = null;
-    ctx.session.customerReplyToAdminOrderId = null;
-    ctx.session.customerReplyToAdminOrderNumber = null;
-    ctx.session.customerReplyToAdminOrderTitle = null;
-    ctx.session.executorReplyToCustomerId = null;
-    ctx.session.executorReplyOrderId = null;
-    ctx.session.executorReplyOrderTitle = null;
-    ctx.session.executorReplyOrderDate = null;
-    ctx.session.executorReplyOrderNumber = null;
-    ctx.session.customerReplyToExecutorId = null;
-    ctx.session.customerReplyOrderId = null;
-    ctx.session.customerReplyOrderTitle = null;
-    ctx.session.customerReplyOrderDate = null;
-    ctx.session.customerReplyOrderNumber = null;
-    ctx.session.customerReplyChatId = null;
-    ctx.session.replyToUserId = null;
-    ctx.session.replyToUsername = null;
-    ctx.session.customOrder = { 
-      workId, 
-      step: 'waiting_description', 
-      description: null, 
-      file: null 
-    };
+      const work = catalog.getWork(workId);
+      if (!work || !work.isCustomOrder) return next();
+
+      const { subjectName, courseName } = getSubjectFullName(work);
+      ctx.session = ctx.session || {};
+      ctx.session.order = null;
+      ctx.session.messageComposer = null;
+      ctx.session.customOrder = { workId, step: 'waiting_description', description: null, file: null };
     
     const promptText = work.prompt || 
       `Пожалуйста, отправьте текстовое описание вашего задания:\n` +
@@ -604,34 +576,25 @@ bot.action(/^custom_back:(\d+)$/, async (ctx) => {
 // 🌟 Универсальная кнопка «Назад» для отмены режимов ожидания (сообщение/файл/оплата)
 bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   ctx.session = ctx.session || {};
-  const orderNumber = parseInt(ctx.match[1]);
-  
-  // Очищаем ВСЕ возможные флаги ожидания
   ctx.session.waitingCustomPrice = null;
-  ctx.session.waitingCustomMessageToCustomer = null;
-  ctx.session.waitingCustomFileToCustomer = null;
-  ctx.session.waitingCustomReplyToExecutor = null;
-  ctx.session.waitingCustomReplyFileToExecutor = null;
   ctx.session.waitingCustomPayment = null;
-  ctx.session.waitingCustomWriteToExecutor = null;
+  ctx.session.messageComposer = null;
 
-  // 🌟 Восстанавливаем исходное сообщение, если оно было сохранено
   if (ctx.session.customCancelOriginalText) {
-      try {
-          await ctx.editMessageText(ctx.session.customCancelOriginalText, {
-              parse_mode: 'HTML',
-              reply_markup: ctx.session.customCancelOriginalKeyboard
-          });
-      } catch (e) {
-          await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
-      }
-      ctx.session.customCancelOriginalText = null;
-      ctx.session.customCancelOriginalKeyboard = null;
-  } else {
+    try {
+      await ctx.editMessageText(ctx.session.customCancelOriginalText, {
+        parse_mode: 'HTML', reply_markup: ctx.session.customCancelOriginalKeyboard
+      });
+    } catch (e) {
       await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
+    }
+    ctx.session.customCancelOriginalText = null;
+    ctx.session.customCancelOriginalKeyboard = null;
+  } else {
+    await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
   }
   await ctx.answerCbQuery('Отменено');
-  });
+});
 
   // Обработка введённой цены
   bot.on('text', async (ctx, next) => {
@@ -812,33 +775,6 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     await ctx.answerCbQuery();
   });
 
-  // 🌟 Отправить файл заказчику (от исполнителя)
-  bot.action(/^custom_write_customer_file:(\d+)$/, async (ctx) => {
-  ctx.session = ctx.session || {};
-  const orderNumber = parseInt(ctx.match[1]);
-  const orderRecord = orders.getOrderByNumber(orderNumber);
-  if (!orderRecord) {
-    return ctx.answerCbQuery('❌ Заказ не найден');
-  }
-  if (!orderRecord.executorId) {
-    return ctx.answerCbQuery('❌ Сначала примите заказ кнопкой "✅ Принять заказ"');
-  }
-  if (String(orderRecord.executorId) !== String(ctx.from.id)) {
-    return ctx.answerCbQuery('❌ Это не ваш заказ.');
-  }
-  await ctx.editMessageText(
-    `📎 <b>Отправить файл заказчику</b>\n\n` +
-    `🆔 <b>Номер заказа:</b> №${orderNumber}\n\n` +
-    `Прикрепите файл или фото:`,
-    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
-    );
-    // 🌟 Сохраняем исходное сообщение для возможности возврата
-    ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
-    ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
-    ctx.session.waitingCustomFileToCustomer = { orderNumber };
-    await ctx.answerCbQuery();
-  });
-
   // Ответить исполнителю (от заказчика)
   bot.action(/^custom_reply_executor:(\d+)$/, async (ctx) => {
     ctx.session = ctx.session || {};
@@ -857,27 +793,6 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       `✏️ <b>Написать ответ исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
       { parse_mode: 'Markdown' }
     );
-    await ctx.answerCbQuery();
-  });
-
-  // 🌟 Отправить файл исполнителю (от заказчика)
-  bot.action(/^custom_reply_file:(\d+)$/, async (ctx) => {
-    ctx.session = ctx.session || {};
-    const orderNumber = parseInt(ctx.match[1]);
-    const orderRecord = orders.getOrderByNumber(orderNumber);
-    if (!orderRecord) {
-      return ctx.answerCbQuery('❌ Заказ не найден');
-    }
-  await ctx.editMessageText(
-    `📎 <b>Отправить файл исполнителю</b>\n\n` +
-    `🆔 <b>Номер заказа:</b> №${orderNumber}\n\n` +
-    `Прикрепите файл или фото:`,
-    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `custom_cancel:${orderNumber}`)]]).reply_markup }
-    );
-    // 🌟 Сохраняем исходное сообщение для возможности возврата
-    ctx.session.customCancelOriginalText = ctx.callbackQuery.message.text || ctx.callbackQuery.message.caption || null;
-    ctx.session.customCancelOriginalKeyboard = ctx.callbackQuery.message.reply_markup || null;
-    ctx.session.waitingCustomReplyFileToExecutor = { orderNumber };
     await ctx.answerCbQuery();
   });
 
@@ -933,9 +848,9 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   // Обработка скриншота оплаты
   bot.on(['photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
-    // 🌟 НОВОЕ: Проверяем композер
+    // Проверяем композер
     if (ctx.session.messageComposer) {
-      const handled = await handleComposerText(ctx, next);
+      const handled = await handleComposerFile(ctx, next);
       if (handled) return;
     }
     

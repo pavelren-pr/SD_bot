@@ -1060,83 +1060,51 @@ function register(bot) {
   bot.action(/^oc:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
-    
     if (!order || String(order.executorId) !== String(ctx.from.id)) {
       await ctx.reply('❌ Заказ не найден или у вас нет прав');
       return ctx.answerCbQuery();
     }
-    
     if (order.status === 'completed') {
       await ctx.answerCbQuery('⚠️ Заказ уже отмечен как выполненный');
       return;
     }
-    
-    // Обновляем статус
+
     ordersDb.updateOrder(orderId, {
       status: 'completed',
       completedAt: new Date().toLocaleString('ru-RU')
     });
-    
-    // 🌟 Обновляем сообщение в группе исполнителей
+
     const updatedOrder = ordersDb.getOrder(orderId);
     if (updatedOrder && updatedOrder.managerMessageId && updatedOrder.managerChatId) {
       const completedText = buildGroupOrderText(updatedOrder, 'completed');
       try {
         if (updatedOrder.screenshotFileId) {
-          await ctx.telegram.editMessageCaption(
-            updatedOrder.managerChatId, updatedOrder.managerMessageId, null,
-            completedText, { parse_mode: 'HTML' }
-          );
+          await ctx.telegram.editMessageCaption(updatedOrder.managerChatId, updatedOrder.managerMessageId, null, completedText, { parse_mode: 'HTML' });
         } else {
-          await ctx.telegram.editMessageText(
-            updatedOrder.managerChatId, updatedOrder.managerMessageId, null,
-            completedText, { parse_mode: 'HTML' }
-          );
+          await ctx.telegram.editMessageText(updatedOrder.managerChatId, updatedOrder.managerMessageId, null, completedText, { parse_mode: 'HTML' });
         }
       } catch (e) {
         console.log('Не удалось обновить сообщение в группе:', e.message);
       }
     }
-    
-    // 🌟 Уведомление в поддержку
+
+    // Уведомление в поддержку
     const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
     if (supportChatId) {
       const executorPayout = order.executorPrice || Math.round((order.price || 0) * (1 - (order.commission || 0) / 100));
-      const supportText = `✅ <b>Заказ выполнен!</b>\n\n` +
-        `🆔 <b>Номер заказа:</b> №${order.orderNumber}\n` +
-        `📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n` +
-        `👷 <b>Исполнитель:</b> ${order.executorUsername ? '@' + escapeHtml(order.executorUsername) : 'ID: ' + order.executorId}\n\n` +
-        `💰 <b>К выплате исполнителю:</b> ${executorPayout} ₽`;
-      const paidKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('✅ Оплачено', `support_paid:${orderId}`)]
-      ]);
+      const supportText = `✅ <b>Заказ выполнен!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n👷 <b>Исполнитель:</b> ${escapeHtml(order.executorUsername) ? '@' + escapeHtml(order.executorUsername) : 'ID: ' + escapeHtml(order.executorId)}\n\n💰 <b>К выплате исполнителю:</b> ${executorPayout} ₽`;
       try {
         await ctx.telegram.sendMessage(supportChatId, supportText, {
-          parse_mode: 'HTML', reply_markup: paidKeyboard.reply_markup
+          parse_mode: 'HTML',
+          reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✅ Оплачено', `support_paid:${orderId}`)]]).reply_markup
         });
-      } catch (e) {
-        console.log('Не удалось отправить уведомление в поддержку:', e.message);
-      }
+      } catch (e) { console.log(e.message); }
     }
-    
-    // 🌟 Уведомление заказчику
-    await ctx.telegram.sendMessage(
-      order.customerId, 
-      `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || "—"}\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`, 
-      { parse_mode: 'HTML' }
-    );
-    
+
+    await ctx.telegram.sendMessage(order.customerId, `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'HTML' });
     await ctx.editMessageText(`✅ <b>Заказ выполнен!</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}`, { parse_mode: 'HTML' });
-    
-    logger.logOrderEvent('completed', {
-      orderNumber: order.orderNumber,
-      orderId: orderId,
-      workTitle: escapeHtml(order.workTitle),
-      status: 'completed',
-      executorId: ctx.from.id,
-      customerId: order.customerId
-    }, ctx.from.id, ctx.from.username);
-    
+
+    logger.logOrderEvent('completed', { orderNumber: order.orderNumber, orderId, workTitle: order.workTitle, status: 'completed', executorId: ctx.from.id, customerId: order.customerId }, ctx.from.id, ctx.from.username);
     await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
   });
 
@@ -1179,38 +1147,8 @@ function register(bot) {
   // 🌟 Отмена сессионных режимов ожидания (сообщение/файл)
   bot.action('cancel_session_reply', async (ctx) => {
     ctx.session = ctx.session || {};
-    // Очищаем все возможные сессионные флаги ожидания
-    ctx.session.customerReplyToExecutorId = null;
-    ctx.session.customerReplyOrderNumber = null;
-    ctx.session.customerReplyOrderTitle = null;
-    ctx.session.customerReplyOrderDate = null;
-    ctx.session.customerReplyOrderId = null;
-    ctx.session.customerReplyChatId = null;
-    ctx.session.executorReplyToCustomerId = null;
-    ctx.session.executorReplyOrderNumber = null;
-    ctx.session.executorReplyOrderTitle = null;
-    ctx.session.executorReplyOrderDate = null;
-    ctx.session.executorReplyOrderId = null;
-    ctx.session.customerReplyToAdminId = null;
-    ctx.session.customerReplyToAdminOrderId = null;
-    ctx.session.customerReplyToAdminOrderNumber = null;
-    ctx.session.customerReplyToAdminOrderTitle = null;
-    
-    // 🌟 Восстанавливаем исходное сообщение, если оно было сохранено
-    if (ctx.session.cancelReplyOriginalText) {
-        try {
-            await ctx.editMessageText(ctx.session.cancelReplyOriginalText, { 
-                parse_mode: 'HTML', 
-                reply_markup: ctx.session.cancelReplyOriginalKeyboard 
-            });
-        } catch (e) {
-            await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
-        }
-        ctx.session.cancelReplyOriginalText = null;
-        ctx.session.cancelReplyOriginalKeyboard = null;
-    } else {
-        await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
-    }
+    ctx.session.messageComposer = null;
+    await ctx.editMessageText('✅ Режим отменён.', { parse_mode: 'HTML' });
     await ctx.answerCbQuery('Отменено');
   });
 }
@@ -1219,20 +1157,14 @@ function register(bot) {
 async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignment = false) {
   const order = ordersDb.getOrder(orderId);
   if (!order) throw new Error('Заказ не найден');
-  if (order.executorId && !isReassignment) {
-    throw new Error('У заказа уже есть исполнитель');
-  }
+  if (order.executorId && !isReassignment) throw new Error('У заказа уже есть исполнитель');
 
   let executorUser;
-  try {
-    executorUser = await bot.telegram.getChat(executorUserId);
-  } catch (e) {
-    throw new Error('Исполнитель с таким ID не найден или заблокировал бота');
-  }
+  try { executorUser = await bot.telegram.getChat(executorUserId); }
+  catch (e) { throw new Error('Исполнитель с таким ID не найден или заблокировал бота'); }
 
   const orderNumber = order.orderNumber || '—';
 
-  // Обновляем заказ в БД (без chatId)
   ordersDb.updateOrder(order.id, {
     executorId: executorUserId,
     executorUsername: executorUser.username || null,
@@ -1240,35 +1172,22 @@ async function assignExecutorToOrder(orderId, executorUserId, bot, isReassignmen
     acceptedAt: new Date().toLocaleString('ru-RU')
   });
 
-  // 🌟 Клавиатура с композером
   const assignButtons = [];
-  if (order.detailsText || order.description) {
-    assignButtons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${order.id}`)]);
-  }
-  if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) {
-    assignButtons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${order.id}:0`)]);
-  }
+  if (order.detailsText || order.description) assignButtons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${order.id}`)]);
+  if ((order.taskFiles && order.taskFiles.length > 0) || order.fileId) assignButtons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${order.id}:0`)]);
   assignButtons.push([Markup.button.callback('✏️ Написать заказчику', `mc_start:executor_to_customer:${orderNumber}:${order.customerId}`)]);
   assignButtons.push([Markup.button.callback('✅ Заказ выполнен', `oc:${order.id}`)]);
-  const executorFullKeyboard = Markup.inlineKeyboard(assignButtons);
 
-  await bot.telegram.sendMessage(
-    executorUserId,
-    `✅ <b>Вам назначен новый заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n👤 <b>Заказчик ID:</b> ${order.customerId}\n\nНапишите сообщение для заказчика или используйте кнопки ниже:`,
-    { parse_mode: 'HTML', reply_markup: executorFullKeyboard.reply_markup }
+  await bot.telegram.sendMessage(executorUserId,
+    `✅ <b>Вам назначен новый заказ!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n👤 <b>Заказчик ID:</b> ${order.customerId}`,
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard(assignButtons).reply_markup }
   );
 
-  await bot.telegram.sendMessage(
-    order.customerId,
+  await bot.telegram.sendMessage(order.customerId,
     isReassignment
-      ? `👷 <b>По вашему заказу изменён исполнитель</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n\nТеперь вы можете обсудить детали:`
-      : `✅ <b>Ваш заказ в работе!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n\nТеперь вы можете обсудить детали:`,
-    { 
-      parse_mode: 'HTML', 
-      reply_markup: Markup.inlineKeyboard([
-        [Markup.button.callback('✏️ Написать исполнителю', `mc_start:customer_to_executor:${orderNumber}:${executorUserId}`)]
-      ]).reply_markup 
-    }
+      ? `👷 <b>По вашему заказу изменён исполнитель</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}`
+      : `✅ <b>Ваш заказ в работе!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}`,
+    { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✏️ Написать исполнителю', `mc_start:customer_to_executor:${orderNumber}:${executorUserId}`)]]) .reply_markup }
   );
 
   return { executorUser, executorUsername: executorUser.username };
