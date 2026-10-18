@@ -901,7 +901,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       const work = catalog.getWork(orderRecord.workId);
       const { chatId: groupChatId } = getWorkConfig(work);
 
-      const paymentMsg = `💳 <b>ПОДТВЕРЖДЕНИЕ ОПЛАТЫ</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n👤 <b>Заказчик:</b> ${orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId}`;
+      const paymentMsg = `💳 <b>ПОДТВЕРЖДЕНИЕ ОПЛАТЫ</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n👤 <b>Заказчик:</b> ${escapeHtml(orderRecord.customerUsername ? '@' + orderRecord.customerUsername : 'ID: ' + orderRecord.customerId)}`;
 
       // 1. Отправляем в личку исполнителя
       if (targetChatId) {
@@ -941,7 +941,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
 
       let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
       updatedText += `🆔 <b>Номер заказа:</b> №${orderNumber}\n`;
-      updatedText += `👤 <b>Заказчик:</b> ${updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId}\n`;
+      updatedText += `👤 <b>Заказчик:</b> ${escapeHtml(updatedOrder.customerUsername ? '@'+updatedOrder.customerUsername : 'ID: '+updatedOrder.customerId)}\n`;
       updatedText += `📚 <b>Предмет:</b> ${escapeHtml(updatedOrder.subjectName)}\n`;
       updatedText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
       if (discountPercent > 0) {
@@ -952,7 +952,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       if (commissionExpense > 0) {
         updatedText += `📉 <b>Покрытие из фонда:</b> ${commissionExpense} ₽\n`;
       }
-      updatedText += `👷 <b>Исполнитель:</b> ${updatedOrder.executorId ? '@'+(await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
+      updatedText += `👷 <b>Исполнитель:</b> ${escapeHtml(updatedOrder.executorId ? '@'+(await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен')}\n`;
       updatedText += `✅ <b>Оплачен:</b> ${updatedOrder.paidAt}\n`;
       updatedText += `🟢 <b>Статус:</b> ОПЛАЧЕН - В РАБОТЕ`;
       

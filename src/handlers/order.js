@@ -1079,12 +1079,13 @@ function register(bot) {
       payoutStatus: 'pending'
     });
 
-    // 🌟 Для ОБЫЧНЫХ заказов обновляем сообщение в группе исполнителей
-    if (!order.isCustomOrder) {
+    // 🌟 Получаем обновлённый заказ
     const updatedOrder = ordersDb.getOrder(orderId);
+
+    // 🌟 Обновляем сообщение (разная логика для обычных и кастомных заказов)
     if (updatedOrder && updatedOrder.managerMessageId && updatedOrder.managerChatId) {
       if (!updatedOrder.isCustomOrder) {
-        // Обычный заказ: обновляем сообщение в группе
+        // 📦 Обычный заказ: обновляем сообщение в группе исполнителей
         const completedText = buildGroupOrderText(updatedOrder, 'completed');
         try {
           if (updatedOrder.screenshotFileId) {
@@ -1122,18 +1123,18 @@ function register(bot) {
         }
       }
     }
-    }
 
     // 🌟 Уведомление в поддержку с кнопкой "Оплачено" (для обоих типов заказов)
     const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
     if (supportChatId) {
-      const executorPayout = order.executorPrice || Math.round((order.price || 0) * (1 - (order.commission || 0) / 100));
-      const typeLabel = order.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
+      // 🌟 Используем updatedOrder для актуальных данных
+      const executorPayout = updatedOrder.executorPrice || Math.round((updatedOrder.price || 0) * (1 - (updatedOrder.commission || 0) / 100));
+      const typeLabel = updatedOrder.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
       const supportText = `✅ <b>Заказ выполнен!</b>\n\n` +
         `${typeLabel}\n` +
-        `🆔 <b>Номер заказа:</b> №${escapeHtml(String(order.orderNumber))}\n` +
-        `📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n` +
-        `👷 <b>Исполнитель:</b> ${order.executorUsername ? '@' + escapeHtml(order.executorUsername) : 'ID: ' + order.executorId}\n\n` +
+        `🆔 <b>Номер заказа:</b> №${escapeHtml(String(updatedOrder.orderNumber))}\n` +
+        `📚 <b>Работа:</b> ${escapeHtml(updatedOrder.workTitle)}\n` +
+        `👷 <b>Исполнитель:</b> ${updatedOrder.executorUsername ? '@' + escapeHtml(updatedOrder.executorUsername) : 'ID: ' + updatedOrder.executorId}\n\n` +
         `💰 <b>К выплате исполнителю:</b> ${executorPayout} ₽`;
       const paidKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('✅ Оплачено', `support_paid:${orderId}`)]
@@ -1142,15 +1143,28 @@ function register(bot) {
         await ctx.telegram.sendMessage(supportChatId, supportText, {
           parse_mode: 'HTML', reply_markup: paidKeyboard.reply_markup
         });
+        console.log(`✅ Уведомление о выполнении заказа №${updatedOrder.orderNumber} отправлено в поддержку (chat: ${supportChatId})`);
       } catch (e) {
-        console.log('Не удалось отправить уведомление в поддержку:', e.message);
+        console.error(`❌ ОШИБКА отправки уведомления в поддержку (chat: ${supportChatId}):`, e.message);
+        // 🌟 Fallback: пытаемся отправить без parse_mode
+        try {
+          const plainText = supportText.replace(/<[^>]*>/g, '');
+          await ctx.telegram.sendMessage(supportChatId, plainText, {
+            reply_markup: paidKeyboard.reply_markup
+          });
+          console.log(`✅ Уведомление отправлено без форматирования`);
+        } catch (e2) {
+          console.error(`❌ Fallback тоже не сработал:`, e2.message);
+        }
       }
+    } else {
+      console.error('❌ SUPPORT_CHAT_ID и MY_CHAT_ID не заданы в .env — уведомление в поддержку НЕ отправлено!');
     }
 
     // 🌟 Уведомление заказчику
     await ctx.telegram.sendMessage(
       order.customerId,
-      `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(String(order.orderNumber || '—'))}\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`,
+      `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(String(order.orderNumber || '—'))}\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\nВы можете задать вопросы по работе через Профиль ➡️ История заказов\n\nСпасибо за использование нашего сервиса! 🌊`,
       { parse_mode: 'HTML' }
     );
 
