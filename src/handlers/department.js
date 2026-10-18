@@ -49,7 +49,9 @@ async function showDepartmentOrders(ctx, chatEnv, deptIdx, filter, page) {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
   const currentPage = Math.min(page, totalPages - 1);
-  const displayOrders = filtered.slice(currentPage * ORDERS_PER_PAGE, (currentPage + 1) * ORDERS_PER_PAGE).reverse();
+  // 🌟 Сортировка по номеру заказа (новые сверху)
+  filtered.sort((a, b) => (Number(b.orderNumber) || 0) - (Number(a.orderNumber) || 0));
+  const displayOrders = filtered.slice(currentPage * ORDERS_PER_PAGE, (currentPage + 1) * ORDERS_PER_PAGE);
 
   let text = `🏢 <b>Отдел:</b> ${escapeHtml(deptName)}\n`;
   text += `${title}\n\n`;

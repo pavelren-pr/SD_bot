@@ -224,7 +224,9 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     
     const text = `📦 <b>Все заказы</b>\n\nСтраница 1 из ${totalPages}\nВсего: ${allOrders.length}`;
     
-    const pageOrders = allOrders.slice(0, ORDERS_PER_PAGE).reverse();
+    // 🌟 Сортировка по номеру заказа (новые сверху)
+    allOrders.sort((a, b) => (Number(b.orderNumber) || 0) - (Number(a.orderNumber) || 0));
+    const pageOrders = allOrders.slice(0, ORDERS_PER_PAGE);
     const buttons = [];
     
     pageOrders.forEach(order => {
@@ -272,7 +274,9 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     const currentPage = Math.min(page, totalPages - 1);
     
     const startIdx = currentPage * ORDERS_PER_PAGE;
-    const pageOrders = allOrders.slice(startIdx, startIdx + ORDERS_PER_PAGE).reverse();
+    // 🌟 Сортировка по номеру заказа (новые сверху)
+    allOrders.sort((a, b) => (Number(b.orderNumber) || 0) - (Number(a.orderNumber) || 0));
+    const pageOrders = allOrders.slice(startIdx, startIdx + ORDERS_PER_PAGE);
     
     let text = `${title}\n\n`;
     text += `Страница ${currentPage + 1} из ${totalPages}\n`;
@@ -523,7 +527,9 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     const currentPage = Math.min(page, totalPages - 1);
     
     const startIdx = currentPage * ORDERS_PER_PAGE;
-    const pageOrders = userOrders.slice(startIdx, startIdx + ORDERS_PER_PAGE).reverse();
+    // 🌟 Сортировка по номеру заказа (новые сверху)
+    userOrders.sort((a, b) => (Number(b.orderNumber) || 0) - (Number(a.orderNumber) || 0));
+    const pageOrders = userOrders.slice(startIdx, startIdx + ORDERS_PER_PAGE);
     
     const statusTitles = {
       pending: '⏳ Ожидают принятия',
@@ -741,7 +747,9 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     const currentPage = Math.min(page, totalPages - 1);
     
     const startIdx = currentPage * ORDERS_PER_PAGE;
-    const pageOrders = executorOrders.slice(startIdx, startIdx + ORDERS_PER_PAGE).reverse();
+    // 🌟 Сортировка по номеру заказа (новые сверху)
+    executorOrders.sort((a, b) => (Number(b.orderNumber) || 0) - (Number(a.orderNumber) || 0));
+    const pageOrders = executorOrders.slice(startIdx, startIdx + ORDERS_PER_PAGE);
     
     const statusTitles = {
       active: '🔨 В работе',

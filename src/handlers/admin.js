@@ -3521,9 +3521,11 @@ function register(bot) {
       else if (filter === 'active') { filtered = all.filter(o => ACTIVE_STATUSES.includes(o.status)); title = '🔨 В работе'; }
       else if (filter === 'completed') { filtered = all.filter(o => COMPLETED_STATUSES.includes(o.status)); title = '✅ Выполнены'; }
       
+      // 🌟 Сортировка заказов по номеру (новые — сверху)
+      filtered.sort((a, b) => (Number(b.orderNumber) || 0) - (Number(a.orderNumber) || 0));
       const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
       const currentPage = Math.min(page, totalPages - 1);
-      const displayOrders = filtered.slice(currentPage * ORDERS_PER_PAGE, (currentPage + 1) * ORDERS_PER_PAGE).reverse();
+      const displayOrders = filtered.slice(currentPage * ORDERS_PER_PAGE, (currentPage + 1) * ORDERS_PER_PAGE);
       
       let text = `${title}\n\nСтраница ${currentPage + 1} из ${totalPages}\nВсего: ${filtered.length}`;
       const buttons = displayOrders.map(o => {
