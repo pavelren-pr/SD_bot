@@ -787,9 +787,9 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       orderTitle: orderRecord.subjectName || orderRecord.workTitle
     });
     
-    await ctx.editMessageText(
+    await ctx.reply(
       `✉️ <b>Написать сообщение заказчику</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
@@ -808,9 +808,9 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       orderTitle: orderRecord.subjectName || orderRecord.workTitle
     });
     
-    await ctx.editMessageText(
+    await ctx.reply(
       `✏️ <b>Написать ответ исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
@@ -1017,9 +1017,9 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       orderTitle: orderRecord.subjectName || orderRecord.workTitle
     });
     
-    await ctx.editMessageText(
+    await ctx.reply(
       `✏️ <b>Написать исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });

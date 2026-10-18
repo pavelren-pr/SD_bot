@@ -778,9 +778,9 @@ function register(bot) {
         orderTitle: 'Поддержка'
       });
       
-      await ctx.editMessageText(
+      await ctx.reply(
         `✏️ <b>Режим ответа</b>\n\nНапишите сообщение для пользователя (ID: <code>${targetUserId}</code>):`, 
-        { parse_mode: 'HTML' }
+        { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
       );
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
     } catch (error) {
@@ -1263,9 +1263,9 @@ function register(bot) {
       orderTitle: orderTitle
     });
     
-    await ctx.editMessageText(
+    await ctx.reply(
       `✏️ <b>Режим ответа администратору</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(String(orderNumber))}\n📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\nНапишите сообщение:`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery('✅ Готов к отправке ответа');
   });

@@ -516,7 +516,7 @@ function registerComposerStartActions(bot) {
     
     await ctx.reply(
       `✏️ <b>Написать сообщение</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(config.title)}\n\nОтправьте текст сообщения:`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });

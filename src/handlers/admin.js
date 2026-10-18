@@ -3127,8 +3127,11 @@ function register(bot) {
     });
 
     await ctx.reply(
-      `💬 <b>Режим ответа заказчику</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(String(orderNumber))}\n📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\nНапишите сообщение:`,
-      { parse_mode: 'HTML' }
+      `💬 <b>Режим ответа заказчику</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n` +
+      `📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\n` +
+      `Напишите сообщение:`,
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery('✅ Готов к отправке ответа');
   });
@@ -5606,9 +5609,12 @@ function register(bot) {
         targetUserId: order.customerId, orderId,
         orderNumber: order.orderNumber || orderId, orderTitle: order.workTitle
       });
-      await ctx.editMessageText(
-        `💬 <b>Отправка сообщения заказчику</b>\n\nЗаказ №${escapeHtml(order.orderNumber || orderId)}\n\nВведите текст сообщения:`,
-        { parse_mode: 'HTML' }
+      await ctx.reply(
+        `💬 <b>Отправка сообщения заказчику</b>\n\n` +
+        `Заказ №${escapeHtml(order.orderNumber || orderId)}\n` +
+        `Заказчик: ${order.customerUsername ? '@' + escapeHtml(order.customerUsername) : 'ID: <code>' + order.customerId + '</code>'}\n\n` +
+        `Введите текст сообщения:`,
+        { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
       );
     }
 
@@ -5617,9 +5623,11 @@ function register(bot) {
       startComposer(ctx, 'admin_to_customer_generic', {
         targetUserId: parseInt(customerId), orderNumber: '—', orderTitle: 'Без заказа'
       });
-      await ctx.editMessageText(
-        `💬 <b>Отправка сообщения заказчику</b>\n\nID заказчика: <code>${escapeHtml(customerId)}</code>\n\nВведите текст сообщения:`,
-        { parse_mode: 'HTML' }
+      await ctx.reply(
+        `💬 <b>Отправка сообщения заказчику</b>\n\n` +
+        `ID заказчика: <code>${escapeHtml(customerId)}</code>\n\n` +
+        `Введите текст сообщения:`,
+        { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
       );
     }
 
