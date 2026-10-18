@@ -21,7 +21,9 @@ const COMPOSER_MODES = {
     label: 'администратор → заказчик',
     buildMessage: (ctx, composer) => ({
       text: `📬 <b>Сообщение от администрации</b>\n\n${escapeHtml(composer.text)}`,
-      keyboard: null
+      keyboard: Markup.inlineKeyboard([[
+        Markup.button.callback('✏️ Ответить администратору', `admin_reply:${composer.targetUserId}_${composer.orderId || '—'}_${composer.senderId}`)
+      ]]).reply_markup
     })
   },
   customer_to_admin: {
@@ -235,14 +237,17 @@ async function sendMessage(ctx) {
   const modeConfig = COMPOSER_MODES[composer.mode];
   
   if (!modeConfig) {
-    await ctx.reply('❌ Неизвестный режим отправки.');
+    await ctx.answerCbQuery('❌ Неизвестный режим отправки');
     return;
   }
   
   const { text, keyboard } = modeConfig.buildMessage(ctx, composer);
   
   try {
-    // Отправляем текст
+    // 🌟 Сначала показываем "Отправляю..." чтобы убрать часики
+    await ctx.answerCbQuery('⏳ Отправляю...');
+    
+    // Отправляем текст получателю
     await ctx.telegram.sendMessage(composer.targetUserId, text, {
       parse_mode: 'HTML',
       ...(keyboard ? { reply_markup: keyboard } : {})
@@ -257,18 +262,25 @@ async function sendMessage(ctx) {
       }
     }
     
-    // 🌟 Временное уведомление (не трогаем превью)
-    const notifyMsg = await ctx.reply(`✅ Сообщение отправлено (${modeConfig.label})`);
-    setTimeout(async () => {
+    // 🌟 Редактируем превью → показываем что отправлено
+    if (composer.previewMessageId) {
       try {
-        await ctx.telegram.deleteMessage(notifyMsg.chat.id, notifyMsg.message_id);
-      } catch (e) { /* ignore */ }
-    }, 3000);
+        await ctx.telegram.editMessageText(
+          ctx.chat.id,
+          composer.previewMessageId,
+          null,
+          `✅ <b>Сообщение отправлено</b>\n\n📤 ${modeConfig.label}`,
+          { parse_mode: 'HTML' }
+        );
+      } catch (e) { /* превью могло быть удалено */ }
+    }
     
     // Очищаем композер
     ctx.session.messageComposer = null;
     
   } catch (err) {
+    // 🌟 Ошибка тоже через уведомление
+    await ctx.answerCbQuery('❌ Ошибка отправки').catch(() => {});
     await ctx.reply(`❌ Не удалось отправить сообщение: ${escapeHtml(err.message)}`);
   }
 }
@@ -287,7 +299,7 @@ function registerComposerActions(bot) {
       '✏️ <b>Введите текст сообщения:</b>',
       { parse_mode: 'HTML' }
     );
-    await ctx.answerCbQuery();
+    await ctx.answerCbQuery('✏️ Введите текст');
   });
   
   // Добавить/изменить файл
@@ -300,7 +312,7 @@ function registerComposerActions(bot) {
       '📎 <b>Пришлите файл или фото:</b>',
       { parse_mode: 'HTML' }
     );
-    await ctx.answerCbQuery();
+    await ctx.answerCbQuery('📎 Жду файл');
   });
   
   // Отправить
@@ -312,15 +324,19 @@ function registerComposerActions(bot) {
       return ctx.answerCbQuery('❌ Сообщение пустое. Добавьте текст или файл.');
     }
     
-    await ctx.answerCbQuery();
+    // 🌟 НЕ вызываем answerCbQuery здесь — он будет вызван внутри sendMessage
     await sendMessage(ctx);
   });
   
   // Отмена
   bot.action('mc:cancel', async (ctx) => {
     ctx.session.messageComposer = null;
-    await ctx.editMessageText('❌ Отправка отменена.', { parse_mode: 'HTML' });
-    await ctx.answerCbQuery('Отменено');
+    // 🌟 Удаляем превью вместо редактирования
+    try {
+      await ctx.deleteMessage();
+    } catch (e) { /* ignore */ }
+    // 🌟 Всплывающее уведомление
+    await ctx.answerCbQuery('❌ Отправка отменена');
   });
 }
 
