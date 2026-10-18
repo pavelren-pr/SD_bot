@@ -123,10 +123,9 @@ function startComposer(ctx, mode, options = {}) {
     orderTitle: options.orderTitle || 'Заказ',
     senderId: ctx.from.id,
     text: null,
-    file: null,
+    files: [],              // 🌟 Массив файлов вместо одного
     step: 'waiting_text',
     previewMessageId: null,
-    // 🌟 НОВОЕ: для рассылки
     broadcastTargets: options.broadcastTargets || null,
     broadcastGroupLabel: options.broadcastGroupLabel || null
   };
@@ -139,8 +138,6 @@ async function showPreview(ctx) {
   const composer = ctx.session.messageComposer;
   
   let previewText = `📝 <b>Предпросмотр сообщения</b>\n\n`;
-
-  // 🌟 Для рассылки показываем количество получателей
   if (composer.broadcastTargets && composer.broadcastTargets.length > 0) {
     previewText += `📤 <b>Кому:</b> ${escapeHtml(composer.broadcastGroupLabel)} (${composer.broadcastTargets.length} чел.)\n\n`;
   } else {
@@ -153,38 +150,38 @@ async function showPreview(ctx) {
     previewText += `💬 <b>Текст:</b> <i>не задан</i>\n\n`;
   }
   
-  if (composer.file) {
-    previewText += `📎 <b>Файл:</b> ${escapeHtml(composer.file.fileName)}\n`;
+  // 🌟 Показываем все файлы
+  if (composer.files && composer.files.length > 0) {
+    previewText += `📎 <b>Файлы (${composer.files.length}):</b>\n`;
+    composer.files.forEach((f, i) => {
+      previewText += `  ${i + 1}. ${escapeHtml(f.fileName)}\n`;
+    });
+    previewText += `\n`;
   }
 
   const buttons = [];
-  
   if (!composer.text) {
     buttons.push([Markup.button.callback('✏️ Ввести текст', `mc:edit_text`)]);
   } else {
     buttons.push([Markup.button.callback('✏️ Изменить текст', `mc:edit_text`)]);
   }
-  
-  if (!composer.file) {
+  // 🌟 Кнопка файла: "Добавить" или "Добавить ещё"
+  if (!composer.files || composer.files.length === 0) {
     buttons.push([Markup.button.callback('📎 Добавить файл', `mc:add_file`)]);
   } else {
-    buttons.push([Markup.button.callback('📎 Изменить файл', `mc:add_file`)]);
+    buttons.push([Markup.button.callback('📎 Добавить ещё файл', `mc:add_file`)]);
+    buttons.push([Markup.button.callback('🗑 Удалить все файлы', `mc:clear_files`)]);
   }
-  
   buttons.push([Markup.button.callback('✅ Отправить', `mc:send`)]);
   buttons.push([Markup.button.callback('❌ Отмена', `mc:cancel`)]);
 
   const keyboard = Markup.inlineKeyboard(buttons);
 
-  // Если превью уже есть — редактируем, иначе создаём
   if (composer.previewMessageId) {
     try {
       await ctx.telegram.editMessageText(
-        ctx.chat.id,
-        composer.previewMessageId,
-        null,
-        previewText,
-        { parse_mode: 'HTML', ...keyboard }
+        ctx.chat.id, composer.previewMessageId, null,
+        previewText, { parse_mode: 'HTML', ...keyboard }
       );
     } catch (e) {
       const msg = await ctx.reply(previewText, { parse_mode: 'HTML', ...keyboard });
@@ -220,15 +217,15 @@ async function handleComposerText(ctx, next) {
  * Обрабатывает файл в режиме композера
  * @returns {boolean} true если файл обработан композером
  */
+const composerMediaBuffer = {}; // 🌟 Буфер для медиагрупп (несколько фото/файлов одновременно)
+
 async function handleComposerFile(ctx, next) {
   ctx.session = ctx.session || {};
   const composer = ctx.session.messageComposer;
-  
   if (!composer) return false;
   
   if (composer.step === 'waiting_file') {
     const fileInfo = {};
-    
     if (ctx.message.photo) {
       fileInfo.type = 'photo';
       fileInfo.fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
@@ -237,9 +234,51 @@ async function handleComposerFile(ctx, next) {
       fileInfo.type = 'document';
       fileInfo.fileId = ctx.message.document.file_id;
       fileInfo.fileName = ctx.message.document.file_name || `Файл_${Date.now()}`;
+    } else {
+      return false;
     }
-    
-    composer.file = fileInfo;
+
+    // 🌟 Обработка медиагрупп (несколько файлов одновременно)
+    if (ctx.message.media_group_id) {
+      const groupId = ctx.message.media_group_id;
+      if (!composerMediaBuffer[groupId]) {
+        composerMediaBuffer[groupId] = { files: [], timer: null };
+      }
+      composerMediaBuffer[groupId].files.push(fileInfo);
+
+      // Сбрасываем таймер при каждом новом файле группы
+      if (composerMediaBuffer[groupId].timer) {
+        clearTimeout(composerMediaBuffer[groupId].timer);
+      }
+
+      // Когда все файлы группы получены (ждём 1 секунду после последнего)
+      composerMediaBuffer[groupId].timer = setTimeout(async () => {
+        const bufferedFiles = composerMediaBuffer[groupId].files;
+        delete composerMediaBuffer[groupId];
+
+        // Инициализируем массив файлов если его нет
+        if (!composer.files) composer.files = [];
+
+        // Добавляем все файлы из группы
+        for (const file of bufferedFiles) {
+          composer.files.push(file);
+        }
+
+        // Показываем превью с обновлённым списком
+        composer.step = 'preview';
+        try {
+          await showPreview(ctx);
+        } catch (e) {
+          console.log('Ошибка показа превью после медиагруппы:', e.message);
+        }
+      }, 1000);
+
+      return true;
+    }
+
+    // 🌟 Одиночный файл
+    if (!composer.files) composer.files = [];
+    composer.files.push(fileInfo);
     composer.step = 'preview';
     await showPreview(ctx);
     return true;
@@ -278,12 +317,14 @@ async function sendMessage(ctx) {
             parse_mode: 'HTML',
             ...(keyboard ? { reply_markup: keyboard } : {})
           });
-          // Отправляем файл, если есть
-          if (composer.file) {
-            if (composer.file.type === 'photo') {
-              await ctx.telegram.sendPhoto(targetId, composer.file.fileId);
-            } else {
-              await ctx.telegram.sendDocument(targetId, composer.file.fileId);
+          // 🌟 Отправляем все файлы
+          if (composer.files && composer.files.length > 0) {
+            for (const file of composer.files) {
+              if (file.type === 'photo') {
+                await ctx.telegram.sendPhoto(composer.targetUserId, file.fileId);
+              } else {
+                await ctx.telegram.sendDocument(composer.targetUserId, file.fileId);
+              }
             }
           }
           sentCount++;
@@ -373,11 +414,19 @@ function registerComposerActions(bot) {
     const composer = ctx.session.messageComposer;
     if (!composer) return ctx.answerCbQuery('❌ Сессия не найдена');
     
+    const filesCount = (composer.files || []).length;
     composer.step = 'waiting_file';
-    await ctx.editMessageText(
-      '📎 <b>Пришлите файл или фото:</b>',
-      { parse_mode: 'HTML' }
-    );
+    
+    let prompt = '📎 <b>Пришлите файлы или фото:</b>\n\n';
+    prompt += 'Можно отправить:\n';
+    prompt += '• Один файл/фото\n';
+    prompt += '• Несколько фото одновременно (группой)\n\n';
+    if (filesCount > 0) {
+      prompt += `📎 <b>Уже добавлено файлов:</b> ${filesCount}\n`;
+      prompt += `Новые файлы будут добавлены к существующим.`;
+    }
+    
+    await ctx.editMessageText(prompt, { parse_mode: 'HTML' });
     await ctx.answerCbQuery('📎 Жду файл');
   });
   
@@ -386,11 +435,11 @@ function registerComposerActions(bot) {
     const composer = ctx.session.messageComposer;
     if (!composer) return ctx.answerCbQuery('❌ Сессия не найдена');
     
-    if (!composer.text && !composer.file) {
+    const hasFiles = composer.files && composer.files.length > 0;
+    if (!composer.text && !hasFiles) {
       return ctx.answerCbQuery('❌ Сообщение пустое. Добавьте текст или файл.');
     }
     
-    // 🌟 НЕ вызываем answerCbQuery здесь — он будет вызван внутри sendMessage
     await sendMessage(ctx);
   });
   
@@ -403,6 +452,16 @@ function registerComposerActions(bot) {
     } catch (e) { /* ignore */ }
     // 🌟 Всплывающее уведомление
     await ctx.answerCbQuery('❌ Отправка отменена');
+  });
+
+  // 🌟 НОВОЕ: Удалить все файлы
+  bot.action('mc:clear_files', async (ctx) => {
+    const composer = ctx.session.messageComposer;
+    if (!composer) return ctx.answerCbQuery('❌ Сессия не найдена');
+    
+    composer.files = [];
+    await showPreview(ctx);
+    await ctx.answerCbQuery('🗑 Файлы удалены');
   });
 
   // 🌟 Кнопка "Скрыть" для рассылки — удаляет сообщение у получателя
