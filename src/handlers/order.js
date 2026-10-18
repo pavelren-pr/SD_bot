@@ -677,7 +677,8 @@ function register(bot) {
           managerChatId: targetChatId,
           detailsText: order.details.text || null,
           taskFiles: order.details.files || [],
-          chatId: chatId
+          chatId: chatId,
+          payoutStatus: 'not_applicable'
         });
         ctx.session.currentOrderId = newOrder.id;
         logger.logOrderEvent('created', newOrder, ctx.from.id, ctx.from.username);
@@ -1060,84 +1061,158 @@ function register(bot) {
   bot.action(/^oc:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
+
     if (!order || String(order.executorId) !== String(ctx.from.id)) {
       await ctx.reply('❌ Заказ не найден или у вас нет прав');
       return ctx.answerCbQuery();
     }
+
     if (order.status === 'completed') {
       await ctx.answerCbQuery('⚠️ Заказ уже отмечен как выполненный');
       return;
     }
 
+    // 🌟 Обновляем статус + начальный статус выплаты
     ordersDb.updateOrder(orderId, {
       status: 'completed',
-      completedAt: new Date().toLocaleString('ru-RU')
+      completedAt: new Date().toLocaleString('ru-RU'),
+      payoutStatus: 'pending'
     });
 
+    // 🌟 Для ОБЫЧНЫХ заказов обновляем сообщение в группе исполнителей
+    if (!order.isCustomOrder) {
     const updatedOrder = ordersDb.getOrder(orderId);
     if (updatedOrder && updatedOrder.managerMessageId && updatedOrder.managerChatId) {
-      const completedText = buildGroupOrderText(updatedOrder, 'completed');
-      try {
-        if (updatedOrder.screenshotFileId) {
-          await ctx.telegram.editMessageCaption(updatedOrder.managerChatId, updatedOrder.managerMessageId, null, completedText, { parse_mode: 'HTML' });
-        } else {
-          await ctx.telegram.editMessageText(updatedOrder.managerChatId, updatedOrder.managerMessageId, null, completedText, { parse_mode: 'HTML' });
+      if (!updatedOrder.isCustomOrder) {
+        // Обычный заказ: обновляем сообщение в группе
+        const completedText = buildGroupOrderText(updatedOrder, 'completed');
+        try {
+          if (updatedOrder.screenshotFileId) {
+            await ctx.telegram.editMessageCaption(
+              updatedOrder.managerChatId, updatedOrder.managerMessageId, null,
+              completedText, { parse_mode: 'HTML' }
+            );
+          } else {
+            await ctx.telegram.editMessageText(
+              updatedOrder.managerChatId, updatedOrder.managerMessageId, null,
+              completedText, { parse_mode: 'HTML' }
+            );
+          }
+        } catch (e) {
+          console.log('Не удалось обновить сообщение в группе:', e.message);
         }
-      } catch (e) {
-        console.log('Не удалось обновить сообщение в группе:', e.message);
+      } else {
+        // 🌟 Кастомный заказ: обновляем сообщение в личке исполнителя
+        try {
+          let completedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ ВЫПОЛНЕН</b>\n\n`;
+          completedText += `🆔 <b>Номер заказа:</b> №${escapeHtml(String(updatedOrder.orderNumber))}\n`;
+          completedText += `📚 <b>Предмет:</b> ${escapeHtml(updatedOrder.subjectName || updatedOrder.workTitle)}\n`;
+          completedText += `💰 <b>Цена:</b> ${updatedOrder.finalPrice || updatedOrder.price || 0} ₽\n`;
+          completedText += `✅ <b>Выполнен:</b> ${escapeHtml(updatedOrder.completedAt)}\n\n`;
+          completedText += `<i>Ожидает подтверждения выплаты от администрации.</i>`;
+          await ctx.telegram.editMessageText(
+            updatedOrder.managerChatId,
+            updatedOrder.managerMessageId,
+            null,
+            completedText,
+            { parse_mode: 'HTML' }
+          );
+        } catch (e) {
+          console.log('Не удалось обновить сообщение кастомного заказа:', e.message);
+        }
       }
     }
+    }
 
-    // Уведомление в поддержку
+    // 🌟 Уведомление в поддержку с кнопкой "Оплачено" (для обоих типов заказов)
     const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
     if (supportChatId) {
       const executorPayout = order.executorPrice || Math.round((order.price || 0) * (1 - (order.commission || 0) / 100));
-      const supportText = `✅ <b>Заказ выполнен!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n👷 <b>Исполнитель:</b> ${escapeHtml(order.executorUsername) ? '@' + escapeHtml(order.executorUsername) : 'ID: ' + escapeHtml(order.executorId)}\n\n💰 <b>К выплате исполнителю:</b> ${executorPayout} ₽`;
+      const typeLabel = order.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
+      const supportText = `✅ <b>Заказ выполнен!</b>\n\n` +
+        `${typeLabel}\n` +
+        `🆔 <b>Номер заказа:</b> №${escapeHtml(String(order.orderNumber))}\n` +
+        `📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n` +
+        `👷 <b>Исполнитель:</b> ${order.executorUsername ? '@' + escapeHtml(order.executorUsername) : 'ID: ' + order.executorId}\n\n` +
+        `💰 <b>К выплате исполнителю:</b> ${executorPayout} ₽`;
+      const paidKeyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Оплачено', `support_paid:${orderId}`)]
+      ]);
       try {
         await ctx.telegram.sendMessage(supportChatId, supportText, {
-          parse_mode: 'HTML',
-          reply_markup: Markup.inlineKeyboard([[Markup.button.callback('✅ Оплачено', `support_paid:${orderId}`)]]).reply_markup
+          parse_mode: 'HTML', reply_markup: paidKeyboard.reply_markup
         });
-      } catch (e) { console.log(e.message); }
+      } catch (e) {
+        console.log('Не удалось отправить уведомление в поддержку:', e.message);
+      }
     }
 
-    await ctx.telegram.sendMessage(order.customerId, `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${order.orderNumber || '—'}\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`, { parse_mode: 'HTML' });
+    // 🌟 Уведомление заказчику
+    await ctx.telegram.sendMessage(
+      order.customerId,
+      `✅ <b>Исполнитель завершил работу по заказу!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(String(order.orderNumber || '—'))}\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`,
+      { parse_mode: 'HTML' }
+    );
+
     await ctx.editMessageText(`✅ <b>Заказ выполнен!</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}`, { parse_mode: 'HTML' });
 
-    logger.logOrderEvent('completed', { orderNumber: order.orderNumber, orderId, workTitle: order.workTitle, status: 'completed', executorId: ctx.from.id, customerId: order.customerId }, ctx.from.id, ctx.from.username);
+    logger.logOrderEvent('completed', {
+      orderNumber: order.orderNumber,
+      orderId: orderId,
+      workTitle: order.workTitle,
+      status: 'completed',
+      isCustomOrder: order.isCustomOrder,
+      executorId: ctx.from.id,
+      customerId: order.customerId
+    }, ctx.from.id, ctx.from.username);
+
     await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
   });
 
-  // 🌟 Кнопка "Оплачено" — удаление уведомления из поддержки + уведомление исполнителю
   bot.action(/^support_paid:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
 
     try {
-      // Удаляем сообщение из чата поддержки
       await ctx.deleteMessage();
 
-      // 🌟 Отправляем уведомление исполнителю
+      // 🌟 Обновляем статус выплаты
+      if (order) {
+        ordersDb.updateOrder(orderId, {
+          status: 'completed',
+          completedAt: new Date().toLocaleString('ru-RU'),
+          payoutStatus: 'pending'  // 🌟 Ожидает выплаты исполнителю
+        });
+      }
+
+      // 🌟 Уведомление исполнителю
       if (order && order.executorId) {
         let notificationText = `💰 <b>Работа оплачена!</b>\n\n`;
         notificationText += `🆔 <b>Заказ:</b> №${escapeHtml(String(order.orderNumber || orderId))}\n`;
         notificationText += `📚 <b>Работа:</b> ${escapeHtml(order.workTitle || '—')}\n`;
         notificationText += `👤 <b>Заказчик:</b> ${order.customerUsername ? '@' + escapeHtml(order.customerUsername) : 'ID: ' + order.customerId}\n\n`;
         notificationText += `📅 <b>Создан:</b> ${escapeHtml(order.createdAt || '—')}\n`;
-        if (order.acceptedAt) {
-          notificationText += `🔨 <b>Принят:</b> ${escapeHtml(order.acceptedAt)}\n`;
-        }
-        if (order.completedAt) {
-          notificationText += `✅ <b>Выполнен:</b> ${escapeHtml(order.completedAt)}\n`;
-        }
+        if (order.acceptedAt) notificationText += `🔨 <b>Принят:</b> ${escapeHtml(order.acceptedAt)}\n`;
+        if (order.completedAt) notificationText += `✅ <b>Выполнен:</b> ${escapeHtml(order.completedAt)}\n`;
+        notificationText += `\n💵 <b>Вы получите:</b> ${order.executorPrice || order.price || 0} ₽`;
 
-        await ctx.telegram.sendMessage(order.executorId, notificationText, {
-          parse_mode: 'HTML',
-          reply_markup: Markup.inlineKeyboard([
-            [Markup.button.callback('🔕 Закрыть', `dismiss_paid:${orderId}`)]
-          ]).reply_markup
-        });
+        try {
+          await ctx.telegram.sendMessage(order.executorId, notificationText, {
+            parse_mode: 'HTML',
+            reply_markup: Markup.inlineKeyboard([
+              [Markup.button.callback('🔕 Закрыть', `dismiss_paid:${orderId}`)]
+            ]).reply_markup
+          });
+        } catch (e) {
+          console.log('Не удалось уведомить исполнителя об оплате:', e.message);
+        }
       }
+
+      logger.logAdminAction('payout_confirmed', {
+        orderId, orderNumber: order ? order.orderNumber : null,
+        executorId: order ? order.executorId : null,
+        amount: order ? (order.executorPrice || order.price) : null
+      }, ctx);
 
       await ctx.answerCbQuery('✅ Отмечено как оплачено');
     } catch (e) {
@@ -1152,7 +1227,6 @@ function register(bot) {
       await ctx.deleteMessage();
       await ctx.answerCbQuery();
     } catch (e) {
-      console.log('Не удалось удалить уведомление:', e.message);
       await ctx.answerCbQuery();
     }
   });

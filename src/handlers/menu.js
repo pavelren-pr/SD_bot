@@ -1094,6 +1094,20 @@ function formatOrderCard(order, role) {
   if (order.acceptedAt) text += `🔨 <b>Принят:</b> ${escapeHtml(order.acceptedAt)}\n`;
   if (order.completedAt) text += `✅ <b>Выполнен:</b> ${escapeHtml(order.completedAt)}\n`;
 
+  // 🌟 Статус выплаты исполнителю (только для админа)
+  if (role === 'admin') {
+    const payoutLabels = {
+      'not_applicable': '⚪ Не требуется',
+      'pending': '🟡 Ожидает выплаты',
+      'paid': '🟢 Выплачено'
+    };
+    const payoutLabel = payoutLabels[order.payoutStatus] || '⚪ Не указано';
+    text += `💵 <b>Статус оплаты работы:</b> ${payoutLabel}\n`;
+    if (order.payoutStatus === 'paid' && order.payoutDate) {
+      text += `📅 <b>Дата выплаты:</b> ${escapeHtml(order.payoutDate)}\n`;
+    }
+  }
+
   return text;
 }
 

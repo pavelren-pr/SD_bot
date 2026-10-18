@@ -3625,17 +3625,12 @@ function register(bot) {
       const typeLabel = order.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
 
       const keyboardButtons = [
-        // 📋 Основные данные
         [Markup.button.callback('📋 Основные данные', `admin:order_edit_main:${orderId}`)],
-        // 💰 Финансы
         [Markup.button.callback('💰 Финансы (цена, скидка, комиссия)', `admin:order_edit_fin:${orderId}`)],
-        // 👥 Участники
         [Markup.button.callback('👥 Участники (заказчик, исполнитель)', `admin:order_edit_people:${orderId}`)],
-        // 📝 Исходные данные
         [Markup.button.callback('📝 Исходные данные и файлы', `admin:order_edit_data:${orderId}`)],
-        // 🏷 Статус
         [Markup.button.callback('🏷 Изменить статус', `admin:order_status_select:${orderId}`)],
-        // ⬅️ Назад
+        [Markup.button.callback('💵 Статус оплаты работы', `admin:order_payout:${orderId}`)],
         [Markup.button.callback('⬅️ Назад к заказу', `admin:order_view:${orderId}`)]
       ];
 
@@ -3924,6 +3919,110 @@ function register(bot) {
         parse_mode: 'HTML',
         ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Назад', `admin:order_edit_data:${orderId}`)]])
       });
+    }
+    // 🌟 Статус оплаты работы исполнителю
+    else if (action.startsWith('order_payout:')) {
+      const orderId = action.split(':')[1];
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const payoutLabels = {
+        'not_applicable': '⚪ Не требуется',
+        'pending': '🟡 Ожидает выплаты',
+        'paid': '🟢 Выплачено'
+      };
+      const currentLabel = payoutLabels[order.payoutStatus] || '⚪ Не указано';
+
+      let payoutText = `💵 <b>Статус оплаты работы</b>\n\n`;
+      payoutText += `📦 <b>Заказ:</b> №${escapeHtml(String(order.orderNumber || orderId))}\n`;
+      payoutText += `👷 <b>Исполнитель:</b> ${order.executorUsername ? '@' + escapeHtml(order.executorUsername) : (order.executorId ? 'ID: ' + order.executorId : '<i>не назначен</i>')}\n`;
+      payoutText += `💰 <b>Сумма выплаты:</b> ${order.executorPrice || order.price || 0} ₽\n\n`;
+      payoutText += `📌 <b>Текущий статус:</b> ${currentLabel}\n`;
+      if (order.payoutDate) {
+        payoutText += `📅 <b>Дата выплаты:</b> ${escapeHtml(order.payoutDate)}\n`;
+      }
+      payoutText += `\nВыберите новый статус:`;
+
+      const buttons = [
+        [Markup.button.callback('⚪ Не требуется', `admin:order_payout_set:${orderId}:not_applicable`)],
+        [Markup.button.callback('🟡 Ожидает выплаты', `admin:order_payout_set:${orderId}:pending`)],
+        [Markup.button.callback('🟢 Выплачено', `admin:order_payout_set:${orderId}:paid`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ];
+
+      await ctx.editMessageText(payoutText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+    }
+
+    // 🌟 Установка статуса выплаты
+    else if (action.startsWith('order_payout_set:')) {
+      const parts = action.split(':');
+      const orderId = parts[1];
+      const newPayoutStatus = parts[2];
+
+      const order = ordersDb.getOrder(orderId);
+      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+      const updates = { payoutStatus: newPayoutStatus };
+
+      if (newPayoutStatus === 'paid') {
+        updates.payoutDate = new Date().toLocaleString('ru-RU');
+      } else {
+        updates.payoutDate = null;
+      }
+
+      ordersDb.updateOrder(orderId, updates);
+
+      logger.logAdminAction('payout_status_changed', {
+        orderId: orderId,
+        orderNumber: order.orderNumber,
+        newStatus: newPayoutStatus,
+        executorId: order.executorId
+      }, ctx);
+
+      // 🌟 Если статус изменён на "Выплачено" — уведомляем исполнителя
+      if (newPayoutStatus === 'paid' && order.executorId) {
+        try {
+          let notificationText = `💰 <b>Работа оплачена!</b>\n\n`;
+          notificationText += `🆔 <b>Заказ:</b> №${escapeHtml(String(order.orderNumber || orderId))}\n`;
+          notificationText += `📚 <b>Работа:</b> ${escapeHtml(order.workTitle || '—')}\n`;
+          notificationText += `\n💵 <b>Вы получите:</b> ${order.executorPrice || order.price || 0} ₽`;
+
+          await bot.telegram.sendMessage(order.executorId, notificationText, {
+            parse_mode: 'HTML',
+            reply_markup: Markup.inlineKeyboard([
+              [Markup.button.callback('🔕 Закрыть', `dismiss_paid:${orderId}`)]
+            ]).reply_markup
+          });
+        } catch (e) {
+          console.log('Не удалось уведомить исполнителя:', e.message);
+        }
+      }
+
+      await ctx.answerCbQuery('✅ Статус выплаты обновлён');
+
+      // Возвращаемся к меню статуса выплаты
+      const payoutLabels = {
+        'not_applicable': '⚪ Не требуется',
+        'pending': '🟡 Ожидает выплаты',
+        'paid': '🟢 Выплачено'
+      };
+      const updatedOrder = ordersDb.getOrder(orderId);
+      let payoutText = `💵 <b>Статус оплаты работы</b>\n\n`;
+      payoutText += `📦 <b>Заказ:</b> №${escapeHtml(String(updatedOrder.orderNumber || orderId))}\n`;
+      payoutText += `💰 <b>Сумма выплаты:</b> ${updatedOrder.executorPrice || updatedOrder.price || 0} ₽\n\n`;
+      payoutText += `📌 <b>Текущий статус:</b> ${payoutLabels[newPayoutStatus]}\n`;
+      if (updatedOrder.payoutDate) {
+        payoutText += `📅 <b>Дата выплаты:</b> ${escapeHtml(updatedOrder.payoutDate)}\n`;
+      }
+
+      const buttons = [
+        [Markup.button.callback('⚪ Не требуется', `admin:order_payout_set:${orderId}:not_applicable`)],
+        [Markup.button.callback('🟡 Ожидает выплаты', `admin:order_payout_set:${orderId}:pending`)],
+        [Markup.button.callback('🟢 Выплачено', `admin:order_payout_set:${orderId}:paid`)],
+        [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
+      ];
+
+      await ctx.editMessageText(payoutText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     }
     // --- ПРИВЯЗКА ЗАКАЗА К ЧАТУ (АДМИН) ---
     else if (action.startsWith('order_bind_chat:')) {
@@ -4597,7 +4696,8 @@ function register(bot) {
         managerChatId: managerChatId,
         managerChatEnv: newOrder.chatEnv || null,
         chatId: chatId,
-        createdAt: createdAt
+        createdAt: createdAt,
+        payoutStatus: 'not_applicable'
       };
 
       const createdOrder = ordersDb.createOrder(orderData);

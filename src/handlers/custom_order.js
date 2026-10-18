@@ -112,7 +112,10 @@ function register(bot) {
   // Приём текстового описания для индивидуального заказа
   bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
-  // 🌟 Если админ в режиме добавления заказа — пропускаем
+    if (ctx.session.messageComposer) {
+      const handled = await handleComposerText(ctx, next);
+      if (handled) return;
+    }
     if (ctx.session.adminState) {
       return next();
     }
@@ -550,7 +553,7 @@ bot.action(/^custom_back:(\d+)$/, async (ctx) => {
   // Очищаем состояние ожидания цены
   ctx.session.waitingCustomPrice = null;
   
-  const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+  const executorName = ctx.from.username ? `@${escapeHtml(ctx.from.username)}` : escapeHtml(ctx.from.first_name);
   
   // Формируем сообщение управления заказом
   let updatedText = `🔔 <b>ИНДИВИДУАЛЬНЫЙ ЗАКАЗ</b>\n\n`;
@@ -563,12 +566,22 @@ bot.action(/^custom_back:(\d+)$/, async (ctx) => {
   updatedText += `👷 <b>Исполнитель:</b> ${escapeHtml(executorName)}\n`;
   updatedText += `🟡 <b>Статус:</b> ${orderRecord.price && orderRecord.price > 0 ? 'СОГЛАСОВАНИЕ ЦЕНЫ' : 'ОЖИДАЕТ ОЦЕНКИ'}`;
   
+  // 🌟 Формируем кнопки в зависимости от статуса согласования цены
+  const backButtons = [];
+  if (orderRecord.price && orderRecord.price > 0) {
+    backButtons.push([Markup.button.callback('💰 Изменить цену', `custom_set_price:${orderNumber}`)]);
+  } else {
+    backButtons.push([Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)]);
+  }
+  backButtons.push([Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]);
+  // 🌟 Кнопка "Заказ выполнен" — только после назначения цены и до завершения
+  if (orderRecord.price && orderRecord.price > 0 && orderRecord.status !== 'completed') {
+    backButtons.push([Markup.button.callback('✅ Заказ выполнен', `oc:${orderRecord.id}`)]);
+  }
+
   await ctx.editMessageText(updatedText, {
     parse_mode: 'HTML',
-    reply_markup: Markup.inlineKeyboard([
-      [Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)],
-      [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
-    ]).reply_markup
+    reply_markup: Markup.inlineKeyboard(backButtons).reply_markup
   });
   await ctx.answerCbQuery();
 });
@@ -599,6 +612,11 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   // Обработка введённой цены
   bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
+  // 🌟 НОВОЕ: Сначала проверяем композер
+  if (ctx.session.messageComposer) {
+    const handled = await handleComposerText(ctx, next);
+    if (handled) return;
+  }
   if (!ctx.session.waitingCustomPrice) {
     return next();
   }
@@ -670,7 +688,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     status: 'price_negotiating'
   });
 
-  const executorName = ctx.from.username ? `@${ctx.from.username}` : ctx.from.first_name;
+  const executorName = ctx.from.username ? `@${escapeHtml(ctx.from.username)}` : escapeHtml(ctx.from.first_name);
 
   // Формируем сообщение для заказчика
   let customerMessage =
@@ -726,7 +744,8 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
         parse_mode: 'HTML',
         reply_markup: createInlineKeyboard([
           [{ text: '💰 Изменить цену', callback: `custom_set_price:${orderNumber}` }],
-          [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderNumber}` }]
+          [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderNumber}` }],
+          [{ text: '✅ Заказ выполнен', callback: `oc:${orderRecord.id}` }]
         ]).reply_markup
       });
     }
@@ -770,7 +789,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     
     await ctx.editMessageText(
       `✉️ <b>Написать сообщение заказчику</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery();
   });
@@ -791,7 +810,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     
     await ctx.editMessageText(
       `✏️ <b>Написать ответ исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery();
   });
@@ -936,8 +955,13 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
       updatedText += `👷 <b>Исполнитель:</b> ${updatedOrder.executorId ? '@'+(await ctx.telegram.getChat(updatedOrder.executorId)).username : 'Не назначен'}\n`;
       updatedText += `✅ <b>Оплачен:</b> ${updatedOrder.paidAt}\n`;
       updatedText += `🟢 <b>Статус:</b> ОПЛАЧЕН - В РАБОТЕ`;
+      
         await ctx.telegram.editMessageText(targetChatId, cacheData.managerMessageId, null, updatedText, {
-          parse_mode: 'HTML'
+          parse_mode: 'HTML',
+          reply_markup: createInlineKeyboard([
+            [{ text: '✉️ Написать сообщение заказчику', callback: `custom_write_customer:${orderNumber}` }],
+            [{ text: '✅ Заказ выполнен', callback: `oc:${updatedOrder.id}` }]
+          ]).reply_markup
         });
       }
       
@@ -995,7 +1019,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     
     await ctx.editMessageText(
       `✏️ <b>Написать исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery();
   });
