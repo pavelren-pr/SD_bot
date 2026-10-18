@@ -1108,14 +1108,52 @@ function register(bot) {
     await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
   });
 
-  // 🌟 Кнопка "Оплачено" — удаление уведомления из поддержки
+  // 🌟 Кнопка "Оплачено" — удаление уведомления из поддержки + уведомление исполнителю
   bot.action(/^support_paid:(.+)$/, async (ctx) => {
+    const orderId = ctx.match[1];
+    const order = ordersDb.getOrder(orderId);
+
     try {
+      // Удаляем сообщение из чата поддержки
       await ctx.deleteMessage();
+
+      // 🌟 Отправляем уведомление исполнителю
+      if (order && order.executorId) {
+        let notificationText = `💰 <b>Работа оплачена!</b>\n\n`;
+        notificationText += `🆔 <b>Заказ:</b> №${escapeHtml(String(order.orderNumber || orderId))}\n`;
+        notificationText += `📚 <b>Работа:</b> ${escapeHtml(order.workTitle || '—')}\n`;
+        notificationText += `👤 <b>Заказчик:</b> ${order.customerUsername ? '@' + escapeHtml(order.customerUsername) : 'ID: ' + order.customerId}\n\n`;
+        notificationText += `📅 <b>Создан:</b> ${escapeHtml(order.createdAt || '—')}\n`;
+        if (order.acceptedAt) {
+          notificationText += `🔨 <b>Принят:</b> ${escapeHtml(order.acceptedAt)}\n`;
+        }
+        if (order.completedAt) {
+          notificationText += `✅ <b>Выполнен:</b> ${escapeHtml(order.completedAt)}\n`;
+        }
+
+        await ctx.telegram.sendMessage(order.executorId, notificationText, {
+          parse_mode: 'HTML',
+          reply_markup: Markup.inlineKeyboard([
+            [Markup.button.callback('🔕 Закрыть', `dismiss_paid:${orderId}`)]
+          ]).reply_markup
+        });
+      }
+
       await ctx.answerCbQuery('✅ Отмечено как оплачено');
     } catch (e) {
-      console.log('Не удалось удалить сообщение поддержки:', e.message);
-      await ctx.answerCbQuery('❌ Не удалось удалить сообщение');
+      console.log('Не удалось обработать кнопку "Оплачено":', e.message);
+      await ctx.answerCbQuery('❌ Не удалось обработать');
+    }
+  });
+
+  // 🌟 Кнопка "Закрыть" — удаление уведомления об оплате
+  bot.action(/^dismiss_paid:(.+)$/, async (ctx) => {
+    try {
+      await ctx.deleteMessage();
+      await ctx.answerCbQuery();
+    } catch (e) {
+      console.log('Не удалось удалить уведомление:', e.message);
+      await ctx.answerCbQuery();
     }
   });
 
