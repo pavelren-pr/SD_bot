@@ -12,6 +12,7 @@ const customOrder = require('./handlers/custom_order');
 const scheduler = require('./handlers/scheduler');
 const department = require('./handlers/department');
 const logger = require('./utils/logger');
+const { registerComposerActions, registerComposerStartActions } = require('./utils/messageComposer');
 
 // 🌟 Глобальный перехватчик всех ошибок в обработчиках бота
 bot.catch((err, ctx) => {
@@ -19,6 +20,8 @@ bot.catch((err, ctx) => {
   console.error('❌ Ошибка в обработчике бота:', err);
 });
 
+registerComposerActions(bot);
+registerComposerStartActions(bot);
 menu.register(bot);
 commands.register(bot);
 catalog.register(bot);

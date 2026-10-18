@@ -3,6 +3,7 @@ const loyalty = require('../data/loyalty');
 const ordersDb = require('../data/orders');
 const { findChatByOrderId, buildGroupOrderText } = require('./order');
 const { escapeHtml } = require('../utils/html');
+const { startComposer, handleComposerText, handleComposerFile } = require('../utils/messageComposer');
 
 // 🌟 Статусы для категорий (включая custom orders)
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
@@ -965,22 +966,15 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     }
   }
   // Для обычных заказов — если есть активный чат, тоже уведомляем
-  if (!order.isCustomOrder) {
-    const { findChatByOrderId } = require('./order');
-    const chatInfo = findChatByOrderId(orderId);
-    if (chatInfo && chatInfo.chatData.customerUserId) {
-      try {
-        await ctx.telegram.sendMessage(
-          chatInfo.chatData.customerUserId,
-          `✅ <b>Ваш заказ выполнен!</b>\n\n` +
-          `🆔 <b>Номер заказа:</b> №${order.orderNumber}\n` +
-          `📚 <b>Работа:</b> ${order.workTitle}\n\n` +
-          `Спасибо за использование нашего сервиса! 🌊`,
-          { parse_mode: 'HTML' }
-        );
-      } catch (e) {
-        console.log('Не удалось уведомить заказчика:', e.message);
-      }
+  if (!order.isCustomOrder && order.customerId) {
+    try {
+      await ctx.telegram.sendMessage(
+        order.customerId,
+        `✅ <b>Ваш заказ выполнен!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(order.orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`,
+        { parse_mode: 'HTML' }
+      );
+    } catch (e) {
+      console.log('Не удалось уведомить заказчика:', e.message);
     }
   }
   await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');

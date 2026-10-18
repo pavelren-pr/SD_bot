@@ -13,6 +13,7 @@ const finance = require('../data/finance');
 const { escapeHtml } = require('../utils/html');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 const { sendTempNotification } = require('../utils/notify');
+const { startComposer, handleComposerText, handleComposerFile } = require('../utils/messageComposer');
 
 // 🌟 Получение доступных переменных окружения из .env
 function getAvailableEnvVars() {
@@ -676,6 +677,12 @@ function register(bot) {
   // ==========================================
   bot.on('text', async (ctx, next) => {
     ctx.session = ctx.session || {};
+    // 🌟 НОВОЕ: Проверяем композер ПЕРЕД проверкой админ-панели
+    if (ctx.session.messageComposer) {
+      const handled = await handleComposerText(ctx, next);
+      if (handled) return;
+    }
+
     if (!ctx.session.adminState) {
       await next();
       return;
@@ -2737,274 +2744,233 @@ function register(bot) {
       return;
     }
 
-      // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из карточки заказа)
-      if (state.startsWith('send_message_to_customer:')) {
+      // ==========================================
+      // 🌟 ПОЛУЧЕНИЕ ID ИСПОЛНИТЕЛЯ И ЕГО НАЗНАЧЕНИЕ
+      // ==========================================
+      if (state.startsWith('awaiting_executor_id_for_order:')) {
         const orderId = state.split(':')[1];
+        const executorId = parseInt(text);
+        if (isNaN(executorId)) {
+          await ctx.reply('❌ ID должен быть числом. Попробуйте ещё раз или нажмите Отмену.');
+          return;
+        }
+
         const order = ordersDb.getOrder(orderId);
         if (!order) {
           await ctx.reply('❌ Заказ не найден');
           ctx.session.adminState = null;
           return;
         }
-        const messageText = ctx.message.text;
-        const customerId = order.customerId;
-        // 🌟 Клавиатура с кнопкой ответа администратору (передаём ID админа, чтобы заказчик знал, кому отвечать)
-        const replyKeyboard = Markup.inlineKeyboard([[
-          Markup.button.callback('✏️ Ответить администратору', `admin_reply:${customerId}_${orderId}_${ctx.from.id}`)
-        ]]);
+
+        const isReassignment = !!order.executorId && String(order.executorId) !== String(executorId);
+        const oldExecutorId = order.executorId;
+        const orderNumber = order.orderNumber || orderId;
+
         try {
-          await ctx.telegram.sendMessage(
-            customerId,
-            `📬 <b>Сообщение от администрации по заказу №${order.orderNumber}</b>\n\n${messageText}`,
-            { parse_mode: 'HTML', reply_markup: replyKeyboard.reply_markup }
+          // Получаем данные нового исполнителя
+          let executorUser;
+          try {
+            executorUser = await bot.telegram.getChat(executorId);
+          } catch (e) {
+            throw new Error('Исполнитель с таким ID не найден или заблокировал бота');
+          }
+
+          const executorUsername = executorUser.username || null;
+          const executorName = executorUser.username ? `@${executorUser.username}` : executorUser.first_name || 'Исполнитель';
+
+          // 🌟 Определяем статус: сохраняем текущий, если заказ уже оплачен/выполнен
+          let newStatus;
+          if (order.status === 'paid' || order.status === 'completed') {
+            newStatus = order.status; // Не сбрасываем статус оплаченных/выполненных заказов
+          } else {
+            newStatus = order.isCustomOrder ? 'waiting_price' : 'active';
+          }
+
+          // ==========================================
+          // 🌟 ИНДИВИДУАЛЬНЫЙ ЗАКАЗ — отдельная логика
+          // ==========================================
+          if (order.isCustomOrder) {
+            // 🌟 Определяем статус: сохраняем текущий, если заказ уже оплачен/выполнен
+            let newStatus;
+            if (order.status === 'paid' || order.status === 'completed') {
+              newStatus = order.status;
+            } else {
+              newStatus = 'waiting_price';
+            }
+
+            // 🌟 Обновляем заказ в БД (только для индивидуальных!)
+            ordersDb.updateOrder(orderId, {
+              executorId: executorId,
+              executorUsername: executorUsername,
+              status: newStatus,
+              acceptedAt: new Date().toLocaleString('ru-RU')
+            });
+            // 1. Уведомляем НОВОГО исполнителя с кнопками управления
+            if (order.status !== 'completed') {
+              const isPaid = order.status === 'paid';
+              
+              const privateText =
+                `✅ <b>Вам назначен индивидуальный заказ!</b>\n\n` +
+                `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n` +
+                `👤 <b>Заказчик:</b> ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n` +
+                (isPaid ? `💰 <b>Цена:</b> ${order.price} ₽\n` : '') +
+                `\n${isPaid ? 'Свяжитесь с заказчиком:' : 'Назначьте цену или свяжитесь с заказчиком:'}`;
+
+              // 🌟 Если заказ уже оплачен — кнопку "Назначить цену" не показываем
+              const privateKeyboard = isPaid
+                ? Markup.inlineKeyboard([
+                    [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
+                  ])
+                : Markup.inlineKeyboard([
+                    [Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)],
+                    [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
+                  ]);
+
+              try {
+                await bot.telegram.sendMessage(executorId, privateText, {
+                  parse_mode: 'HTML',
+                  reply_markup: privateKeyboard.reply_markup
+                });
+              } catch (e) {
+                console.log('Не удалось уведомить нового исполнителя:', e.message);
+              }
+
+              // Пересылаем файл задания новому исполнителю
+              if (order.fileId) {
+                try {
+                  const fileCaption = `📎 Файл задания к заказу №${orderNumber}`;
+                  if (order.fileType === 'photo') {
+                    await bot.telegram.sendPhoto(executorId, order.fileId, { caption: fileCaption });
+                  } else {
+                    await bot.telegram.sendDocument(executorId, order.fileId, { caption: fileCaption });
+                  }
+                } catch (e) {
+                  console.log('Не удалось переслать файл новому исполнителю:', e.message);
+                }
+              }
+            }
+
+            // 2. Уведомляем заказчика (без username исполнителя, с правильным текстом)
+            if (order.customerId) {
+              const actionWord = isReassignment ? 'изменён' : 'назначен';
+              const customerMessage =
+                `👷 <b>По вашему заказу ${actionWord} исполнитель</b>\n\n` +
+                `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n\n` +
+                `Вы можете связаться с исполнителем для обсуждения деталей:`;
+
+              const customerKeyboard = Markup.inlineKeyboard([
+                [Markup.button.callback('✏️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
+              ]);
+
+              try {
+                await bot.telegram.sendMessage(order.customerId, customerMessage, {
+                  parse_mode: 'HTML',
+                  reply_markup: customerKeyboard.reply_markup
+                });
+              } catch (e) {
+                console.log('Не удалось уведомить заказчика:', e.message);
+              }
+            }
+
+            // 3. Уведомляем СТАРОГО исполнителя о снятии
+            if (isReassignment && oldExecutorId) {
+              try {
+                await bot.telegram.sendMessage(oldExecutorId,
+                  `⚠️ <b>Заказ передан другому исполнителю</b>\n\n` +
+                  `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                  `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n\n` +
+                  `Администратор назначил нового исполнителя. Вы больше не являетесь исполнителем по этому заказу.`,
+                  { parse_mode: 'HTML' }
+                );
+              } catch (e) {
+                console.log('Не удалось уведомить старого исполнителя:', e.message);
+              }
+            }
+          }
+          // ==========================================
+          // 📦 ОБЫЧНЫЙ ЗАКАЗ — используем существующую функцию
+          // ==========================================
+          else {
+            const result = await assignExecutorToOrder(orderId, executorId, bot, isReassignment);
+
+            // При переназначении обычного заказа тоже уведомляем старого исполнителя
+            if (isReassignment && oldExecutorId) {
+              try {
+                await bot.telegram.sendMessage(oldExecutorId,
+                  `⚠️ <b>Заказ передан другому исполнителю</b>\n\n` +
+                  `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
+                  `📚 <b>Работа:</b> ${order.workTitle}\n\n` +
+                  `Администратор назначил нового исполнителя. Вы больше не являетесь исполнителем по этому заказу.`,
+                  { parse_mode: 'HTML' }
+                );
+              } catch (e) {
+                console.log('Не удалось уведомить старого исполнителя:', e.message);
+              }
+            }
+          }
+
+          // 🌟 Логируем действие
+          logger.logAdminAction(isReassignment ? 'executor_reassigned' : 'executor_assigned', {
+            orderId: orderId,
+            orderNumber: orderNumber,
+            newExecutorId: executorId,
+            oldExecutorId: oldExecutorId || null,
+            isCustomOrder: order.isCustomOrder
+          }, ctx);
+
+          const actionLabel = isReassignment ? 'переназначен' : 'назначен';
+          const notifyDetails = isReassignment
+            ? 'новому исполнителю, заказчику и старому исполнителю'
+            : 'исполнителю и заказчику';
+
+          await ctx.reply(
+            `✅ <b>Исполнитель успешно ${actionLabel}!</b>\n\n` +
+            `👷 <b>Исполнитель:</b> ${executorName}\n` +
+            `📦 <b>Заказ:</b> №${orderNumber}\n\n` +
+            `Уведомления отправлены ${notifyDetails}.`,
+            { parse_mode: 'HTML' }
           );
-          await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + customerId}`);
+
+          // Перерисовываем карточку заказа
+          const updatedOrder = ordersDb.getOrder(orderId);
+          const cardText = formatOrderCard(updatedOrder, 'admin');
+          const newButtons = [
+            [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
+            [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]
+          ];
+          if (updatedOrder.customerUsername) newButtons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${updatedOrder.customerUsername}`)]);
+          newButtons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
+          newButtons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
+          newButtons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
+          newButtons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
+          await ctx.reply(cardText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(newButtons) });
+
         } catch (err) {
-          await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
+          await ctx.reply(
+            `❌ <b>Ошибка назначения:</b>\n\n${err.message}`,
+            {
+              parse_mode: 'HTML',
+              ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `admin:order_view:${orderId}`)]])
+            }
+          );
         }
         ctx.session.adminState = null;
         return;
       }
-
-          // 🌟 ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ (из базы заказчиков по ID)
-          if (state.startsWith('send_message_to_customer_by_id:')) {
-            const customerId = state.split(':')[1];
-            const messageText = ctx.message.text;
-            try {
-              await ctx.telegram.sendMessage(
-                customerId,
-                `📬 <b>Сообщение от администрации</b>\n\n${messageText}`,
-                { parse_mode: 'HTML' }
-              );
-              await ctx.reply(`✅ Сообщение отправлено заказчику ID: ${customerId}`);
-            } catch (err) {
-              await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
-            }
-            ctx.session.adminState = null;
-            return;
-          }
-          // ==========================================
-          // 🌟 ПОЛУЧЕНИЕ ID ИСПОЛНИТЕЛЯ И ЕГО НАЗНАЧЕНИЕ
-          // ==========================================
-          if (state.startsWith('awaiting_executor_id_for_order:')) {
-            const orderId = state.split(':')[1];
-            const executorId = parseInt(text);
-            if (isNaN(executorId)) {
-              await ctx.reply('❌ ID должен быть числом. Попробуйте ещё раз или нажмите Отмену.');
-              return;
-            }
-
-            const order = ordersDb.getOrder(orderId);
-            if (!order) {
-              await ctx.reply('❌ Заказ не найден');
-              ctx.session.adminState = null;
-              return;
-            }
-
-            const isReassignment = !!order.executorId && String(order.executorId) !== String(executorId);
-            const oldExecutorId = order.executorId;
-            const orderNumber = order.orderNumber || orderId;
-
-            try {
-              // Получаем данные нового исполнителя
-              let executorUser;
-              try {
-                executorUser = await bot.telegram.getChat(executorId);
-              } catch (e) {
-                throw new Error('Исполнитель с таким ID не найден или заблокировал бота');
-              }
-
-              const executorUsername = executorUser.username || null;
-              const executorName = executorUser.username ? `@${executorUser.username}` : executorUser.first_name || 'Исполнитель';
-
-              // 🌟 Определяем статус: сохраняем текущий, если заказ уже оплачен/выполнен
-              let newStatus;
-              if (order.status === 'paid' || order.status === 'completed') {
-                newStatus = order.status; // Не сбрасываем статус оплаченных/выполненных заказов
-              } else {
-                newStatus = order.isCustomOrder ? 'waiting_price' : 'active';
-              }
-
-              // ==========================================
-              // 🌟 ИНДИВИДУАЛЬНЫЙ ЗАКАЗ — отдельная логика
-              // ==========================================
-              if (order.isCustomOrder) {
-                // 🌟 Определяем статус: сохраняем текущий, если заказ уже оплачен/выполнен
-                let newStatus;
-                if (order.status === 'paid' || order.status === 'completed') {
-                  newStatus = order.status;
-                } else {
-                  newStatus = 'waiting_price';
-                }
-
-                // 🌟 Обновляем заказ в БД (только для индивидуальных!)
-                ordersDb.updateOrder(orderId, {
-                  executorId: executorId,
-                  executorUsername: executorUsername,
-                  status: newStatus,
-                  acceptedAt: new Date().toLocaleString('ru-RU')
-                });
-                // 1. Уведомляем НОВОГО исполнителя с кнопками управления
-                if (order.status !== 'completed') {
-                  const isPaid = order.status === 'paid';
-                  
-                  const privateText =
-                    `✅ <b>Вам назначен индивидуальный заказ!</b>\n\n` +
-                    `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-                    `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n` +
-                    `👤 <b>Заказчик:</b> ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n` +
-                    (isPaid ? `💰 <b>Цена:</b> ${order.price} ₽\n` : '') +
-                    `\n${isPaid ? 'Свяжитесь с заказчиком:' : 'Назначьте цену или свяжитесь с заказчиком:'}`;
-
-                  // 🌟 Если заказ уже оплачен — кнопку "Назначить цену" не показываем
-                  const privateKeyboard = isPaid
-                    ? Markup.inlineKeyboard([
-                        [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
-                      ])
-                    : Markup.inlineKeyboard([
-                        [Markup.button.callback('💰 Назначить цену', `custom_set_price:${orderNumber}`)],
-                        [Markup.button.callback('✉️ Написать сообщение заказчику', `custom_write_customer:${orderNumber}`)]
-                      ]);
-
-                  try {
-                    await bot.telegram.sendMessage(executorId, privateText, {
-                      parse_mode: 'HTML',
-                      reply_markup: privateKeyboard.reply_markup
-                    });
-                  } catch (e) {
-                    console.log('Не удалось уведомить нового исполнителя:', e.message);
-                  }
-
-                  // Пересылаем файл задания новому исполнителю
-                  if (order.fileId) {
-                    try {
-                      const fileCaption = `📎 Файл задания к заказу №${orderNumber}`;
-                      if (order.fileType === 'photo') {
-                        await bot.telegram.sendPhoto(executorId, order.fileId, { caption: fileCaption });
-                      } else {
-                        await bot.telegram.sendDocument(executorId, order.fileId, { caption: fileCaption });
-                      }
-                    } catch (e) {
-                      console.log('Не удалось переслать файл новому исполнителю:', e.message);
-                    }
-                  }
-                }
-
-                // 2. Уведомляем заказчика (без username исполнителя, с правильным текстом)
-                if (order.customerId) {
-                  const actionWord = isReassignment ? 'изменён' : 'назначен';
-                  const customerMessage =
-                    `👷 <b>По вашему заказу ${actionWord} исполнитель</b>\n\n` +
-                    `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-                    `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n\n` +
-                    `Вы можете связаться с исполнителем для обсуждения деталей:`;
-
-                  const customerKeyboard = Markup.inlineKeyboard([
-                    [Markup.button.callback('✏️ Написать исполнителю', `custom_write_executor:${orderNumber}`)]
-                  ]);
-
-                  try {
-                    await bot.telegram.sendMessage(order.customerId, customerMessage, {
-                      parse_mode: 'HTML',
-                      reply_markup: customerKeyboard.reply_markup
-                    });
-                  } catch (e) {
-                    console.log('Не удалось уведомить заказчика:', e.message);
-                  }
-                }
-
-                // 3. Уведомляем СТАРОГО исполнителя о снятии
-                if (isReassignment && oldExecutorId) {
-                  try {
-                    await bot.telegram.sendMessage(oldExecutorId,
-                      `⚠️ <b>Заказ передан другому исполнителю</b>\n\n` +
-                      `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-                      `📚 <b>Предмет:</b> ${order.subjectName || order.workTitle}\n\n` +
-                      `Администратор назначил нового исполнителя. Вы больше не являетесь исполнителем по этому заказу.`,
-                      { parse_mode: 'HTML' }
-                    );
-                  } catch (e) {
-                    console.log('Не удалось уведомить старого исполнителя:', e.message);
-                  }
-                }
-              }
-              // ==========================================
-              // 📦 ОБЫЧНЫЙ ЗАКАЗ — используем существующую функцию
-              // ==========================================
-              else {
-                const result = await assignExecutorToOrder(orderId, executorId, bot, isReassignment);
-
-                // При переназначении обычного заказа тоже уведомляем старого исполнителя
-                if (isReassignment && oldExecutorId) {
-                  try {
-                    await bot.telegram.sendMessage(oldExecutorId,
-                      `⚠️ <b>Заказ передан другому исполнителю</b>\n\n` +
-                      `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-                      `📚 <b>Работа:</b> ${order.workTitle}\n\n` +
-                      `Администратор назначил нового исполнителя. Вы больше не являетесь исполнителем по этому заказу.`,
-                      { parse_mode: 'HTML' }
-                    );
-                  } catch (e) {
-                    console.log('Не удалось уведомить старого исполнителя:', e.message);
-                  }
-                }
-              }
-
-              // 🌟 Логируем действие
-              logger.logAdminAction(isReassignment ? 'executor_reassigned' : 'executor_assigned', {
-                orderId: orderId,
-                orderNumber: orderNumber,
-                newExecutorId: executorId,
-                oldExecutorId: oldExecutorId || null,
-                isCustomOrder: order.isCustomOrder
-              }, ctx);
-
-              const actionLabel = isReassignment ? 'переназначен' : 'назначен';
-              const notifyDetails = isReassignment
-                ? 'новому исполнителю, заказчику и старому исполнителю'
-                : 'исполнителю и заказчику';
-
-              await ctx.reply(
-                `✅ <b>Исполнитель успешно ${actionLabel}!</b>\n\n` +
-                `👷 <b>Исполнитель:</b> ${executorName}\n` +
-                `📦 <b>Заказ:</b> №${orderNumber}\n\n` +
-                `Уведомления отправлены ${notifyDetails}.`,
-                { parse_mode: 'HTML' }
-              );
-
-              // Перерисовываем карточку заказа
-              const updatedOrder = ordersDb.getOrder(orderId);
-              const cardText = formatOrderCard(updatedOrder, 'admin');
-              const newButtons = [
-                [Markup.button.callback('✏️ Изменить заказ', `admin:order_edit:${orderId}`)],
-                [Markup.button.callback('💬 Написать заказчику', `admin:send_msg_customer:${orderId}`)]
-              ];
-              if (updatedOrder.customerUsername) newButtons.push([Markup.button.url('🔗 Профиль заказчика', `https://t.me/${updatedOrder.customerUsername}`)]);
-              newButtons.push([Markup.button.callback('✅ Отметить выполненным', `admin:order_status:${orderId}:completed`)]);
-              newButtons.push([Markup.button.callback('⏳ Вернуть в ожидание', `admin:order_status:${orderId}:pending`)]);
-              newButtons.push([Markup.button.callback('🗑 Удалить заказ', `admin:order_delete:${orderId}`)]);
-              newButtons.push([Markup.button.callback('⬅️ Назад к списку', 'admin:orders')]);
-              await ctx.reply(cardText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(newButtons) });
-
-            } catch (err) {
-              await ctx.reply(
-                `❌ <b>Ошибка назначения:</b>\n\n${err.message}`,
-                {
-                  parse_mode: 'HTML',
-                  ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `admin:order_view:${orderId}`)]])
-                }
-              );
-            }
-            ctx.session.adminState = null;
-            return;
-          }
-        });
+    });
 
     // ==========================================
     // 🌟 ОБРАБОТЧИК ФАЙЛОВ ДЛЯ РУЧНОГО ДОБАВЛЕНИЯ ЗАКАЗА
     // ==========================================
     bot.on(['photo', 'document'], async (ctx, next) => {
       ctx.session = ctx.session || {};
+      // 🌟 НОВОЕ: Проверяем композер
+      if (ctx.session.messageComposer) {
+        const handled = await handleComposerFile(ctx, next);
+        if (handled) return;
+      }
       
       // 🌟 Если админ не в режиме добавления заказа — пропускаем
       if (!ctx.session.adminState) {
@@ -3141,51 +3107,38 @@ function register(bot) {
       await next();
     });
 
-    // ==========================================
-    // 🌟 Админ нажимает "Ответить заказчику" после получения ответа от заказчика
-    // ==========================================
-    bot.action(/^admin_reply_to_customer:(\d+)_(.+)$/, async (ctx) => {
-      ctx.session = ctx.session || {};
+  // ==========================================
+  // 🌟 Админ нажимает "Ответить заказчику" после получения ответа от заказчика
+  // ==========================================
+  bot.action(/^admin_reply_to_customer:(\d+)_(.+)$/, async (ctx) => {
+    ctx.session = ctx.session || {};
+    if (!isAdmin(ctx.from.id)) {
+      await ctx.answerCbQuery('❌ У вас нет прав');
+      return;
+    }
+    const customerId = parseInt(ctx.match[1]);
+    const orderId = ctx.match[2];
+    const order = ordersDb.getOrder(orderId);
+    const orderNumber = order && order.orderNumber ? order.orderNumber : orderId;
+    const orderTitle = order ? order.workTitle : 'Заказ';
 
-      if (!isAdmin(ctx.from.id)) {
-        await ctx.answerCbQuery('❌ У вас нет прав');
-        return;
-      }
-
-      const customerId = parseInt(ctx.match[1]);
-      const orderId = ctx.match[2];
-
-      const order = ordersDb.getOrder(orderId);
-
-      const orderNumber = order && order.orderNumber ? order.orderNumber : orderId;
-      const orderTitle = order ? order.workTitle : 'Заказ';
-
-      ctx.session.adminReplyToCustomerId = customerId;
-      ctx.session.adminReplyOrderId = orderId;
-      ctx.session.adminReplyOrderNumber = orderNumber;
-      ctx.session.adminReplyOrderTitle = orderTitle;
-      ctx.session.adminReplyOrderDate = order ? order.createdAt : new Date().toLocaleString('ru-RU');
-      ctx.session.adminReplyAdminId = ctx.from.id;
-
-const backCallback = order ? `admin:order_view:${orderId}` : 'admin:orders';
-
-const backKeyboard = Markup.inlineKeyboard([
-  [Markup.button.callback('↩️ Назад', backCallback)]
-]);
-
-      await ctx.reply(
-        `💬 <b>Режим ответа заказчику</b>\n\n` +
-        `🆔 <b>Номер заказа:</b> №${orderNumber}\n` +
-        `📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\n` +
-        `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.`,
-        { 
-          parse_mode: 'HTML',
-          reply_markup: backKeyboard.reply_markup
-        }
-      );
-
-      await ctx.answerCbQuery('✅ Готов к отправке ответа');
+    // 🌟 Запускаем композер
+    startComposer(ctx, 'admin_to_customer', {
+      targetUserId: customerId,
+      orderId: orderId,
+      orderNumber: orderNumber,
+      orderTitle: orderTitle
     });
+
+    await ctx.reply(
+      `💬 <b>Режим ответа заказчику</b>\n\n` +
+      `🆔 <b>Номер заказа:</b> №${escapeHtml(orderNumber)}\n` +
+      `📚 <b>Заказ:</b> ${escapeHtml(orderTitle)}\n\n` +
+      `Напишите сообщение:`,
+      { parse_mode: 'HTML' }
+    );
+    await ctx.answerCbQuery('✅ Готов к отправке ответа');
+  });
 
   // ==========================================
   // Обработчик inline-кнопок
@@ -5495,33 +5448,38 @@ const backKeyboard = Markup.inlineKeyboard([
         await ctx.answerCbQuery('❌ Заказ не найден');
         return;
       }
-      ctx.session.adminState = `send_message_to_customer:${orderId}`;
+
+      // 🌟 Запускаем композер
+      startComposer(ctx, 'admin_to_customer', {
+        targetUserId: order.customerId,
+        orderId: orderId,
+        orderNumber: order.orderNumber || orderId,
+        orderTitle: order.workTitle
+      });
+
       await ctx.editMessageText(
-        `💬 Отправка сообщения заказчику\n\n` +
-        `Заказ №${order.orderNumber}\n` +
-        `Заказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: <code>' + order.customerId + '</code>'}\n\n` +
+        `💬 <b>Отправка сообщения заказчику</b>\n\n` +
+        `Заказ №${escapeHtml(order.orderNumber || orderId)}\n` +
+        `Заказчик: ${order.customerUsername ? '@' + escapeHtml(order.customerUsername) : 'ID: <code>' + order.customerId + '</code>'}\n\n` +
         `Введите текст сообщения:`,
-        { 
-          parse_mode: 'HTML', 
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Назад', `admin:order_view:${orderId}`)]
-          ])  
-        }
+        { parse_mode: 'HTML' }
       );
     }
     else if (action.startsWith('send_msg_customer_by_id:')) {
       const customerId = action.split(':')[1];
-      ctx.session.adminState = `send_message_to_customer_by_id:${customerId}`;
+
+      // 🌟 Запускаем композер
+      startComposer(ctx, 'admin_to_customer_generic', {
+        targetUserId: parseInt(customerId),
+        orderNumber: '—',
+        orderTitle: 'Без заказа'
+      });
+
       await ctx.editMessageText(
-        `💬 Отправка сообщения заказчику\n\n` +
-        `ID заказчика: <code>${customerId}</code>\n\n` +
+        `💬 <b>Отправка сообщения заказчику</b>\n\n` +
+        `ID заказчика: <code>${escapeHtml(customerId)}</code>\n\n` +
         `Введите текст сообщения:`,
-        { 
-          parse_mode: 'HTML', 
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Назад', 'admin:customers')]
-          ]) 
-        }
+        { parse_mode: 'HTML' }
       );
     }
 
