@@ -1270,6 +1270,86 @@ function register(bot) {
     await ctx.answerCbQuery('✅ Готов к отправке ответа');
   });
 
+  // 🌟 Заказчик отвечает исполнителю (кнопка из сообщения композера)
+  bot.action(/^customer_reply_msg:(\d+)_(.+)$/, async (ctx) => {
+    const executorId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    const order = ordersDb.getOrderByNumber(orderNumber);
+
+    startComposer(ctx, 'customer_to_executor', {
+      targetUserId: parseInt(executorId),
+      orderId: order ? order.id : null,
+      orderNumber: orderNumber,
+      orderTitle: order ? order.workTitle : 'Заказ'
+    });
+
+    await ctx.editMessageText(
+      `✏️ <b>Напишите ответ исполнителю:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
+      { parse_mode: 'HTML' }
+    );
+    await ctx.answerCbQuery();
+  });
+
+  // 🌟 Заказчик отправляет файл исполнителю (кнопка из сообщения композера)
+  bot.action(/^customer_reply_file:(\d+)_(.+)$/, async (ctx) => {
+    const executorId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    const order = ordersDb.getOrderByNumber(orderNumber);
+
+    startComposer(ctx, 'customer_to_executor', {
+      targetUserId: parseInt(executorId),
+      orderId: order ? order.id : null,
+      orderNumber: orderNumber,
+      orderTitle: order ? order.workTitle : 'Заказ'
+    });
+
+    await ctx.editMessageText(
+      `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
+      { parse_mode: 'HTML' }
+    );
+    await ctx.answerCbQuery();
+  });
+
+  // 🌟 Исполнитель отвечает заказчику (кнопка из сообщения композера)
+  bot.action(/^executor_reply_msg2:(\d+)_(.+)$/, async (ctx) => {
+    const customerId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    const order = ordersDb.getOrderByNumber(orderNumber);
+
+    startComposer(ctx, 'executor_to_customer', {
+      targetUserId: parseInt(customerId),
+      orderId: order ? order.id : null,
+      orderNumber: orderNumber,
+      orderTitle: order ? order.workTitle : 'Заказ'
+    });
+
+    await ctx.editMessageText(
+      `✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
+      { parse_mode: 'HTML' }
+    );
+    await ctx.answerCbQuery();
+  });
+
+  // 🌟 Исполнитель отправляет файл заказчику (кнопка из сообщения композера)
+  bot.action(/^executor_reply_file2:(\d+)_(.+)$/, async (ctx) => {
+    const customerId = ctx.match[1];
+    const orderNumber = ctx.match[2];
+    const order = ordersDb.getOrderByNumber(orderNumber);
+
+    startComposer(ctx, 'executor_to_customer', {
+      targetUserId: parseInt(customerId),
+      orderId: order ? order.id : null,
+      orderNumber: orderNumber,
+      orderTitle: order ? order.workTitle : 'Заказ'
+    });
+
+    await ctx.editMessageText(
+      `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
+      { parse_mode: 'HTML' }
+    );
+    await ctx.answerCbQuery();
+  });
+
   // 🌟 Отмена сессионных режимов ожидания (сообщение/файл)
   bot.action('cancel_session_reply', async (ctx) => {
     ctx.session = ctx.session || {};
