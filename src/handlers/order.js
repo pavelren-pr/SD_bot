@@ -1306,7 +1306,7 @@ function register(bot) {
     ctx.session.messageComposer.step = 'waiting_file';
 
     await ctx.reply(
-      `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
+      `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}\n\nМожно прикрепить одно или несколько фото (группой), либо один файл, если необходимо отправить несколько файлов - добавляйте их в сообщени по очереди`,
       { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
@@ -1348,7 +1348,7 @@ function register(bot) {
     ctx.session.messageComposer.step = 'waiting_file';
 
     await ctx.reply(
-      `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
+      `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}\n\nМожно прикрепить одно или несколько фото (группой), либо один файл, если необходимо отправить несколько файлов - добавляйте их в сообщени по очереди`,
       { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
