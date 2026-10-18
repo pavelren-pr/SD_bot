@@ -440,50 +440,27 @@ bot.hears('📚 Заказать работу', async (ctx) => {
   });
 
   // 🌟 Обновлённый обработчик "Написать исполнителю" для заказчика
-bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
+  bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
+    if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
 
-    if (!order || !order.executorId) {
-        await ctx.answerCbQuery('❌ Исполнитель не назначен');
-        return;
-    }
-
-    // 🌟 Пытаемся найти активный чат для этого заказа
-    const { findChatByOrderId } = require('./order');
-    const chatInfo = findChatByOrderId(orderId);
-    
-    // 🌟 Если чат не найден, создаём его структуру
-    let chatId;
-    if (chatInfo) {
-        chatId = chatInfo.chatId;
-    } else {
-        // Формируем chatId как в accept_order
-        chatId = `order_${ctx.from.id}_${order.workId}`;
-    }
-
-    ctx.session = ctx.session || {};
-    ctx.session.customerReplyToExecutorId = order.executorId;
-    ctx.session.customerReplyOrderId = orderId;
-    ctx.session.customerReplyOrderTitle = order.workTitle;
-    ctx.session.customerReplyOrderDate = order.createdAt;
-    ctx.session.customerReplyOrderNumber = order.orderNumber || '—';
-    ctx.session.customerReplyChatId = chatId; // 🌟 Сохраняем chatId
-
-    const keyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('❌ Отмена', `orders:customer:view:${orderId}`)]
-    ]);
+    // 🌟 Запускаем композер
+    startComposer(ctx, 'customer_to_executor', {
+      targetUserId: order.executorId,
+      orderId: order.id,
+      orderNumber: String(order.orderNumber || orderId),
+      orderTitle: order.workTitle
+    });
 
     await ctx.editMessageText(
-        `💬 <b>Режим ответа исполнителю</b>\n\n` +
-        `📚 <b>Заказ:</b> ${order.workTitle}\n` +
-        `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
-        `Напишите сообщение или прикрепите файл.\n\n` +
-        `<i>(Для отмены нажмите "Отмена")</i>`,
-        { parse_mode: 'HTML', ...keyboard }
+      `💬 <b>Режим ответа исполнителю</b>\n\n` +
+      `📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\n` +
+      `Напишите сообщение:`,
+      { parse_mode: 'HTML' }
     );
     await ctx.answerCbQuery();
-});
+  });
 
   // ==========================================
   // ИСТОРИЯ ЗАКАЗОВ ПОЛЬЗОВАТЕЛЯ (с пагинацией)
@@ -896,32 +873,25 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   });
 
   bot.action(/^orders:executor:contact:(.+)$/, async (ctx) => {
-  const orderId = ctx.match[1];
-  const order = ordersDb.getOrder(orderId);
-  if (!order || String(order.executorId) !== String(ctx.from.id)) {
-    await ctx.answerCbQuery('❌ Заказ не найден');
-    return;
-  }
-  
-  ctx.session = ctx.session || {};
-  ctx.session.executorReplyToCustomerId = order.customerId;
-  ctx.session.executorReplyOrderId = orderId;
-  ctx.session.executorReplyOrderTitle = order.workTitle;
-  ctx.session.executorReplyOrderDate = order.createdAt;
-  ctx.session.executorReplyOrderNumber = order.orderNumber || '—';
-  
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('❌ Отмена', `orders:executor:view:${orderId}`)]
-  ]);
-  await ctx.editMessageText(
-    `💬 <b>Режим ответа заказчику</b>\n\n` +
-    `📚 <b>Заказ:</b> ${order.workTitle}\n` +
-    `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
-    `Напишите сообщение или прикрепите файл.\n\n` +
-    `<i>(Для отмены нажмите "Отмена")</i>`,
-    { parse_mode: 'HTML', ...keyboard }
-  );
-  await ctx.answerCbQuery();
+    const orderId = ctx.match[1];
+    const order = ordersDb.getOrder(orderId);
+    if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+
+    // 🌟 Запускаем композер вместо старых сессионных флагов
+    startComposer(ctx, 'executor_to_customer', {
+      targetUserId: order.customerId,
+      orderId: order.id,
+      orderNumber: String(order.orderNumber || orderId),
+      orderTitle: order.workTitle
+    });
+
+    await ctx.editMessageText(
+      `💬 <b>Режим ответа заказчику</b>\n\n` +
+      `📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\n` +
+      `Напишите сообщение:`,
+      { parse_mode: 'HTML' }
+    );
+    await ctx.answerCbQuery();
   });
 
   // 🌟 Отметить заказ выполненным (исполнитель)
