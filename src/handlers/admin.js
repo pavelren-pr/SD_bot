@@ -4934,6 +4934,7 @@ function register(bot) {
           [Markup.button.callback('👑 Назначить администратора', 'admin:set_user_rank:new:admin')],
           [Markup.button.callback('👁️ Назначить управляющего (Циклоп)', 'admin:set_user_rank:new:manager')],
           [Markup.button.callback('📋 Управление пользователями', 'admin:set_user_rank:manage')],
+          [Markup.button.callback('📢 Рассылка персоналу', 'admin:set_user_rank:broadcast')],
           [Markup.button.callback('⬅️ Назад', 'admin:main')]
         ]);
         await ctx.editMessageText(text, { parse_mode: 'HTML', ...keyboard });
@@ -5055,6 +5056,80 @@ function register(bot) {
       ];
       
       await ctx.editMessageText(text, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+    }
+    // ==========================================
+    // 📢 РАССЫЛКА ПЕРСОНАЛУ
+    // ==========================================
+
+    // Выбор группы получателей
+    else if (action === 'set_user_rank:broadcast') {
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('👥 Весь персонал', 'admin:broadcast_group:all')],
+        [Markup.button.callback('👑 Все админы (Посейдон)', 'admin:broadcast_group:admins')],
+        [Markup.button.callback('👁️ Все руководители отделов (Циклоп)', 'admin:broadcast_group:managers')],
+        [Markup.button.callback('🔥 Все исполнители (Прометей)', 'admin:broadcast_group:executors')],
+        [Markup.button.callback('⬅️ Назад', 'admin:set_user_rank')]
+      ]);
+      await ctx.editMessageText(
+        '📢 <b>Рассылка персоналу</b>\n\nВыберите группу получателей:',
+        { parse_mode: 'HTML', ...keyboard }
+      );
+    }
+
+    // Запуск композера для выбранной группы
+    else if (action.startsWith('broadcast_group:')) {
+      const group = action.split(':')[1];
+      const loyaltyData = loyalty.loadData();
+      
+      // 🌟 Собираем ID получателей
+      const targets = [];
+      let groupLabel = '';
+      
+      for (const [userId, userData] of Object.entries(loyaltyData)) {
+        if (!userData.rank) continue;
+        if (group === 'all') {
+          targets.push(parseInt(userId));
+          groupLabel = 'весь персонал';
+        } else if (group === 'admins' && userData.rank === 'Посейдон') {
+          targets.push(parseInt(userId));
+          groupLabel = 'админы (Посейдон)';
+        } else if (group === 'managers' && userData.rank === 'Циклоп') {
+          targets.push(parseInt(userId));
+          groupLabel = 'руководители отделов (Циклоп)';
+        } else if (group === 'executors' && userData.rank === 'Прометей') {
+          targets.push(parseInt(userId));
+          groupLabel = 'исполнители (Прометей)';
+        }
+      }
+      
+      if (targets.length === 0) {
+        await ctx.answerCbQuery('❌ Нет получателей в этой группе');
+        return;
+      }
+      
+      // 🌟 Запускаем композер в режиме рассылки
+      startComposer(ctx, 'broadcast', {
+        targetUserId: targets[0],
+        broadcastTargets: targets,
+        broadcastGroupLabel: groupLabel,
+        orderNumber: '—',
+        orderTitle: 'Рассылка'
+      });
+      
+      // 🌟 Логируем запуск рассылки
+      logger.logAdminAction('broadcast_started', {
+        group: group,
+        groupLabel: groupLabel,
+        recipientsCount: targets.length
+      }, ctx);
+      
+      await ctx.editMessageText(
+        `📢 <b>Рассылка: ${escapeHtml(groupLabel)}</b>\n\n` +
+        `👥 <b>Получателей:</b> ${targets.length}\n\n` +
+        `Отправьте текст сообщения:`,
+        { parse_mode: 'HTML' }
+      );
+      await ctx.answerCbQuery();
     }
     // ==========================================
     // 🌟 ИЗМЕНЕНИЕ РАНГА СУЩЕСТВУЮЩЕГО ПОЛЬЗОВАТЕЛЯ

@@ -97,6 +97,16 @@ const COMPOSER_MODES = {
       text: `📬 <b>Сообщение от руководителя отдела по заказу №${composer.orderNumber}</b>\n\n${escapeHtml(composer.text)}`,
       keyboard: null
     })
+  },
+  // 🌟 НОВОЕ: Рассылка персоналу
+  broadcast: {
+    label: 'рассылка персоналу',
+    buildMessage: (ctx, composer) => ({
+      text: `📢 <b>Сообщение от администрации</b>\n\n${escapeHtml(composer.text)}`,
+      keyboard: Markup.inlineKeyboard([
+        [Markup.button.callback('🔕 Скрыть', 'dismiss_broadcast')]
+      ]).reply_markup
+    })
   }
 };
 
@@ -114,8 +124,11 @@ function startComposer(ctx, mode, options = {}) {
     senderId: ctx.from.id,
     text: null,
     file: null,
-    step: 'waiting_text', // waiting_text | waiting_file | preview
-    previewMessageId: null
+    step: 'waiting_text',
+    previewMessageId: null,
+    // 🌟 НОВОЕ: для рассылки
+    broadcastTargets: options.broadcastTargets || null,
+    broadcastGroupLabel: options.broadcastGroupLabel || null
   };
 }
 
@@ -126,7 +139,13 @@ async function showPreview(ctx) {
   const composer = ctx.session.messageComposer;
   
   let previewText = `📝 <b>Предпросмотр сообщения</b>\n\n`;
-  previewText += `📤 <b>Кому:</b> ${COMPOSER_MODES[composer.mode].label}\n\n`;
+
+  // 🌟 Для рассылки показываем количество получателей
+  if (composer.broadcastTargets && composer.broadcastTargets.length > 0) {
+    previewText += `📤 <b>Кому:</b> ${escapeHtml(composer.broadcastGroupLabel)} (${composer.broadcastTargets.length} чел.)\n\n`;
+  } else {
+    previewText += `📤 <b>Кому:</b> ${COMPOSER_MODES[composer.mode].label}\n\n`;
+  }
   
   if (composer.text) {
     previewText += `💬 <b>Текст:</b>\n${escapeHtml(composer.text)}\n\n`;
@@ -244,16 +263,68 @@ async function sendMessage(ctx) {
   const { text, keyboard } = modeConfig.buildMessage(ctx, composer);
   
   try {
-    // 🌟 Сначала показываем "Отправляю..." чтобы убрать часики
+    // ==========================================
+    // 🌟 РЕЖИМ РАССЫЛКИ (несколько получателей)
+    // ==========================================
+    if (composer.broadcastTargets && composer.broadcastTargets.length > 0) {
+      await ctx.answerCbQuery('⏳ Рассылаю...');
+      
+      let sentCount = 0;
+      let failedCount = 0;
+      
+      for (const targetId of composer.broadcastTargets) {
+        try {
+          await ctx.telegram.sendMessage(targetId, text, {
+            parse_mode: 'HTML',
+            ...(keyboard ? { reply_markup: keyboard } : {})
+          });
+          // Отправляем файл, если есть
+          if (composer.file) {
+            if (composer.file.type === 'photo') {
+              await ctx.telegram.sendPhoto(targetId, composer.file.fileId);
+            } else {
+              await ctx.telegram.sendDocument(targetId, composer.file.fileId);
+            }
+          }
+          sentCount++;
+        } catch (e) {
+          failedCount++;
+        }
+      }
+      
+      // 🌟 Отчёт об отправке
+      let reportText = `✅ <b>Рассылка завершена!</b>\n\n`;
+      reportText += `👥 <b>Группа:</b> ${escapeHtml(composer.broadcastGroupLabel || 'персонал')}\n`;
+      reportText += `📤 <b>Отправлено:</b> ${sentCount}\n`;
+      if (failedCount > 0) {
+        reportText += `❌ <b>Не доставлено:</b> ${failedCount}\n<i>(заблокировали бота или не начинали чат)</i>\n`;
+      }
+      
+      // Обновляем превью или отправляем отчёт
+      if (composer.previewMessageId) {
+        try {
+          await ctx.telegram.editMessageText(ctx.chat.id, composer.previewMessageId, null, reportText, { parse_mode: 'HTML' });
+        } catch (e) {
+          await ctx.reply(reportText, { parse_mode: 'HTML' });
+        }
+      } else {
+        await ctx.reply(reportText, { parse_mode: 'HTML' });
+      }
+      
+      ctx.session.messageComposer = null;
+      return;
+    }
+    
+    // ==========================================
+    // ОБЫЧНЫЙ РЕЖИМ (один получатель)
+    // ==========================================
     await ctx.answerCbQuery('⏳ Отправляю...');
     
-    // Отправляем текст получателю
     await ctx.telegram.sendMessage(composer.targetUserId, text, {
       parse_mode: 'HTML',
       ...(keyboard ? { reply_markup: keyboard } : {})
     });
     
-    // Отправляем файл, если есть
     if (composer.file) {
       if (composer.file.type === 'photo') {
         await ctx.telegram.sendPhoto(composer.targetUserId, composer.file.fileId);
@@ -262,24 +333,19 @@ async function sendMessage(ctx) {
       }
     }
     
-    // 🌟 Редактируем превью → показываем что отправлено
     if (composer.previewMessageId) {
       try {
         await ctx.telegram.editMessageText(
-          ctx.chat.id,
-          composer.previewMessageId,
-          null,
+          ctx.chat.id, composer.previewMessageId, null,
           `✅ <b>Сообщение отправлено</b>\n\n📤 ${modeConfig.label}`,
           { parse_mode: 'HTML' }
         );
-      } catch (e) { /* превью могло быть удалено */ }
+      } catch (e) { /* ignore */ }
     }
     
-    // Очищаем композер
     ctx.session.messageComposer = null;
     
   } catch (err) {
-    // 🌟 Ошибка тоже через уведомление
     await ctx.answerCbQuery('❌ Ошибка отправки').catch(() => {});
     await ctx.reply(`❌ Не удалось отправить сообщение: ${escapeHtml(err.message)}`);
   }
@@ -337,6 +403,16 @@ function registerComposerActions(bot) {
     } catch (e) { /* ignore */ }
     // 🌟 Всплывающее уведомление
     await ctx.answerCbQuery('❌ Отправка отменена');
+  });
+
+  // 🌟 Кнопка "Скрыть" для рассылки — удаляет сообщение у получателя
+  bot.action('dismiss_broadcast', async (ctx) => {
+    try {
+      await ctx.deleteMessage();
+      await ctx.answerCbQuery();
+    } catch (e) {
+      await ctx.answerCbQuery();
+    }
   });
 }
 
