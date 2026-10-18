@@ -321,9 +321,9 @@ async function sendMessage(ctx) {
           if (composer.files && composer.files.length > 0) {
             for (const file of composer.files) {
               if (file.type === 'photo') {
-                await ctx.telegram.sendPhoto(composer.targetUserId, file.fileId);
+                await ctx.telegram.sendPhoto(targetId, file.fileId);
               } else {
-                await ctx.telegram.sendDocument(composer.targetUserId, file.fileId);
+                await ctx.telegram.sendDocument(targetId, file.fileId);
               }
             }
           }
@@ -366,11 +366,13 @@ async function sendMessage(ctx) {
       ...(keyboard ? { reply_markup: keyboard } : {})
     });
     
-    if (composer.file) {
-      if (composer.file.type === 'photo') {
-        await ctx.telegram.sendPhoto(composer.targetUserId, composer.file.fileId);
-      } else {
-        await ctx.telegram.sendDocument(composer.targetUserId, composer.file.fileId);
+    if (composer.files && composer.files.length > 0) {
+      for (const file of composer.files) {
+        if (file.type === 'photo') {
+          await ctx.telegram.sendPhoto(composer.targetUserId, file.fileId);
+        } else {
+          await ctx.telegram.sendDocument(composer.targetUserId, file.fileId);
+        }
       }
     }
     

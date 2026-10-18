@@ -1302,6 +1302,8 @@ function register(bot) {
       orderNumber: orderNumber,
       orderTitle: order ? order.workTitle : 'Заказ'
     });
+    // 🌟 ИСПРАВЛЕНО: сразу переходим к ожиданию файла, а не текста
+    ctx.session.messageComposer.step = 'waiting_file';
 
     await ctx.editMessageText(
       `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
@@ -1342,6 +1344,8 @@ function register(bot) {
       orderNumber: orderNumber,
       orderTitle: order ? order.workTitle : 'Заказ'
     });
+    // 🌟 ИСПРАВЛЕНО: сразу переходим к ожиданию файла, а не текста
+    ctx.session.messageComposer.step = 'waiting_file';
 
     await ctx.editMessageText(
       `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
