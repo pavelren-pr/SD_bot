@@ -1283,9 +1283,9 @@ function register(bot) {
       orderTitle: order ? order.workTitle : 'Заказ'
     });
 
-    await ctx.editMessageText(
+    await ctx.reply(
       `✏️ <b>Напишите ответ исполнителю:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
@@ -1305,9 +1305,9 @@ function register(bot) {
     // 🌟 ИСПРАВЛЕНО: сразу переходим к ожиданию файла, а не текста
     ctx.session.messageComposer.step = 'waiting_file';
 
-    await ctx.editMessageText(
+    await ctx.reply(
       `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
@@ -1325,9 +1325,9 @@ function register(bot) {
       orderTitle: order ? order.workTitle : 'Заказ'
     });
 
-    await ctx.editMessageText(
+    await ctx.reply(
       `✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
@@ -1347,9 +1347,9 @@ function register(bot) {
     // 🌟 ИСПРАВЛЕНО: сразу переходим к ожиданию файла, а не текста
     ctx.session.messageComposer.step = 'waiting_file';
 
-    await ctx.editMessageText(
+    await ctx.reply(
       `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
