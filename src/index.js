@@ -11,8 +11,10 @@ const treasure = require('./handlers/treasure');
 const customOrder = require('./handlers/custom_order');
 const scheduler = require('./handlers/scheduler');
 const department = require('./handlers/department');
-const logger = require('./utils/logger');
 const { registerComposerActions, registerComposerStartActions } = require('./utils/messageComposer');
+// 🌟 НОВОЕ: Инициализируем глобальные обработчики ошибок
+const logger = require('./utils/logger');
+logger.initGlobalHandlers(bot);
 
 // 🌟 Глобальный перехватчик всех ошибок в обработчиках бота
 bot.catch((err, ctx) => {

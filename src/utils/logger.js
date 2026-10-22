@@ -100,7 +100,7 @@ function logButton(ctx) {
 /**
  * Логирует ошибку
  */
-function logError(err, ctx) {
+function logError(err, ctx, context = {}) {
   // 🌟 Защита от некорректных входных данных
   const errorObj = err instanceof Error ? err : new Error(String(err));
   const entry = {
@@ -130,9 +130,17 @@ function logError(err, ctx) {
     entry.messageText = ctx.message.text.substring(0, 200);
   }
 
+  // 🌟 НОВОЕ: Добавляем контекст из третьего параметра
+  if (context.action) entry.action = context.action;
+  if (context.orderId) entry.orderId = context.orderId;
+  if (context.orderNumber) entry.orderNumber = context.orderNumber;
+  if (context.chatId) entry.contextChatId = context.chatId;
+  if (context.source) entry.source = context.source;
+  if (context.details) entry.details = context.details;
+  if (context.workTitle) entry.workTitle = context.workTitle;
+
   logEvent(entry);
 }
-
 /**
  * Логирует события заказов
  */
@@ -302,6 +310,33 @@ async function notifyErrorToSupport(error, ctx, bot, context = {}) {
   }
 }
 
+// 🌟 НОВОЕ: Глобальные обработчики необработанных ошибок
+/**
+ * Инициализирует глобальные обработчики ошибок
+ * Вызывается один раз при старте бота в index.js
+ */
+function initGlobalHandlers(bot) {
+  // Глобальный обработчик необработанных исключений
+  process.on('uncaughtException', (error) => {
+    logError(error, null, { source: 'uncaughtException', action: 'Необработанное исключение' });
+    if (bot) {
+      notifyErrorToSupport(error, null, bot, { action: 'Необработанное исключение (uncaughtException)' });
+    }
+    logSystemEvent('uncaught_exception_caught', { message: error.message });
+  });
+
+  // Глобальный обработчик необработанных промисов
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    logError(error, null, { source: 'unhandledRejection', action: 'Необработанный промис' });
+    if (bot) {
+      notifyErrorToSupport(error, null, bot, { action: 'Необработанный промис (unhandledRejection)' });
+    }
+  });
+
+  logSystemEvent('global_handlers_initialized', { message: 'Глобальные обработчики ошибок установлены' });
+}
+
 module.exports = {
   logEvent,
   logMessage,
@@ -314,5 +349,6 @@ module.exports = {
   readAllLogs,
   clearLogs,
   notifyErrorToSupport,
+  initGlobalHandlers,
   LOG_FILE
 };

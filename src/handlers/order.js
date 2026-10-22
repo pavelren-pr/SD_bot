@@ -243,7 +243,7 @@ function register(bot) {
       orders.updateOrder(order.id, { managerMessageId: sentMsg.message_id });
       await ctx.answerCbQuery();
     } catch (e) {
-      console.error('Не удалось показать файл:', e.message);
+      logger.logError(e, ctx, { action: 'Показ файла задания в группе', orderId: order.id });
       await ctx.answerCbQuery('Не удалось показать файл');
     }
   });
@@ -331,7 +331,7 @@ function register(bot) {
           ctx.callbackQuery.message.message_id
         );
       } catch (delErr) {
-        console.log('Не удалось удалить сообщение карточки:', delErr.message);
+        logger.logError(delErr, ctx, { action: 'Удаление карточки заказа при показе файла' });
       }
 
       // 🌟 Отправляем файл с кнопками
@@ -348,7 +348,7 @@ function register(bot) {
       }
       await ctx.answerCbQuery();
     } catch (e) {
-      console.error('Не удалось отправить файл:', e.message);
+      logger.logError(e, ctx, { action: 'Отправка файла задания в личку', orderId: order.id });
       await ctx.answerCbQuery('❌ Не удалось отправить файл');
     }
   });
@@ -615,7 +615,7 @@ function register(bot) {
         try {
           await ctx.telegram.deleteMessage(order.supportChatId, order.supportMessageId);
         } catch (e) {
-          console.log('Не удалось удалить уведомление из поддержки:', e.message);
+          logger.logError(e, ctx, { action: 'Удаление уведомления из поддержки при оплате' });
         }
       }
 
@@ -784,7 +784,7 @@ function register(bot) {
       );
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
     } catch (error) {
-      console.error('❌ Ошибка в обработчике support_reply:', error);
+      logger.logError(error, ctx, { action: 'Ответ поддержки пользователю' });
       await ctx.answerCbQuery('❌ Ошибка. Попробуйте ещё раз').catch(() => {});
     }
   });
@@ -832,17 +832,15 @@ function register(bot) {
         reply_markup: createInlineKeyboard(buttons).reply_markup 
       });
     } catch (error) {
-      console.error('Ошибка парсинга HTML в showConfirmation:', error.message);
-      console.error('Проблемный текст:', summary);
-      
+      logger.logError(error, ctx, { action: 'Показ подтверждения заказа', details: { summaryLength: summary.length } });
       // Отправляем без форматирования как fallback
       try {
         const plainSummary = summary.replace(/<[^>]*>/g, ''); // удаляем HTML-теги
-        await ctx.reply(plainSummary, { 
-          reply_markup: createInlineKeyboard(buttons).reply_markup 
+        await ctx.reply(plainSummary, {
+          reply_markup: createInlineKeyboard(buttons).reply_markup
         });
       } catch (fallbackError) {
-        console.error('Ошибка fallback:', fallbackError.message);
+        logger.logError(fallbackError, ctx, { action: 'Fallback подтверждения заказа' });
         await ctx.reply('⚠️ Произошла ошибка при формировании подтверждения. Попробуйте ещё раз или напишите в поддержку.');
       }
     }
@@ -904,7 +902,7 @@ function register(bot) {
       order.supportMessageId = supportMsg.message_id;
       order.supportChatId = supportChatId;
     } catch (e) {
-      console.error('Не удалось отправить уведомление в поддержку:', e.message);
+      logger.logError(e, ctx, { action: 'Отправка уведомления в поддержку при оформлении заказа' });
     }
 
     // 🌟 ВАЖНО: НЕ отправляем в чат исполнителей и НЕ создаём там сообщение.
@@ -945,8 +943,11 @@ function register(bot) {
 
     const work = catalog.getWork(workId);
     if (!work) {
-      console.error(`❌ Работа не найдена при парсинге chatId: ${chatId}`);
-      console.error(`   Пробовали: "${fullWorkId}" и "${workId}"`);
+      logger.logError(
+        new Error(`Работа не найдена при парсинге chatId: ${chatId}. Пробовали: "${fullWorkId}" и "${workId}"`),
+        ctx,
+        { action: 'Принятие заказа — парсинг chatId', chatId }
+      );
       return ctx.answerCbQuery('❌ Работа не найдена');
     }
 
@@ -997,7 +998,7 @@ function register(bot) {
           );
         }
       } catch (e) {
-        console.log('Не удалось обновить сообщение в группе:', e.message);
+        logger.logError(e, ctx, { action: 'Обновление сообщения в группе при принятии заказа', orderId: activeOrder ? activeOrder.id : null });
       }
     }
 
@@ -1100,7 +1101,7 @@ function register(bot) {
             );
           }
         } catch (e) {
-          console.log('Не удалось обновить сообщение в группе:', e.message);
+          logger.logError(e, ctx, { action: 'Обновление сообщения в группе при завершении заказа', orderId });
         }
       } else {
         // 🌟 Кастомный заказ: обновляем сообщение в личке исполнителя
