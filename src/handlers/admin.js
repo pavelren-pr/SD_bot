@@ -3707,14 +3707,18 @@ function register(bot) {
       ];
       
       const keyboard = Markup.inlineKeyboard(buttons);
-      
       try {
         await ctx.editMessageText(finText, { 
           parse_mode: 'HTML', 
           reply_markup: keyboard.reply_markup 
         });
       } catch (e) {
-        console.error('Ошибка показа финансов:', e.message);
+        // 🌟 Игнорируем ошибку "message is not modified" (повторное нажатие кнопки)
+        if (e.message && e.message.includes('message is not modified')) {
+          return await ctx.answerCbQuery();
+        }
+        // 🌟 Записываем реальную ошибку в лог (чтобы она попала в Excel)
+        logger.logError(e, ctx);
         
         // 🌟 Fallback: отправляем без HTML-форматирования
         try {
@@ -3723,6 +3727,9 @@ function register(bot) {
             reply_markup: keyboard.reply_markup 
           });
         } catch (e2) {
+          if (e2.message && e2.message.includes('message is not modified')) {
+            return await ctx.answerCbQuery();
+          }
           // Если и это не сработало — отправляем новым сообщением
           try {
             await ctx.reply(finText, { 
@@ -3730,7 +3737,7 @@ function register(bot) {
               reply_markup: keyboard.reply_markup 
             });
           } catch (e3) {
-            console.error('Критическая ошибка отображения финансов:', e3.message);
+            logger.logError(e3, ctx);
             await ctx.answerCbQuery('❌ Ошибка отображения. Попробуйте позже.');
           }
         }
