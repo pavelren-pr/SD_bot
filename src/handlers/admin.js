@@ -10,7 +10,7 @@ const logger = require('../utils/logger');
 const storage = require('../utils/storage');
 const backup = require('../utils/backup');
 const finance = require('../data/finance');
-const { escapeHtml } = require('../utils/html');
+const { escapeHtml, stripHtml, hasUnescapedHtml } = require('../utils/html');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 const { sendTempNotification } = require('../utils/notify');
 const { startComposer, handleComposerText, handleComposerFile } = require('../utils/messageComposer');
@@ -3668,24 +3668,36 @@ function register(bot) {
     else if (action.startsWith('order_edit_fin:')) {
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
-      if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+      if (!order) { 
+        await ctx.answerCbQuery('❌ Заказ не найден'); 
+        return; 
+      }
+      
       const basePrice = order.basePrice || order.price || 0;
       const discountPercent = order.discountPercent || 0;
       const finalPrice = order.finalPrice || order.price || 0;
       const commissionPercent = order.commissionPercent || order.commission || 20;
       const executorPrice = order.executorPrice || Math.round(basePrice * (1 - commissionPercent / 100));
       const commissionExpense = order.commissionExpense || 0;
-      // 🌟 Экранируем orderNumber на случай спецсимволов
-      let finText = `💰 <b>Финансы заказа №${escapeHtml(String(order.orderNumber || '—'))}</b>\n\n`;
+      
+      // 🌟 Безопасное формирование текста
+      const orderNumber = String(order.orderNumber || '—');
+      const discountAmount = order.discountAmount || 0;
+      
+      let finText = `💰 <b>Финансы заказа №${escapeHtml(orderNumber)}</b>\n\n`;
       finText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
+      
       if (discountPercent > 0) {
-        finText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${order.discountAmount || 0} ₽)\n`;
+        finText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${discountAmount} ₽)\n`;
       }
+      
       finText += `💰 <b>Итого к оплате:</b> ${finalPrice} ₽\n`;
       finText += `👷 <b>Исполнитель получит:</b> ${executorPrice} ₽ (комиссия ${commissionPercent}%)\n`;
+      
       if (commissionExpense > 0) {
         finText += `📉 <b>Покрытие из фонда:</b> ${commissionExpense} ₽\n`;
       }
+      
       const buttons = [
         [Markup.button.callback('💵 Базовая цена', `admin:order_edit_fin_field:${orderId}:basePrice`)],
         [Markup.button.callback('🎉 Скидка (%)', `admin:order_edit_fin_field:${orderId}:discountPercent`)],
@@ -3693,15 +3705,34 @@ function register(bot) {
         [Markup.button.callback('📊 Комиссия (%)', `admin:order_edit_fin_field:${orderId}:commissionPercent`)],
         [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
       ];
+      
+      const keyboard = Markup.inlineKeyboard(buttons);
+      
       try {
-        await ctx.editMessageText(finText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+        await ctx.editMessageText(finText, { 
+          parse_mode: 'HTML', 
+          reply_markup: keyboard.reply_markup 
+        });
       } catch (e) {
         console.error('Ошибка показа финансов:', e.message);
-        // Fallback: отправляем отдельным сообщением
+        
+        // 🌟 Fallback: отправляем без HTML-форматирования
         try {
-          await ctx.reply(finText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+          const plainText = finText.replace(/<[^>]*>/g, '');
+          await ctx.editMessageText(plainText, { 
+            reply_markup: keyboard.reply_markup 
+          });
         } catch (e2) {
-          await ctx.answerCbQuery('❌ Ошибка отображения');
+          // Если и это не сработало — отправляем новым сообщением
+          try {
+            await ctx.reply(finText, { 
+              parse_mode: 'HTML', 
+              reply_markup: keyboard.reply_markup 
+            });
+          } catch (e3) {
+            console.error('Критическая ошибка отображения финансов:', e3.message);
+            await ctx.answerCbQuery('❌ Ошибка отображения. Попробуйте позже.');
+          }
         }
       }
     }
