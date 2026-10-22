@@ -575,28 +575,21 @@ function calculateFinancialStats(period, fromDate = null, toDate = null) {
 // 🌟 Функция полного пересчёта финансовой модели заказа
 function recalculateFinances(order, overrides = {}) {
   const basePrice = overrides.basePrice !== undefined ? overrides.basePrice : (order.basePrice || order.price || 0);
-  const commissionPercent = overrides.commissionPercent !== undefined ? overrides.commissionPercent : (order.commissionPercent || order.commission || 20);
+  const commissionPercent = overrides.commissionPercent !== undefined ? overrides.commissionPercent : (order.commissionPercent || order.commission || 0);
   const discountPercent = overrides.discountPercent !== undefined ? overrides.discountPercent : (order.discountPercent || 0);
-  const finalPriceOverride = overrides.finalPrice; // если задана оплаченная сумма вручную
 
   const executorPrice = Math.round(basePrice * (1 - commissionPercent / 100));
-  const totalCommission = Math.round(basePrice * commissionPercent / 100);
+  const discountAmount = Math.round(basePrice * discountPercent / 100);
 
-  let discountAmount, finalPrice, actualDiscountPercent;
-
-  if (finalPriceOverride !== undefined) {
-    // Режим: указана оплаченная сумма → пересчитываем скидку
-    finalPrice = finalPriceOverride;
-    discountAmount = Math.max(0, basePrice - finalPrice);
-    actualDiscountPercent = basePrice > 0 ? Math.round(discountAmount / basePrice * 100) : 0;
+  let calculatedFinalPrice;
+  if (overrides.finalPrice !== undefined) {
+    calculatedFinalPrice = overrides.finalPrice;
   } else {
-    // Режим: указана скидка в % → пересчитываем итог
-    discountAmount = Math.round(basePrice * discountPercent / 100);
-    finalPrice = basePrice - discountAmount;
-    actualDiscountPercent = discountPercent;
+    calculatedFinalPrice = basePrice - discountAmount;
   }
 
-  const actualCommission = Math.max(0, finalPrice - executorPrice);
+  const totalCommission = Math.round(basePrice * commissionPercent / 100);
+  const actualCommission = Math.max(0, calculatedFinalPrice - executorPrice);
   const commissionExpense = Math.max(0, totalCommission - actualCommission);
 
   const expenseConstantPercent = finance.getExpenseConstant();
@@ -614,14 +607,15 @@ function recalculateFinances(order, overrides = {}) {
   return {
     basePrice,
     executorPrice,
-    finalPrice,
-    discountPercent: actualDiscountPercent,
+    finalPrice: calculatedFinalPrice,
+    discountPercent,
     discountAmount,
     commissionPercent,
     commissionExpense,
     expenseConstantPercent,
     expenseConstantAmount,
     coOwnerShares,
+    // Legacy поля для совместимости
     price: basePrice,
     commission: commissionPercent
   };
@@ -1748,6 +1742,7 @@ function register(bot) {
       );
       ctx.session.adminState = null; return;
     }
+
     // 🌟 РЕДАКТИРОВАНИЕ ФИНАНСОВЫХ ПОЛЕЙ С ПЕРЕСЧЁТОМ
     if (state.startsWith('edit_order_fin:')) {
       const parts = state.split(':');
@@ -1755,10 +1750,8 @@ function register(bot) {
       const field = parts[2];
       const order = ordersDb.getOrder(orderId);
       if (!order) { ctx.session.adminState = null; return ctx.reply('❌ Заказ не найден.'); }
-
       if (isNaN(text)) return ctx.reply('❌ Значение должно быть числом.');
       const numValue = parseInt(text);
-
       // Валидация
       if (field === 'discountPercent' && (numValue < 0 || numValue > 100)) {
         return ctx.reply('❌ Скидка должна быть в диапазоне от 0 до 100.');
@@ -1769,44 +1762,44 @@ function register(bot) {
       if ((field === 'basePrice' || field === 'finalPrice') && numValue < 0) {
         return ctx.reply('❌ Сумма не может быть отрицательной.');
       }
-
-      // 🌟 Пересчёт финансовой модели
-      const overrides = {};
-      overrides[field] = numValue;
-      const newFinances = recalculateFinances(order, overrides);
-
-      // Обновляем заказ
-      ordersDb.updateOrder(orderId, newFinances);
-
-      // Формируем отчёт
-      let report = `✅ <b>Финансы пересчитаны!</b>\n\n`;
-      report += `💵 <b>Базовая цена:</b> ${newFinances.basePrice} ₽\n`;
-      if (newFinances.discountPercent > 0) {
-        report += `🎉 <b>Скидка:</b> ${newFinances.discountPercent}% (-${newFinances.discountAmount} ₽)\n`;
+      try {
+        // 🌟 Пересчёт финансовой модели
+        const overrides = {};
+        overrides[field] = numValue;
+        const newFinances = recalculateFinances(order, overrides);
+        // Обновляем заказ
+        ordersDb.updateOrder(orderId, newFinances);
+        // Формируем отчёт
+        let report = `✅ <b>Финансы пересчитаны!</b>\n\n`;
+        report += `💵 <b>Базовая цена:</b> ${newFinances.basePrice} ₽\n`;
+        if (newFinances.discountPercent > 0) {
+          report += `🎉 <b>Скидка:</b> ${newFinances.discountPercent}% (-${newFinances.discountAmount} ₽)\n`;
+        }
+        report += `💰 <b>Итого к оплате:</b> ${newFinances.finalPrice} ₽\n`;
+        report += `👷 <b>Исполнитель получит:</b> ${newFinances.executorPrice} ₽\n`;
+        report += `📊 <b>Комиссия:</b> ${newFinances.commissionPercent}%\n`;
+        if (newFinances.commissionExpense > 0) {
+          report += `📉 <b>Покрытие из фонда константы:</b> ${newFinances.commissionExpense} ₽\n`;
+        }
+        logger.logAdminAction('order_finances_updated', {
+          orderId,
+          orderNumber: order.orderNumber,
+          changedField: field,
+          newValue: numValue,
+          newFinalPrice: newFinances.finalPrice,
+          newExecutorPrice: newFinances.executorPrice
+        }, ctx);
+        await ctx.reply(report, {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('💰 К финансам', `admin:order_edit_fin:${orderId}`)],
+            [Markup.button.callback('📦 К заказу', `admin:order_view:${orderId}`)]
+          ])
+        });
+      } catch (e) {
+        console.error('Ошибка пересчёта финансов:', e);
+        await ctx.reply(`❌ Ошибка пересчёта: ${escapeHtml(e.message)}`, { parse_mode: 'HTML' });
       }
-      report += `💰 <b>Итого к оплате:</b> ${newFinances.finalPrice} ₽\n`;
-      report += `👷 <b>Исполнитель получит:</b> ${newFinances.executorPrice} ₽\n`;
-      report += `📊 <b>Комиссия:</b> ${newFinances.commissionPercent}%\n`;
-      if (newFinances.commissionExpense > 0) {
-        report += `📉 <b>Покрытие из фонда константы:</b> ${newFinances.commissionExpense} ₽\n`;
-      }
-
-      logger.logAdminAction('order_finances_updated', {
-        orderId,
-        orderNumber: order.orderNumber,
-        changedField: field,
-        newValue: numValue,
-        newFinalPrice: newFinances.finalPrice,
-        newExecutorPrice: newFinances.executorPrice
-      }, ctx);
-
-      await ctx.reply(report, {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('💰 К финансам', `admin:order_edit_fin:${orderId}`)],
-          [Markup.button.callback('📦 К заказу', `admin:order_view:${orderId}`)]
-        ])
-      });
       ctx.session.adminState = null; return;
     }
      // --- ИЗМЕНЕНИЕ СУММЫ ВЫКУПА ---
@@ -3676,15 +3669,14 @@ function register(bot) {
       const orderId = action.split(':')[1];
       const order = ordersDb.getOrder(orderId);
       if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
-
       const basePrice = order.basePrice || order.price || 0;
       const discountPercent = order.discountPercent || 0;
       const finalPrice = order.finalPrice || order.price || 0;
       const commissionPercent = order.commissionPercent || order.commission || 20;
       const executorPrice = order.executorPrice || Math.round(basePrice * (1 - commissionPercent / 100));
       const commissionExpense = order.commissionExpense || 0;
-
-      let finText = `💰 <b>Финансы заказа №${order.orderNumber}</b>\n\n`;
+      // 🌟 Экранируем orderNumber на случай спецсимволов
+      let finText = `💰 <b>Финансы заказа №${escapeHtml(String(order.orderNumber || '—'))}</b>\n\n`;
       finText += `💵 <b>Базовая цена:</b> ${basePrice} ₽\n`;
       if (discountPercent > 0) {
         finText += `🎉 <b>Скидка:</b> ${discountPercent}% (-${order.discountAmount || 0} ₽)\n`;
@@ -3694,16 +3686,24 @@ function register(bot) {
       if (commissionExpense > 0) {
         finText += `📉 <b>Покрытие из фонда:</b> ${commissionExpense} ₽\n`;
       }
-
       const buttons = [
-        [Markup.button.callback('💵 Изменить базовую цену', `admin:order_edit_fin_field:${orderId}:basePrice`)],
-        [Markup.button.callback('🎉 Изменить скидку (%)', `admin:order_edit_fin_field:${orderId}:discountPercent`)],
-        [Markup.button.callback('💰 Изменить оплаченную сумму', `admin:order_edit_fin_field:${orderId}:finalPrice`)],
-        [Markup.button.callback('📊 Изменить комиссию (%)', `admin:order_edit_fin_field:${orderId}:commissionPercent`)],
+        [Markup.button.callback('💵 Базовая цена', `admin:order_edit_fin_field:${orderId}:basePrice`)],
+        [Markup.button.callback('🎉 Скидка (%)', `admin:order_edit_fin_field:${orderId}:discountPercent`)],
+        [Markup.button.callback('💰 Оплаченная сумма', `admin:order_edit_fin_field:${orderId}:finalPrice`)],
+        [Markup.button.callback('📊 Комиссия (%)', `admin:order_edit_fin_field:${orderId}:commissionPercent`)],
         [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
       ];
-
-      await ctx.editMessageText(finText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+      try {
+        await ctx.editMessageText(finText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+      } catch (e) {
+        console.error('Ошибка показа финансов:', e.message);
+        // Fallback: отправляем отдельным сообщением
+        try {
+          await ctx.reply(finText, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
+        } catch (e2) {
+          await ctx.answerCbQuery('❌ Ошибка отображения');
+        }
+      }
     }
 
     // 👥 Участники
