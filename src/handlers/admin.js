@@ -3699,10 +3699,10 @@ function register(bot) {
       }
       
       const buttons = [
-        [Markup.button.callback('💵 Базовая цена', `admin:order_edit_fin_field:${orderId}:basePrice`)],
-        [Markup.button.callback('🎉 Скидка (%)', `admin:order_edit_fin_field:${orderId}:discountPercent`)],
-        [Markup.button.callback('💰 Оплаченная сумма', `admin:order_edit_fin_field:${orderId}:finalPrice`)],
-        [Markup.button.callback('📊 Комиссия (%)', `admin:order_edit_fin_field:${orderId}:commissionPercent`)],
+        [Markup.button.callback('💵 Базовая цена', `admin:fin:${orderId}:basePrice`)],
+        [Markup.button.callback('🎉 Скидка (%)', `admin:fin:${orderId}:discountPercent`)],
+        [Markup.button.callback('💰 Оплаченная сумма', `admin:fin:${orderId}:finalPrice`)],
+        [Markup.button.callback('📊 Комиссия (%)', `admin:fin:${orderId}:commissionPercent`)],
         [Markup.button.callback('⬅️ Назад', `admin:order_edit:${orderId}`)]
       ];
       
@@ -3835,7 +3835,7 @@ function register(bot) {
     }
 
     // 🌟 Переход к вводу финансового поля
-    else if (action.startsWith('order_edit_fin_field:')) {
+    else if (action.startsWith('fin:')) {
       const parts = action.split(':');
       const orderId = parts[1];
       const field = parts[2];
