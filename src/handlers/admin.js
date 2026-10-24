@@ -2545,7 +2545,42 @@ function register(bot) {
       ctx.session.adminState = null;
       return;
     }
-
+    if (state === 'add_customer:id') {
+      if (isNaN(text)) return ctx.reply('❌ ID должен быть числом.');
+      const id = parseInt(text);
+      const loyaltyData = loyalty.loadData();
+      // 🌟 Проверка: существует ли уже такой заказчик?
+      if (loyaltyData[id]) {
+        const existing = loyaltyData[id];
+        ctx.session.newCustomer = { id: id };
+        ctx.session.adminState = 'add_customer:confirm_overwrite';
+        await ctx.reply(
+          `⚠️ <b>Заказчик с ID <code>${id}</code> уже существует!</b>\n\n` +
+          `📛 <b>Username:</b> <code>${existing.username ? '@' + existing.username : 'не указан'}</code>\n` +
+          `💰 <b>Сумма выкупа:</b> <code>${existing.totalSpent || 0}</code> ₽\n\n` +
+          `<b>Продолжить и перезаписать данные?</b>`,
+          {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('✅ Да, перезаписать', 'admin:add_customer:overwrite_yes')],
+              [Markup.button.callback('❌ Отмена', 'admin:customers')]
+            ])
+          }
+        );
+        return;
+      }
+      ctx.session.newCustomer = { id: id };
+      ctx.session.adminState = 'add_customer:username';
+      await ctx.reply(
+        '📝 <b>Шаг 2/4: Введите username заказчика (без @):</b>',
+        { parse_mode: 'HTML', ...getBackToAdminMenu() }
+      );
+      return;
+    }
+    // 🌟 Ожидание подтверждения перезаписи (обрабатывается кнопкой, текст игнорируем)
+    if (state === 'add_customer:confirm_overwrite') {
+      return ctx.reply('⚠️ Пожалуйста, нажмите одну из кнопок выше для подтверждения.');
+    }
     if (state === 'add_customer:username') {
       const username = text.replace('@', '').trim();
       if (!username) return ctx.reply('❌ Username не может быть пустым.');
