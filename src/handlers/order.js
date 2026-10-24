@@ -250,47 +250,62 @@ function register(bot) {
 
   // 🌟 Показать исходные данные в личке — редактируем сообщение карточки
   bot.action(/^order_details_view:(.+)$/, async (ctx) => {
-    const order = ordersDb.getOrder(ctx.match[1]);
-    if (!order) return ctx.answerCbQuery('❌ Заказ не найден');
+    ctx.session = ctx.session || {};
 
-    const textToShow = order.detailsText || order.description || 'Нет данных';
-    const header = `📝 <b>Исходные данные к заказу №${order.orderNumber}</b>\n\n`;
-    const fullText = header + escapeHtml(textToShow);
+    const orderId = ctx.match[1];
+    const order = ordersDb.getOrder(orderId);
+    if (!order) {
+      return ctx.answerCbQuery('❌ Заказ не найден');
+    }
 
-    // Определяем роль для кнопки "Назад"
-    const role = ctx.session.lastOrderViewRole || 'executor';
+    try {
+      const textToShow = order.detailsText || order.description || 'Нет данных';
+      const header = `📝 <b>Исходные данные к заказу №${order.orderNumber}</b>\n\n`;
+      const fullText = header + escapeHtml(textToShow);
 
-    // Если текст помещается в лимит — редактируем текущее сообщение
-    if (fullText.length <= 4096) {
+      const role = ctx.session.lastOrderViewRole || (order.isCustomOrder ? 'executor' : 'executor');
+      ctx.session.lastOrderViewRole = role;
+
       const backKeyboard = Markup.inlineKeyboard([
         [Markup.button.callback('⬅️ Назад к заказу', `order_back_view:${order.id}:${role}`)]
       ]);
 
-      try {
-        await ctx.editMessageText(fullText, {
-          parse_mode: 'HTML',
-          reply_markup: backKeyboard.reply_markup
-        });
-        await ctx.answerCbQuery();
-      } catch (e) {
-        if (e.message && e.message.includes('message is not modified')) {
-          return ctx.answerCbQuery();
+      if (fullText.length <= 4096) {
+        try {
+          await ctx.editMessageText(fullText, {
+            parse_mode: 'HTML',
+            reply_markup: backKeyboard.reply_markup
+          });
+        } catch (editErr) {
+          // Сообщение нельзя отредактировать (не текст / уже изменено) — шлём новым
+          if (editErr.message && editErr.message.includes('message is not modified')) {
+            await ctx.answerCbQuery();
+            return;
+          }
+          await ctx.reply(fullText, {
+            parse_mode: 'HTML',
+            reply_markup: backKeyboard.reply_markup
+          });
         }
-        // Если не удалось отредактировать — отправляем отдельно
-        await ctx.reply(fullText, { parse_mode: 'HTML' });
-        await ctx.answerCbQuery('Данные отправлены отдельным сообщением');
+      } else {
+        // Длинный текст — отдельными сообщениями
+        await ctx.reply(header, { parse_mode: 'HTML' });
+        for (let i = 0; i < textToShow.length; i += 3500) {
+          await ctx.reply(escapeHtml(textToShow.substring(i, i + 3500)), { parse_mode: 'HTML' });
+        }
+        await ctx.reply('⬅️ Назад к заказу:', {
+          parse_mode: 'HTML',
+          reply_markup: backKeyboard
+        });
       }
-    } else {
-      // Текст слишком длинный — отправляем отдельными сообщениями
-      await ctx.reply(header, { parse_mode: 'HTML' });
-      const chunks = [];
-      for (let i = 0; i < textToShow.length; i += 3500) {
-        chunks.push(textToShow.substring(i, i + 3500));
-      }
-      for (const chunk of chunks) {
-        await ctx.reply(escapeHtml(chunk), { parse_mode: 'HTML' });
-      }
-      await ctx.answerCbQuery('Данные отправлены отдельными сообщениями');
+
+      await ctx.answerCbQuery();
+    } catch (e) {
+      logger.logError(e, ctx, {
+        action: 'Просмотр исходных данных в личке',
+        orderId: orderId
+      });
+      await ctx.answerCbQuery('❌ Не удалось показать данные').catch(() => {});
     }
   });
 
@@ -1006,11 +1021,11 @@ function register(bot) {
     const executorButtons = [];
 
     // Кнопки просмотра данных и файлов (если они есть)
-    if (activeOrder && (activeOrder.detailsText || activeOrder.description)) {
-      executorButtons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${orderId}`)]);
+    if (activeOrder && activeOrder.id && (activeOrder.detailsText || activeOrder.description)) {
+      executorButtons.push([Markup.button.callback('📝 Исходные данные', `order_details_view:${activeOrder.id}`)]);
     }
-    if (activeOrder && ((activeOrder.taskFiles && activeOrder.taskFiles.length > 0) || activeOrder.fileId)) {
-      executorButtons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${orderId}:0`)]);
+    if (activeOrder && activeOrder.id && ((activeOrder.taskFiles && activeOrder.taskFiles.length > 0) || activeOrder.fileId)) {
+      executorButtons.push([Markup.button.callback('📎 Файлы задания', `order_files_view:${activeOrder.id}:0`)]);
     }
 
     // 🌟 Кнопка композера для переписки с заказчиком
