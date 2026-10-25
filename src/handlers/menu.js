@@ -899,7 +899,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   });
 
   // 🌟 Отметить заказ выполненным (исполнитель)
-  bot.action(/^orders:executor:complete:(.+)$/, async (ctx) => {
+bot.action(/^orders:executor:complete:(.+)$/, async (ctx) => {
   ctx.session = ctx.session || {};
   const orderId = ctx.match[1];
   const order = ordersDb.getOrder(orderId);
@@ -911,10 +911,11 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     await ctx.answerCbQuery('⚠️ Заказ уже отмечен как выполненный');
     return;
   }
-  // Меняем статус на completed
+  // 🌟 Меняем статус на completed + устанавливаем начальный статус выплаты
   ordersDb.updateOrder(orderId, {
-    status: 'completed',
-    completedAt: new Date().toLocaleString('ru-RU')
+  status: 'completed',
+  completedAt: new Date().toLocaleString('ru-RU'),
+  payoutStatus: 'pending'
   });
   
   // 🌟 Обновляем сообщение в группе исполнителей
@@ -952,14 +953,50 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   if (!order.isCustomOrder && order.customerId) {
     try {
       await ctx.telegram.sendMessage(
-        order.customerId,
-        `✅ <b>Ваш заказ выполнен!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(order.orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`,
-        { parse_mode: 'HTML' }
+      order.customerId,
+      `✅ <b>Ваш заказ выполнен!</b>\n\n🆔 <b>Номер заказа:</b> №${escapeHtml(order.orderNumber)}\n📚 <b>Работа:</b> ${escapeHtml(order.workTitle)}\n\nСпасибо за использование нашего сервиса! 🌊`,
+      { parse_mode: 'HTML' }
       );
     } catch (e) {
       console.log('Не удалось уведомить заказчика:', e.message);
     }
   }
+
+  // 🌟 Уведомление в поддержку с кнопкой "Оплачено"
+  const supportChatId = process.env.SUPPORT_CHAT_ID || process.env.MY_CHAT_ID;
+  if (supportChatId) {
+    const updatedOrder = ordersDb.getOrder(orderId);
+    const executorPayout = updatedOrder.executorPrice || Math.round((updatedOrder.price || 0) * (1 - (updatedOrder.commission || 0) / 100));
+    const typeLabel = updatedOrder.isCustomOrder ? '🌟 Индивидуальный' : '📦 Обычный';
+    const supportText = `✅ <b>Заказ выполнен!</b>\n\n` +
+      `${typeLabel}\n` +
+      `🆔 <b>Номер заказа:</b> №${escapeHtml(String(updatedOrder.orderNumber))}\n` +
+      `📚 <b>Работа:</b> ${escapeHtml(updatedOrder.workTitle)}\n` +
+      `👷 <b>Исполнитель:</b> ${updatedOrder.executorUsername ? '@' + escapeHtml(updatedOrder.executorUsername) : 'ID: ' + updatedOrder.executorId}\n\n` +
+      `💰 <b>К выплате исполнителю:</b> ${executorPayout} ₽`;
+    const paidKeyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('✅ Оплачено', `support_paid:${orderId}`)]
+    ]);
+    try {
+      await ctx.telegram.sendMessage(supportChatId, supportText, {
+        parse_mode: 'HTML', reply_markup: paidKeyboard.reply_markup
+      });
+      logger.logEvent({ type: 'system', action: 'payout_notification_sent', orderId, orderNumber: updatedOrder.orderNumber });
+    } catch (e) {
+      logger.logError(e, ctx, { action: 'Уведомление поддержки при завершении заказа (меню исполнителя)', orderId });
+      try {
+        const plainText = supportText.replace(/<[^>]*>/g, '');
+        await ctx.telegram.sendMessage(supportChatId, plainText, {
+          reply_markup: paidKeyboard.reply_markup
+        });
+      } catch (e2) {
+        logger.logError(e2, ctx, { action: 'Fallback уведомления поддержки', orderId });
+      }
+    }
+  } else {
+    logger.logError(new Error('SUPPORT_CHAT_ID и MY_CHAT_ID не заданы в .env'), ctx, { action: 'Уведомление поддержки при завершении заказа (меню исполнителя)' });
+  }
+
   await ctx.answerCbQuery('✅ Заказ отмечен как выполненный');
   // Перерисовываем карточку заказа
   const updatedOrder = ordersDb.getOrder(orderId);
