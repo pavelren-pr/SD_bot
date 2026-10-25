@@ -714,6 +714,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   });
 
   bot.action(/^orders:executor:list:(\w+):(\d+)$/, async (ctx) => {
+    ctx.session = ctx.session || {};
     const status = ctx.match[1];
     const page = parseInt(ctx.match[2]);
     
@@ -772,6 +773,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   });
 
   bot.action(/^orders:executor:view:(.+)$/, async (ctx) => {
+    ctx.session = ctx.session || {};
     ctx.session.lastOrderViewRole = 'executor';
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
@@ -827,6 +829,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   });
 
   bot.action(/^orders:executor:back:(\w+)$/, async (ctx) => {
+    ctx.session = ctx.session || {};
     const status = ctx.match[1];
     const statusMap = { active: EXECUTOR_ACTIVE_STATUSES, completed: COMPLETED_STATUSES };
     const allowedStatuses = statusMap[status] || [status];
@@ -873,6 +876,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
   });
 
   bot.action(/^orders:executor:contact:(.+)$/, async (ctx) => {
+    ctx.session = ctx.session || {};
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
     if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
@@ -896,6 +900,7 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
 
   // 🌟 Отметить заказ выполненным (исполнитель)
   bot.action(/^orders:executor:complete:(.+)$/, async (ctx) => {
+  ctx.session = ctx.session || {};
   const orderId = ctx.match[1];
   const order = ordersDb.getOrder(orderId);
   if (!order || String(order.executorId) !== String(ctx.from.id)) {
