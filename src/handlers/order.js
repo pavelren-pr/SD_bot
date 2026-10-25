@@ -1095,10 +1095,8 @@ function register(bot) {
       payoutStatus: 'pending'
     });
 
-    // 🌟 Получаем обновлённый заказ
+     // 🌟 Обновляем сообщение (разная логика для обычных и кастомных заказов)
     const updatedOrder = ordersDb.getOrder(orderId);
-
-    // 🌟 Обновляем сообщение (разная логика для обычных и кастомных заказов)
     if (updatedOrder && updatedOrder.managerMessageId && updatedOrder.managerChatId) {
       if (!updatedOrder.isCustomOrder) {
         // 📦 Обычный заказ: обновляем сообщение в группе исполнителей
@@ -1135,7 +1133,7 @@ function register(bot) {
             { parse_mode: 'HTML' }
           );
         } catch (e) {
-          console.log('Не удалось обновить сообщение кастомного заказа:', e.message);
+          logger.logError(e, ctx, { action: 'Обновление сообщения кастомного заказа при завершении', orderId });
         }
       }
     }
@@ -1159,22 +1157,21 @@ function register(bot) {
         await ctx.telegram.sendMessage(supportChatId, supportText, {
           parse_mode: 'HTML', reply_markup: paidKeyboard.reply_markup
         });
-        console.log(`✅ Уведомление о выполнении заказа №${updatedOrder.orderNumber} отправлено в поддержку (chat: ${supportChatId})`);
+        logger.logEvent({ type: 'system', action: 'payout_notification_sent', orderId, orderNumber: order.orderNumber });
       } catch (e) {
-        console.error(`❌ ОШИБКА отправки уведомления в поддержку (chat: ${supportChatId}):`, e.message);
-        // 🌟 Fallback: пытаемся отправить без parse_mode
+        logger.logError(e, ctx, { action: 'Уведомление поддержки при завершении заказа', orderId });
+        // Fallback: отправляем без HTML-форматирования
         try {
           const plainText = supportText.replace(/<[^>]*>/g, '');
           await ctx.telegram.sendMessage(supportChatId, plainText, {
             reply_markup: paidKeyboard.reply_markup
           });
-          console.log(`✅ Уведомление отправлено без форматирования`);
         } catch (e2) {
-          console.error(`❌ Fallback тоже не сработал:`, e2.message);
+          logger.logError(e2, ctx, { action: 'Fallback уведомления поддержки', orderId });
         }
       }
     } else {
-      console.error('❌ SUPPORT_CHAT_ID и MY_CHAT_ID не заданы в .env — уведомление в поддержку НЕ отправлено!');
+      logger.logError(new Error('SUPPORT_CHAT_ID и MY_CHAT_ID не заданы в .env'), ctx, { action: 'Уведомление поддержки при завершении заказа' });
     }
 
     // 🌟 Уведомление заказчику
