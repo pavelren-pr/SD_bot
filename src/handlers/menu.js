@@ -3,7 +3,7 @@ const loyalty = require('../data/loyalty');
 const ordersDb = require('../data/orders');
 const { findChatByOrderId, buildGroupOrderText } = require('./order');
 const { escapeHtml } = require('../utils/html');
-const { startComposer, handleComposerText, handleComposerFile } = require('../utils/messageComposer');
+const { startComposer, handleComposerInput } = require('../utils/messageComposer');
 
 // 🌟 Статусы для категорий (включая custom orders)
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
@@ -369,33 +369,27 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     await ctx.answerCbQuery();
   });
 
-  // 🌟 Кнопка "Написать заказчику" — включаем режим ответа
+  // 🌟 Кнопка "Написать заказчику" — включаем универсальный композер
   bot.action(/^orders:admin:contact:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
-    
     if (!order) {
       await ctx.answerCbQuery('❌ Заказ не найден');
       return;
     }
     
-    ctx.session = ctx.session || {};
-    ctx.session.adminReplyToCustomerId = order.customerId;
-    ctx.session.adminReplyOrderId = orderId;
-    ctx.session.adminReplyOrderTitle = order.workTitle;
-    ctx.session.adminReplyOrderDate = order.createdAt;
-    
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('↩️ Назад', `orders:admin:view:${orderId}`)]
-    ]);
-    
+    startComposer(ctx, 'admin_to_customer', {
+      targetUserId: order.customerId,
+      orderId: order.id,
+      orderNumber: String(order.orderNumber || orderId),
+      orderTitle: order.workTitle
+    });
+
     await ctx.editMessageText(
-      `💬 <b>Режим ответа заказчику</b>\n\n` +
-      `📚 <b>Заказ:</b> ${order.workTitle}\n` +
-      `📅 <b>Дата:</b> ${order.createdAt}\n\n` +
-      `Напишите сообщение или прикрепите файл, которое будет отправлено заказчику.\n\n` +
-      `<i>(Для отмены нажмите "Отмена")</i>`,
-      { parse_mode: 'HTML', ...keyboard }
+      `💬 <b>Ответ заказчику</b>\n\n` +
+      `📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\n` +
+      `Отправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
@@ -439,25 +433,24 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     await ctx.answerCbQuery();
   });
 
-  // 🌟 Обновлённый обработчик "Написать исполнителю" для заказчика
+  // 🌟 Универсальный ответ исполнителю для заказчика
   bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
     if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
-
-    // 🌟 Запускаем композер
+    
     startComposer(ctx, 'customer_to_executor', {
       targetUserId: order.executorId,
       orderId: order.id,
       orderNumber: String(order.orderNumber || orderId),
       orderTitle: order.workTitle
     });
-
+    
     await ctx.editMessageText(
-      `💬 <b>Режим ответа исполнителю</b>\n\n` +
+      `💬 <b>Ответ исполнителю</b>\n\n` +
       `📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\n` +
-      `Напишите сообщение:`,
-      { parse_mode: 'HTML' }
+      `Отправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
@@ -880,20 +873,19 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
     if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
-
-    // 🌟 Запускаем композер вместо старых сессионных флагов
+    
     startComposer(ctx, 'executor_to_customer', {
       targetUserId: order.customerId,
       orderId: order.id,
       orderNumber: String(order.orderNumber || orderId),
       orderTitle: order.workTitle
     });
-
+    
     await ctx.editMessageText(
-      `💬 <b>Режим ответа заказчику</b>\n\n` +
+      `💬 <b>Ответ заказчику</b>\n\n` +
       `📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\n` +
-      `Напишите сообщение:`,
-      { parse_mode: 'HTML' }
+      `Отправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });

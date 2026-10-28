@@ -13,7 +13,7 @@ const finance = require('../data/finance');
 const { escapeHtml, stripHtml, hasUnescapedHtml } = require('../utils/html');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 const { sendTempNotification } = require('../utils/notify');
-const { startComposer, handleComposerText, handleComposerFile } = require('../utils/messageComposer');
+const { startComposer, handleComposerInput } = require('../utils/messageComposer');
 
 // 🌟 Получение доступных переменных окружения из .env
 function getAvailableEnvVars() {
@@ -671,9 +671,9 @@ function register(bot) {
   // ==========================================
   bot.on('text', async (ctx, next) => {
     ctx.session = ctx.session || {};
-    // 🌟 НОВОЕ: Проверяем композер ПЕРЕД проверкой админ-панели
+    // 🌟 Проверяем композер ПЕРЕД проверкой админ-панели
     if (ctx.session.messageComposer) {
-      const handled = await handleComposerText(ctx, next);
+      const handled = await handleComposerInput(ctx, next);
       if (handled) return;
     }
 
@@ -2994,9 +2994,9 @@ function register(bot) {
     // ==========================================
     bot.on(['photo', 'document'], async (ctx, next) => {
       ctx.session = ctx.session || {};
-      // 🌟 НОВОЕ: Проверяем композер
+      // 🌟 Проверяем композер
       if (ctx.session.messageComposer) {
-        const handled = await handleComposerFile(ctx, next);
+        const handled = await handleComposerInput(ctx, next);
         if (handled) return;
       }
       
@@ -5686,7 +5686,7 @@ function register(bot) {
         `💬 <b>Отправка сообщения заказчику</b>\n\n` +
         `Заказ №${escapeHtml(order.orderNumber || orderId)}\n` +
         `Заказчик: ${order.customerUsername ? '@' + escapeHtml(order.customerUsername) : 'ID: <code>' + order.customerId + '</code>'}\n\n` +
-        `Введите текст сообщения:`,
+        `Отправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
         { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
       );
     }
@@ -5699,7 +5699,7 @@ function register(bot) {
       await ctx.reply(
         `💬 <b>Отправка сообщения заказчику</b>\n\n` +
         `ID заказчика: <code>${escapeHtml(customerId)}</code>\n\n` +
-        `Введите текст сообщения:`,
+        `Отправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
         { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
       );
     }

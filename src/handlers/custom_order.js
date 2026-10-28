@@ -5,7 +5,7 @@ const { createInlineKeyboard } = require('../utils/keyboard');
 const storage = require('../utils/storage');
 const { Markup } = require('telegraf');
 const finance = require('../data/finance');
-const { startComposer, handleComposerText, handleComposerFile } = require('../utils/messageComposer');
+const { startComposer, handleComposerInput } = require('../utils/messageComposer');
 
 // Хранилище состояний для индивидуальных заказов
 const customOrderStates = new Map();
@@ -113,7 +113,7 @@ function register(bot) {
   bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
     if (ctx.session.messageComposer) {
-      const handled = await handleComposerText(ctx, next);
+      const handled = await handleComposerInput(ctx, next);
       if (handled) return;
     }
     if (ctx.session.adminState) {
@@ -612,9 +612,9 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
   // Обработка введённой цены
   bot.on('text', async (ctx, next) => {
   ctx.session = ctx.session || {};
-  // 🌟 НОВОЕ: Сначала проверяем композер
+  // 🌟 Сначала проверяем композер
   if (ctx.session.messageComposer) {
-    const handled = await handleComposerText(ctx, next);
+    const handled = await handleComposerInput(ctx, next);
     if (handled) return;
   }
   if (!ctx.session.waitingCustomPrice) {
@@ -788,7 +788,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     });
     
     await ctx.reply(
-      `✉️ <b>Написать сообщение заказчику</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
+      `✉️ <b>Написать сообщение заказчику</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
       { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
@@ -809,7 +809,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     });
     
     await ctx.reply(
-      `✏️ <b>Написать ответ исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
+      `✏️ <b>Ответить исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
       { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
@@ -869,7 +869,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     ctx.session = ctx.session || {};
     // Проверяем композер
     if (ctx.session.messageComposer) {
-      const handled = await handleComposerFile(ctx, next);
+      const handled = await handleComposerInput(ctx, next);
       if (handled) return;
     }
     
@@ -1018,7 +1018,7 @@ bot.action(/^custom_cancel:(\d+)$/, async (ctx) => {
     });
     
     await ctx.reply(
-      `✏️ <b>Написать исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте ваше сообщение:`,
+      `✏️ <b>Написать исполнителю</b>\n\n🆔 <b>Номер заказа:</b> №${orderNumber}\n\nОтправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
       { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();

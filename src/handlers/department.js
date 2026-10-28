@@ -5,6 +5,7 @@ const { Markup } = require('telegraf');
 const logger = require('../utils/logger');
 const { assignExecutorToOrder, unassignExecutorFromOrder, buildGroupOrderText } = require('./order');
 const { escapeHtml } = require('../utils/html');
+const { startComposer } = require('../utils/messageComposer');
 
 const PENDING_STATUSES = ['pending', 'waiting_acceptance', 'waiting_price', 'price_negotiating'];
 const ACTIVE_STATUSES = ['active', 'paid'];
@@ -392,7 +393,7 @@ function register(bot) {
     );
   });
 
-  // --- НАПИСАТЬ ЗАКАЗЧИКУ: запрос текста ---
+  // --- НАПИСАТЬ ЗАКАЗЧИКУ: универсальный композер ---
   bot.action(/^dept:msg:(.+)$/, async (ctx) => {
     if (!isManager(ctx.from.id)) {
       await ctx.answerCbQuery('❌ У вас нет прав');
@@ -401,19 +402,21 @@ function register(bot) {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);
     if (!order) { await ctx.answerCbQuery('❌ Заказ не найден'); return; }
+    
+    startComposer(ctx, 'dept_to_customer', {
+      targetUserId: order.customerId,
+      orderId: order.id,
+      orderNumber: String(order.orderNumber || orderId),
+      orderTitle: order.workTitle
+    });
 
-    ctx.session = ctx.session || {};
-    ctx.session.deptState = `dept_msg_customer:${orderId}`;
     await ctx.editMessageText(
-      `💬 <b>Отправка сообщения заказчику</b>\n\n` +
-      `Заказ №${order.orderNumber}\n` +
-      `Заказчик: ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}\n\n` +
-      `Введите текст сообщения:`,
-      {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', `dept:view:${orderId}`)]])
-      }
+      `💬 <b>Ответ заказчику</b>\n\n` +
+      `📚 <b>Заказ:</b> ${escapeHtml(order.workTitle)}\n\n` +
+      `Отправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
+      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
+    await ctx.answerCbQuery();
   });
 
   // --- ПРИВЯЗКА К ОТДЕЛУ: запрос выбора чата ---
@@ -584,31 +587,6 @@ function register(bot) {
           `❌ <b>Ошибка назначения:</b>\n\n${escapeHtml(err.message)}`,
           { parse_mode: 'HTML', ...Markup.inlineKeyboard([[Markup.button.callback('⬅️ Вернуться к заказу', `dept:view:${orderId}`)]]) }
         );
-      }
-
-      ctx.session.deptState = null;
-      return;
-    }
-
-    // --- ОТПРАВКА СООБЩЕНИЯ ЗАКАЗЧИКУ ---
-    if (state.startsWith('dept_msg_customer:')) {
-      const orderId = state.split(':')[1];
-      const order = ordersDb.getOrder(orderId);
-      if (!order) {
-        await ctx.reply('❌ Заказ не найден');
-        ctx.session.deptState = null;
-        return;
-      }
-
-      try {
-        await ctx.telegram.sendMessage(
-          order.customerId,
-          `📬 <b>Сообщение от руководителя отдела по заказу №${order.orderNumber}</b>\n\n${escapeHtml(text)}`,
-          { parse_mode: 'HTML' }
-        );
-        await ctx.reply(`✅ Сообщение отправлено заказчику ${order.customerUsername ? '@' + order.customerUsername : 'ID: ' + order.customerId}`);
-      } catch (err) {
-        await ctx.reply(`❌ Не удалось отправить сообщение: ${err.message}`);
       }
 
       ctx.session.deptState = null;

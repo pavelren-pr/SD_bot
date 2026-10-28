@@ -8,7 +8,7 @@ const storage = require('../utils/storage');
 const finance = require('../data/finance');
 const { Markup } = require('telegraf');
 const { sendTempNotification } = require('../utils/notify');
-const { startComposer, handleComposerText, handleComposerFile } = require('../utils/messageComposer');
+const { startComposer, handleComposerInput } = require('../utils/messageComposer');
 
 const mediaBuffer = {};
 
@@ -524,14 +524,8 @@ function register(bot) {
 
     // 🌟 1. СНАЧАЛА проверяем композер сообщений (универсальный сборщик)
     if (ctx.session.messageComposer) {
-      if (ctx.message.text) {
-        const handled = await handleComposerText(ctx, next);
-        if (handled) return;
-      }
-      if (ctx.message.photo || ctx.message.document) {
-        const handled = await handleComposerFile(ctx, next);
-        if (handled) return;
-      }
+      const handled = await handleComposerInput(ctx, next);
+      if (handled) return;
     }
 
     // 🌟 2. Если пользователь в админ-панели — передаём управление admin.js
@@ -786,15 +780,15 @@ function register(bot) {
   bot.action(/^support_reply:(\d+)$/, async (ctx) => {
     try {
       const targetUserId = ctx.match[1];
-      
+
       startComposer(ctx, 'support_to_user', {
         targetUserId: parseInt(targetUserId),
         orderNumber: '—',
         orderTitle: 'Поддержка'
       });
-      
+
       await ctx.reply(
-        `✏️ <b>Режим ответа</b>\n\nНапишите сообщение для пользователя (ID: <code>${targetUserId}</code>):`, 
+        `✏️ <b>Режим ответа</b>\n\nОтправьте сообщение для пользователя (ID: <code>${targetUserId}</code>):`,
         { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
       );
       await ctx.answerCbQuery('✅ Готов к отправке ответа');
@@ -1283,8 +1277,8 @@ function register(bot) {
     await ctx.answerCbQuery('✅ Готов к отправке ответа');
   });
 
-  // 🌟 Заказчик отвечает исполнителю (кнопка из сообщения композера)
-  bot.action(/^customer_reply_msg:(\d+)_(.+)$/, async (ctx) => {
+  // 🌟 Универсальная кнопка: Заказчик отвечает исполнителю
+  bot.action(/^customer_reply:(\d+)_(.+)$/, async (ctx) => {
     const executorId = ctx.match[1];
     const orderNumber = ctx.match[2];
     const order = ordersDb.getOrderByNumber(orderNumber);
@@ -1297,36 +1291,14 @@ function register(bot) {
     });
 
     await ctx.reply(
-      `✏️ <b>Напишите ответ исполнителю:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
+      `✏️ <b>Ответить исполнителю</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}\n\nОтправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
       { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
   });
 
-  // 🌟 Заказчик отправляет файл исполнителю (кнопка из сообщения композера)
-  bot.action(/^customer_reply_file:(\d+)_(.+)$/, async (ctx) => {
-    const executorId = ctx.match[1];
-    const orderNumber = ctx.match[2];
-    const order = ordersDb.getOrderByNumber(orderNumber);
-
-    startComposer(ctx, 'customer_to_executor', {
-      targetUserId: parseInt(executorId),
-      orderId: order ? order.id : null,
-      orderNumber: orderNumber,
-      orderTitle: order ? order.workTitle : 'Заказ'
-    });
-    // 🌟 ИСПРАВЛЕНО: сразу переходим к ожиданию файла, а не текста
-    ctx.session.messageComposer.step = 'waiting_file';
-
-    await ctx.reply(
-      `📎 <b>Пришлите файл или фото для исполнителя:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}\n\nМожно прикрепить одно или несколько фото (группой), либо один файл, если необходимо отправить несколько файлов - добавляйте их в сообщени по очереди`,
-      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
-    );
-    await ctx.answerCbQuery();
-  });
-
-  // 🌟 Исполнитель отвечает заказчику (кнопка из сообщения композера)
-  bot.action(/^executor_reply_msg2:(\d+)_(.+)$/, async (ctx) => {
+  // 🌟 Универсальная кнопка: Исполнитель отвечает заказчику
+  bot.action(/^executor_reply:(\d+)_(.+)$/, async (ctx) => {
     const customerId = ctx.match[1];
     const orderNumber = ctx.match[2];
     const order = ordersDb.getOrderByNumber(orderNumber);
@@ -1339,29 +1311,7 @@ function register(bot) {
     });
 
     await ctx.reply(
-      `✏️ <b>Напишите сообщение заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}`,
-      { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
-    );
-    await ctx.answerCbQuery();
-  });
-
-  // 🌟 Исполнитель отправляет файл заказчику (кнопка из сообщения композера)
-  bot.action(/^executor_reply_file2:(\d+)_(.+)$/, async (ctx) => {
-    const customerId = ctx.match[1];
-    const orderNumber = ctx.match[2];
-    const order = ordersDb.getOrderByNumber(orderNumber);
-
-    startComposer(ctx, 'executor_to_customer', {
-      targetUserId: parseInt(customerId),
-      orderId: order ? order.id : null,
-      orderNumber: orderNumber,
-      orderTitle: order ? order.workTitle : 'Заказ'
-    });
-    // 🌟 ИСПРАВЛЕНО: сразу переходим к ожиданию файла, а не текста
-    ctx.session.messageComposer.step = 'waiting_file';
-
-    await ctx.reply(
-      `📎 <b>Пришлите файл или фото заказчику:</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}\n\nМожно прикрепить одно или несколько фото (группой), либо один файл, если необходимо отправить несколько файлов - добавляйте их в сообщени по очереди`,
+      `✏️ <b>Ответить заказчику</b>\n\n📚 <b>Заказ:</b> ${escapeHtml(order ? order.workTitle : 'Заказ')}\n\nОтправьте сообщение (текст, фото или файл). Вы можете отправлять несколько сообщений подряд — они объединятся в одно.`,
       { parse_mode: 'HTML', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('❌ Отмена', 'mc:cancel')]]).reply_markup }
     );
     await ctx.answerCbQuery();
