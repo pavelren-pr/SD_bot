@@ -129,86 +129,86 @@ const COMPOSER_MODES = {
 /**
  * 🌟 УНИВЕРСАЛЬНАЯ ФУНКЦИЯ: Обрабатывает любое входящее сообщение
  */
-async function handleComposerInput(ctx, next) {
-  ctx.session = ctx.session || {};
-  const composer = ctx.session.messageComposer;
-  if (!composer) return false;
-
-  let hasContent = false;
-
-  // 1. Извлекаем текст (из обычного текста или из подписи к медиа)
-  const incomingText = ctx.message.text || ctx.message.caption || null;
-  if (incomingText) {
-    if (composer.text) {
-      composer.text += '\n\n' + incomingText;
-    } else {
-      composer.text = incomingText;
-    }
-    hasContent = true;
-  }
-
-  // 2. Извлекаем медиа (фото или документ)
-  let fileInfo = null;
-  if (ctx.message.photo) {
-    fileInfo = {
-      type: 'photo',
-      fileId: ctx.message.photo[ctx.message.photo.length - 1].file_id,
-      fileName: `Фото_${Date.now()}.jpg`
-    };
-  } else if (ctx.message.document) {
-    fileInfo = {
-      type: 'document',
-      fileId: ctx.message.document.file_id,
-      fileName: ctx.message.document.file_name || `Файл_${Date.now()}`
-    };
-  }
-
-  if (fileInfo) {
-    hasContent = true;
-    if (!composer.files) composer.files = [];
-
-    if (ctx.message.media_group_id) {
-      const groupId = ctx.message.media_group_id;
-      if (!composerMediaBuffer[groupId]) {
-        composerMediaBuffer[groupId] = { files: [], timer: null };
-      }
-      composerMediaBuffer[groupId].files.push(fileInfo);
-
-      if (composerMediaBuffer[groupId].timer) {
-        clearTimeout(composerMediaBuffer[groupId].timer);
-      }
-
-      composerMediaBuffer[groupId].timer = setTimeout(async () => {
-        const bufferedFiles = composerMediaBuffer[groupId].files;
-        delete composerMediaBuffer[groupId];
-
-        for (const f of bufferedFiles) {
-          composer.files.push(f);
+async function handleComposerInput(ctx,next){
+    ctx.session=ctx.session||{};
+    const composer=ctx.session.messageComposer;
+    if(!composer)return false;
+    
+    let hasContent=false;
+    
+    // 1. Извлекаем текст (из обычного текста или из подписи к медиа)
+    const incomingText=ctx.message.text||ctx.message.caption||null;
+    if(incomingText){
+        if(composer.text){
+            composer.text+='\n\n'+incomingText;
+        } else {
+            composer.text=incomingText;
         }
-
-        composer.step = 'preview';
-        try {
-          await showPreview(ctx);
-        } catch (e) {
-          console.log('Ошибка показа превью после медиагруппы:', e.message);
-        }
-      }, 1000);
-
-      return true;
-    } else {
-      composer.files.push(fileInfo);
+        hasContent=true;
     }
-  }
-
-  if (!hasContent) return false;
-
-  composer.step = 'preview';
-  try {
-    await showPreview(ctx);
-  } catch (e) {
-    console.log('Ошибка показа превью:', e.message);
-  }
-  return true;
+    
+    // 2. Извлекаем медиа (фото или документ)
+    let fileInfo=null;
+    if(ctx.message.photo&&ctx.message.photo.length>0){
+        fileInfo={
+            type: 'photo',
+            fileId: ctx.message.photo[ctx.message.photo.length-1].file_id,
+            fileName: `Фото_${Date.now()}.jpg`
+        };
+    } else if(ctx.message.document){
+        fileInfo={
+            type: 'document',
+            fileId: ctx.message.document.file_id,
+            fileName: ctx.message.document.file_name||`Файл_${Date.now()}`
+        };
+    }
+    
+    if(fileInfo){
+        hasContent=true;
+        if(!composer.files)composer.files=[];
+        
+        if(ctx.message.media_group_id){
+            const groupId=ctx.message.media_group_id;
+            if(!composerMediaBuffer[groupId]){
+                composerMediaBuffer[groupId]={files: [],timer: null};
+            }
+            composerMediaBuffer[groupId].files.push(fileInfo);
+            if(composerMediaBuffer[groupId].timer){
+                clearTimeout(composerMediaBuffer[groupId].timer);
+            }
+            composerMediaBuffer[groupId].timer=setTimeout(async()=>{
+                const bufferedFiles=composerMediaBuffer[groupId].files;
+                delete composerMediaBuffer[groupId];
+                for(const f of bufferedFiles){
+                    composer.files.push(f);
+                }
+                composer.step='preview';
+                try{
+                    await showPreview(ctx);
+                } catch(e){
+                    console.log('Ошибка показа превью после медиагруппы:',e.message);
+                }
+            },1000);
+            return true;
+        } else {
+            composer.files.push(fileInfo);
+        }
+    }
+    
+    // 🌟 КРИТИЧНО: Если нет ни текста, ни файлов - возвращаем false
+    if(!hasContent)return false;
+    
+    composer.step='preview';
+    
+    try{
+        await showPreview(ctx);
+    } catch(e){
+        console.log('Ошибка показа превью:',e.message);
+        // 🌟 ВАЖНО: даже если showPreview упал, мы уже добавили контент
+        // и должны вернуть true, чтобы сообщение не ушло в поддержку
+    }
+    
+    return true;
 }
 
 /**
