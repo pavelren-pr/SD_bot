@@ -631,37 +631,6 @@ const completed = userOrders.filter(o => COMPLETED_STATUSES.includes(o.status)).
     await ctx.answerCbQuery();
   });
 
-  bot.action(/^orders:customer:contact:(.+)$/, async (ctx) => {
-    const orderId = ctx.match[1];
-    const chatInfo = findChatByOrderId(orderId);
-    
-    if (!chatInfo || chatInfo.chatData.status === 'closed') {
-      await ctx.answerCbQuery('❌ Чат по этому заказу завершён');
-      return;
-    }
-    
-    const chatId = chatInfo.chatId;
-    const chatData = chatInfo.chatData;
-    
-    const text = 
-      `💬 <b>Чат с исполнителем</b>\n\n` +
-      `📚 <b>Заказ:</b> ${chatData.workTitle}\n\n` +
-      `Выберите действие:`;
-    
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✏️ Написать исполнителю', `customer_reply:${chatId}`)],
-      [Markup.button.callback('📎 Отправить файл/фото', `customer_send_file:${chatId}`)],
-      [Markup.button.callback('❌ Завершить чат', `customer_close_chat:${chatId}`)],
-      [Markup.button.callback('⬅️ Назад к заказу', `orders:customer:view:${orderId}`)]
-    ]);
-    
-    await ctx.editMessageText(text, {
-      parse_mode: 'HTML',
-      ...keyboard
-    });
-    await ctx.answerCbQuery();
-  });
-
   // ==========================================
   // МОИ ЗАКАЗЫ ИСПОЛНИТЕЛЯ (с пагинацией)
   // ==========================================
