@@ -369,7 +369,7 @@ bot.hears('📚 Заказать работу', async (ctx) => {
     await ctx.answerCbQuery();
   });
 
-  // 🌟 Кнопка "Написать заказчику" — включаем универсальный композер
+  // 🌟 Кнопка "Написать заказчику" — универсальный композер
   bot.action(/^orders:admin:contact:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     const order = ordersDb.getOrder(orderId);

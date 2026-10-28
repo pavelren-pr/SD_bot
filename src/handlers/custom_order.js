@@ -143,6 +143,12 @@ function register(bot) {
   bot.on(['photo', 'document'], async (ctx, next) => {
     ctx.session = ctx.session || {};
     
+    // 🌟 Сначала проверяем композер
+    if(ctx.session.messageComposer){
+        consthandled=awaithandleComposerInput(ctx,next);
+        if(handled)return;
+    }
+
     // Пропускаем если это не индивидуальный заказ в режиме ожидания файла
     if (!ctx.session.customOrder || ctx.session.customOrder.step !== 'waiting_file') {
       return next();
