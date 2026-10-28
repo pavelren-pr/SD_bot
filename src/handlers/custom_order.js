@@ -145,13 +145,15 @@ function register(bot) {
     
     // 🌟 Сначала проверяем композер
     if(ctx.session.messageComposer){
-        consthandled=awaithandleComposerInput(ctx,next);
+        const handled=await handleComposerInput(ctx,next);
         if(handled)return;
+        // 🌟 ИСПРАВЛЕНО: Если композер не обработал, передаём управление дальше
+        return next();
     }
-
+    
     // Пропускаем если это не индивидуальный заказ в режиме ожидания файла
-    if (!ctx.session.customOrder || ctx.session.customOrder.step !== 'waiting_file') {
-      return next();
+    if(!ctx.session.customOrder||ctx.session.customOrder.step!=='waiting_file'){
+        return next();
     }
     
     const customOrder = ctx.session.customOrder;
