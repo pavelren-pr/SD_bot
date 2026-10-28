@@ -17,16 +17,15 @@ function startComposer(ctx, mode, options = {}) {
     orderTitle: options.orderTitle || 'Заказ',
     senderId: ctx.from.id,
     text: null,
-    files: [],              // 🌟 Массив файлов вместо одного
-    step: 'waiting_message', // 🌟 ИЗМЕНЕНО: универсальный шаг ожидания
+    files: [],              
+    step: 'waiting_message', // 🌟 Универсальный шаг ожидания
     previewMessageId: null,
     broadcastTargets: options.broadcastTargets || null,
     broadcastGroupLabel: options.broadcastGroupLabel || null
   };
 }
 
-// Режимы композера: определяют, куда и как отправлять
-// 🌟 ОБНОВЛЕНО: добавлена проверка на наличие текста (composer.text) перед добавлением переносов
+// Режимы композера
 const COMPOSER_MODES = {
   admin_to_customer: {
     label: 'администратор → заказчик',
@@ -64,7 +63,7 @@ const COMPOSER_MODES = {
             `🆔 <b>Номер заказа:</b> №${composer.orderNumber}\n` +
             `📚 <b>Заказ:</b> ${escapeHtml(composer.orderTitle)}${composer.text ? '\n\n' + escapeHtml(composer.text) : ''}`,
       keyboard: Markup.inlineKeyboard([
-        [Markup.button.callback('✏️ Ответить исполнителю', `customer_reply:${composer.senderId}_${composer.orderNumber}`)]
+        [Markup.button.callback('✏️ Ответить исполнителю', `customer_reply:${composer.senderId}_${composer.orderNumber}`)] // 🌟 УНИВЕРСАЛЬНАЯ КНОПКА
       ]).reply_markup
     })
   },
@@ -75,7 +74,7 @@ const COMPOSER_MODES = {
             `🆔 <b>Номер заказа:</b> №${composer.orderNumber}\n` +
             `📚 <b>Заказ:</b> ${escapeHtml(composer.orderTitle)}${composer.text ? '\n\n' + escapeHtml(composer.text) : ''}`,
       keyboard: Markup.inlineKeyboard([
-        [Markup.button.callback('✏️ Ответить заказчику', `executor_reply:${ctx.from.id}_${composer.orderNumber}`)]
+        [Markup.button.callback('✏️ Ответить заказчику', `executor_reply:${ctx.from.id}_${composer.orderNumber}`)] // 🌟 УНИВЕРСАЛЬНАЯ КНОПКА
       ]).reply_markup
     })
   },
@@ -128,8 +127,7 @@ const COMPOSER_MODES = {
 };
 
 /**
- * 🌟 НОВАЯ УНИВЕРСАЛЬНАЯ ФУНКЦИЯ: Обрабатывает любое входящее сообщение в режиме композера
- * Заменяет собой handleComposerText и handleComposerFile
+ * 🌟 УНИВЕРСАЛЬНАЯ ФУНКЦИЯ: Обрабатывает любое входящее сообщение
  */
 async function handleComposerInput(ctx, next) {
   ctx.session = ctx.session || {};
@@ -169,7 +167,6 @@ async function handleComposerInput(ctx, next) {
     hasContent = true;
     if (!composer.files) composer.files = [];
 
-    // Обработка медиагрупп (альбомов)
     if (ctx.message.media_group_id) {
       const groupId = ctx.message.media_group_id;
       if (!composerMediaBuffer[groupId]) {
@@ -203,10 +200,7 @@ async function handleComposerInput(ctx, next) {
     }
   }
 
-  if (!hasContent) {
-    // Игнорируем сообщения без текста и медиа (стикеры, голосовые и т.д.)
-    return false;
-  }
+  if (!hasContent) return false;
 
   composer.step = 'preview';
   try {
@@ -290,12 +284,8 @@ async function sendMessage(ctx) {
   const { text, keyboard } = modeConfig.buildMessage(ctx, composer);
   
   try {
-    // ==========================================
-    // 🌟 РЕЖИМ РАССЫЛКИ (несколько получателей)
-    // ==========================================
     if (composer.broadcastTargets && composer.broadcastTargets.length > 0) {
       await ctx.answerCbQuery('⏳ Отправляю рассылку...');
-      
       let successCount = 0;
       let failCount = 0;
       
@@ -307,7 +297,6 @@ async function sendMessage(ctx) {
               ...(keyboard ? { reply_markup: keyboard } : {})
             });
           }
-          
           if (composer.files && composer.files.length > 0) {
             for (const file of composer.files) {
               if (file.type === 'photo') {
@@ -324,26 +313,20 @@ async function sendMessage(ctx) {
       }
       
       await ctx.reply(
-        `✅ <b>Рассылка завершена!</b>\n\n` +
-        `📤 Успешно доставлено: <b>${successCount}</b>\n` +
-        `❌ Ошибок доставки: <b>${failCount}</b>`,
+        `✅ <b>Рассылка завершена!</b>\n\n📤 Успешно: <b>${successCount}</b>\n❌ Ошибок: <b>${failCount}</b>`,
         { parse_mode: 'HTML' }
       );
-      
       ctx.session.messageComposer = null;
       return;
     }
     
-    // ==========================================
-    // ОБЫЧНЫЙ РЕЖИМ (один получатель)
-    // ==========================================
     await ctx.answerCbQuery('⏳ Отправляю...');
     
     const hasText = !!composer.text;
     const hasFiles = composer.files && composer.files.length > 0;
 
     if (hasFiles) {
-      // 🌟 Если есть файлы, отправляем их. Текст и клавиатуру прикрепляем к ПЕРВОМУ файлу.
+      // 🌟 Отправляем файлы. Текст прикрепляем как подпись к первому файлу.
       for (let i = 0; i < composer.files.length; i++) {
         const file = composer.files[i];
         const isFirst = i === 0;
@@ -353,7 +336,7 @@ async function sendMessage(ctx) {
           options.parse_mode = 'HTML';
           if (keyboard) options.reply_markup = keyboard;
           if (hasText) {
-            options.caption = text; // Текст становится подписью к фото/файлу
+            options.caption = text; 
           } else if (keyboard) {
             options.caption = `📎 <b>Вам прислали файлы</b>`;
           }
@@ -366,14 +349,12 @@ async function sendMessage(ctx) {
         }
       }
     } else if (hasText) {
-      // Если файлов нет, отправляем обычное текстовое сообщение
       await ctx.telegram.sendMessage(composer.targetUserId, text, {
         parse_mode: 'HTML',
         ...(keyboard ? { reply_markup: keyboard } : {})
       });
     }
     
-    // Очистка сессии и удаление превью
     ctx.session.messageComposer = null;
     try {
       await ctx.deleteMessage();
@@ -387,11 +368,7 @@ async function sendMessage(ctx) {
   }
 }
 
-/**
- * Регистрирует обработчики кнопок композера
- */
 function registerComposerActions(bot) {
-  // Отправить
   bot.action('mc:send', async (ctx) => {
     const composer = ctx.session.messageComposer;
     if (!composer) return ctx.answerCbQuery('❌ Сессия не найдена');
@@ -400,20 +377,15 @@ function registerComposerActions(bot) {
     if (!composer.text && !hasFiles) {
       return ctx.answerCbQuery('❌ Сообщение пустое. Добавьте текст или файл.');
     }
-    
     await sendMessage(ctx);
   });
   
-  // Отмена
   bot.action('mc:cancel', async (ctx) => {
     ctx.session.messageComposer = null;
-    try {
-      await ctx.deleteMessage();
-    } catch (e) { /* ignore */ }
+    try { await ctx.deleteMessage(); } catch (e) {}
     await ctx.answerCbQuery('❌ Отправка отменена');
   });
 
-  // 🌟 НОВОЕ: Очистить всё (текст и файлы)
   bot.action('mc:clear_all', async (ctx) => {
     const composer = ctx.session.messageComposer;
     if (!composer) return ctx.answerCbQuery('❌ Сессия не найдена');
@@ -426,20 +398,12 @@ function registerComposerActions(bot) {
     await ctx.answerCbQuery('🗑 Всё очищено');
   });
 
-  // Кнопка "Скрыть" для рассылки
   bot.action('dismiss_broadcast', async (ctx) => {
-    try {
-      await ctx.deleteMessage();
-      await ctx.answerCbQuery();
-    } catch (e) {
-      await ctx.answerCbQuery();
-    }
+    try { await ctx.deleteMessage(); } catch (e) {}
+    await ctx.answerCbQuery();
   });
 }
 
-/**
- * Обработчик кнопок запуска композера из других модулей
- */
 function registerComposerStartActions(bot) {
   bot.action(/^mc_start:(\w+):(\d+|—):(\d+)$/, async (ctx) => {
     const mode = ctx.match[1];
@@ -450,20 +414,12 @@ function registerComposerStartActions(bot) {
     const order = orders.getOrderByNumber(orderNumber !== '—' ? parseInt(orderNumber) : orderNumber);
     
     const modeMap = {
-      'executor_to_customer': {
-        mode: 'executor_to_customer',
-        title: order ? order.workTitle : 'Заказ'
-      },
-      'customer_to_executor': {
-        mode: 'customer_to_executor',
-        title: order ? order.workTitle : 'Заказ'
-      }
+      'executor_to_customer': { mode: 'executor_to_customer', title: order ? order.workTitle : 'Заказ' },
+      'customer_to_executor': { mode: 'customer_to_executor', title: order ? order.workTitle : 'Заказ' }
     };
     
     const config = modeMap[mode];
-    if (!config) {
-      return ctx.answerCbQuery('❌ Неизвестный режим');
-    }
+    if (!config) return ctx.answerCbQuery('❌ Неизвестный режим');
     
     startComposer(ctx, config.mode, {
       targetUserId: targetUserId,
@@ -485,7 +441,6 @@ module.exports = {
   handleComposerInput,
   registerComposerActions, 
   registerComposerStartActions,
-  // 🌟 Временные заглушки для совместимости со старым кодом из order.js и admin.js
   handleComposerText: handleComposerInput,
   handleComposerFile: handleComposerInput
 };
